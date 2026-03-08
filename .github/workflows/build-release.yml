@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pygame openai pyinstaller
+        pip install pygame openai pyinstaller aiohttp httpx requests
         
     - name: Build Windows executable
       run: |
@@ -65,7 +65,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pygame openai pyinstaller
+        pip install pygame openai pyinstaller aiohttp httpx requests
         
     - name: Build macOS app
       run: |

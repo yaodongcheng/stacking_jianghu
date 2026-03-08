@@ -50,6 +50,11 @@ BUILD_CONFIG = {
         "certifi",
         "charset_normalizer",
         "idna",
+        # LLM 相关依赖
+        "aiohttp",
+        "aiohttp.client",
+        "openai",
+        "httpx",
     ],
     
     # 排除的模块（减小体积）
