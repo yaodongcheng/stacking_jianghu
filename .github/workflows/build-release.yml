@@ -99,18 +99,35 @@ jobs:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     
     steps:
-    - name: Download all artifacts
+    - name: Download Windows artifact
       uses: actions/download-artifact@v4
+      with:
+        name: stacking_jianghu_windows_zip
+        path: ./
+        
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: stacking_jianghu_macos
+        path: ./
+      continue-on-error: true
+      
+    - name: List downloaded files
+      run: ls -la
       
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          stacking_jianghu_windows_zip/*.zip
-          stacking_jianghu_macos/*.dmg
+          stacking_jianghu_windows.zip
+          *.dmg
+        name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
