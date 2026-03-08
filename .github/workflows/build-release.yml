@@ -27,7 +27,9 @@ jobs:
         pip install pygame openai pyinstaller
         
     - name: Build Windows executable
-      run: python packaging/build.py
+      run: |
+        cd packaging
+        python build.py
       
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
@@ -37,9 +39,9 @@ jobs:
         
     - name: Create Windows ZIP
       if: startsWith(github.ref, 'refs/tags/v')
+      shell: powershell
       run: |
-        cd release
-        7z a ../stacking_jianghu_windows.zip 堆叠江湖/
+        Compress-Archive -Path "release\堆叠江湖" -DestinationPath "stacking_jianghu_windows.zip"
         
     - name: Upload Windows Release
       if: startsWith(github.ref, 'refs/tags/v')
