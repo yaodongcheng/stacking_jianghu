@@ -2,11 +2,9 @@ name: Build Release
 
 on:
   push:
-    branches: [ main, master ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-windows:

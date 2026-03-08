@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 堆叠江湖 - 一键打包脚本
 支持 Windows 和 macOS
@@ -12,6 +13,12 @@
 
 import sys
 import os
+
+# 设置 stdout 编码为 utf-8（解决 GitHub Actions Windows 环境的编码问题）
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 import json
 import shutil
 import subprocess
