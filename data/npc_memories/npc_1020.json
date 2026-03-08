@@ -1,0 +1,72 @@
+{
+  "npc_id": 1020,
+  "npc_name": "小翠",
+  "short_term": [
+    {
+      "id": "mem_1772944776685",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「小崔干嘛呢」",
+      "importance": 2,
+      "timestamp": 1772944776.6850274,
+      "real_timestamp": 1772944776.6850274,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1772944780756",
+      "memory_type": "conversation",
+      "content": "小翠说：「这位爷，小女出来学艺见世面呢，顺道寻家铺子打短工挣口饭吃。」",
+      "importance": 1,
+      "timestamp": 1772944780.7564282,
+      "real_timestamp": 1772944780.7564282,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "小翠"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1772944780756",
+      "memory_type": "knowledge",
+      "content": "玩家再次问我在做什么，我稍显戒备但仍客气作答。",
+      "importance": 3,
+      "timestamp": 1772944780.7564282,
+      "real_timestamp": 1772944780.7564282,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1772944780.7564282,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1772944786.0397313
+}

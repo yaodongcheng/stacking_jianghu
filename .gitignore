@@ -1,0 +1,38 @@
+# 堆叠江湖 - Git 忽略文件
+
+# 构建输出
+build/
+release/
+dist/
+*.spec
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志和临时文件
+*.log
+game_log.txt
+*.tmp
+
+# 用户配置（包含敏感信息）
+user_config/ai_config.json
+
+# 操作系统
+.DS_Store
+Thumbs.db

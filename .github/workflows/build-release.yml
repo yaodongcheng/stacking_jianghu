@@ -1,0 +1,116 @@
+name: Build Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pygame openai pyinstaller
+        
+    - name: Build Windows executable
+      run: python packaging/build.py
+      
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: stacking_jianghu_windows
+        path: release/
+        
+    - name: Create Windows ZIP
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        cd release
+        7z a ../stacking_jianghu_windows.zip 堆叠江湖/
+        
+    - name: Upload Windows Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v4
+      with:
+        name: stacking_jianghu_windows_zip
+        path: stacking_jianghu_windows.zip
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pygame openai pyinstaller
+        
+    - name: Build macOS app
+      run: |
+        pyinstaller \
+          --name="堆叠江湖" \
+          --windowed \
+          --add-data="assets:assets" \
+          --add-data="data:data" \
+          --add-data="src:src" \
+          main.py
+          
+    - name: Create DMG
+      run: |
+        brew install create-dmg || true
+        create-dmg \
+          --volname "堆叠江湖" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --app-drop-link 600 185 \
+          "堆叠江湖_macOS.dmg" \
+          "dist/堆叠江湖.app" || echo "DMG creation failed, uploading app bundle"
+          
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: stacking_jianghu_macos
+        path: |
+          dist/堆叠江湖.app
+          *.dmg
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          stacking_jianghu_windows_zip/*.zip
+          stacking_jianghu_macos/*.dmg
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

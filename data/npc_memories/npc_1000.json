@@ -1,0 +1,126 @@
+{
+  "npc_id": 1000,
+  "npc_name": "方承意",
+  "short_term": [
+    {
+      "id": "mem_1772937770277",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你是谁」",
+      "importance": 2,
+      "timestamp": 1772937770.2778223,
+      "real_timestamp": 1772937770.2778223,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 2
+    },
+    {
+      "id": "mem_1772937774186",
+      "memory_type": "conversation",
+      "content": "方承意说：「本官乃开封府尹方承意。你是何人，为何在此？」",
+      "importance": 1,
+      "timestamp": 1772937774.1868532,
+      "real_timestamp": 1772937774.1868532,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "方承意"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1772937774186",
+      "memory_type": "knowledge",
+      "content": "此人询问我的身份，似乎不认识我",
+      "importance": 3,
+      "timestamp": 1772937774.1868532,
+      "real_timestamp": 1772937774.1868532,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1772937790183",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「我想嫁给你」",
+      "importance": 2,
+      "timestamp": 1772937790.1831882,
+      "real_timestamp": 1772937790.1831882,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1772937793860",
+      "memory_type": "conversation",
+      "content": "方承意说：「大胆！本官乃朝廷命官，岂容你在此胡言乱语？」",
+      "importance": 1,
+      "timestamp": 1772937793.860189,
+      "real_timestamp": 1772937793.860189,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "angry",
+      "location": "",
+      "tags": [
+        "对话",
+        "方承意"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1772937793860",
+      "memory_type": "knowledge",
+      "content": "此人言行轻浮，竟敢对本官说出如此荒唐之语",
+      "importance": 3,
+      "timestamp": 1772937793.860189,
+      "real_timestamp": 1772937793.860189,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": -5,
+      "last_interaction": 1772937793.860189,
+      "interaction_count": 2
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1772937799.045281
+}

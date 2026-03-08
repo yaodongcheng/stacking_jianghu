@@ -1,0 +1,15 @@
+id,org_id,title,type,target,count,merit_reward,money_reward,item_reward,min_rank,cooldown_days,desc
+OT_HF_01,heifeng_zhai,收取保护费,GATHER,铜钱,100,15,0,,0,1,去城内各处收取保护费上交山寨
+OT_HF_02,heifeng_zhai,劫掠行商,KILL,MERCHANT,1,25,30,,0,2,在城外劫杀路过的行商
+OT_HF_03,heifeng_zhai,打探官府动向,INTERACT,8015,1,10,20,,0,1,找茶馆老板打探衙门的剿匪计划
+OT_HF_04,heifeng_zhai,招募新血,RECRUIT,THUG,1,20,0,,1,3,为山寨招募一名新成员
+OT_BG_01,beggar_gang,乞讨筹款,GATHER,铜钱,50,10,0,,0,1,在城内各处乞讨筹集帮费
+OT_BG_02,beggar_gang,打探消息,INTERACT,8010,1,15,10,,0,1,找酒楼掌柜打探城内富户动向
+OT_BG_03,beggar_gang,看场护院,PATROL,MARKET,1,12,25,,0,2,在市集巡逻维护秩序
+OT_BG_04,beggar_gang,寻找失物,GATHER,玉佩,1,20,50,鲜鱼:3,1,3,帮城内贵人寻找丢失的玉佩
+OT_YM_01,yamen,缉拿逃犯,KILL,BANDIT,2,30,50,,0,2,缉拿在逃的江洋大盗
+OT_YM_02,yamen,巡街值守,PATROL,CITY,1,10,20,,0,1,在城内巡逻维护治安
+OT_YM_03,yamen,调查案件,INTERACT,8008,1,15,30,,0,1,调查近日发生的盗窃案
+OT_GY_01,gao_family,护送货物,ESCORT,8020,1,25,40,,0,2,护送高府的货物安全抵达
+OT_GY_02,gao_family,打点关系,GIVE,8012,50,20,0,,1,3,给衙门的张捕头送礼打点
+OT_GY_03,gao_family,收购珍品,GATHER,玉佩,2,30,0,金叶子:1,2,5,为高府收购珍贵玉器

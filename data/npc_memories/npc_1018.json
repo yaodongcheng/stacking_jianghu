@@ -1,0 +1,72 @@
+{
+  "npc_id": 1018,
+  "npc_name": "钱掌柜",
+  "short_term": [
+    {
+      "id": "mem_1772943270464",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你好？」",
+      "importance": 2,
+      "timestamp": 1772943270.4649427,
+      "real_timestamp": 1772943270.4649427,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1772943274608",
+      "memory_type": "conversation",
+      "content": "钱掌柜说：「哎哟，这位爷有礼。小店钱掌柜，做布匹买卖的。街上风大，您可是来寻货，还是路过打个照面？」",
+      "importance": 1,
+      "timestamp": 1772943274.6080978,
+      "real_timestamp": 1772943274.6080978,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "钱掌柜"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1772943274608",
+      "memory_type": "knowledge",
+      "content": "玩家两次打招呼，显得客气有礼。",
+      "importance": 3,
+      "timestamp": 1772943274.6080978,
+      "real_timestamp": 1772943274.6080978,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 1,
+      "last_interaction": 1772943274.6080978,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1772943279.6200805
+}
