@@ -39,7 +39,9 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v')
       shell: powershell
       run: |
-        Compress-Archive -Path "release\堆叠江湖" -DestinationPath "stacking_jianghu_windows.zip"
+        # 使用通配符避免中文编码问题
+        $folder = Get-ChildItem -Path "release" -Directory | Select-Object -First 1
+        Compress-Archive -Path $folder.FullName -DestinationPath "stacking_jianghu_windows.zip"
         
     - name: Upload Windows Release
       if: startsWith(github.ref, 'refs/tags/v')
