@@ -231,9 +231,12 @@ class SettingsPanel:
                     try:
                         import pygame.scrap
                         pygame.scrap.init()
-                        clipboard = pygame.scrap.get(pygame.SCRAP_TEXT)
+                        clipboard = pygame.scrap.get(pg.SCRAP_TEXT)
                         if clipboard:
-                            text = clipboard.decode('utf-8', errors='ignore').strip('\x00')
+                            # 彻底清理剪贴板内容：移除所有空字符和控制字符
+                            text = clipboard.decode('utf-8', errors='ignore')
+                            # 移除所有空字符 (\x00) 和其他非打印控制字符
+                            text = ''.join(c for c in text if c.isprintable())
                             self.input_values[self.active_input] += text
                     except Exception:
                         pass
