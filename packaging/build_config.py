@@ -50,6 +50,7 @@ BUILD_CONFIG = {
         "certifi",
         "charset_normalizer",
         "idna",
+        "pyperclip",  # 剪贴板功能
         # LLM 相关依赖
         "aiohttp",
         "aiohttp.client",

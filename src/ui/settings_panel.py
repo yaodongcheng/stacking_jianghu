@@ -227,32 +227,14 @@ class SettingsPanel:
                         idx = all_inputs.index(self.active_input)
                         self.active_input = all_inputs[(idx + 1) % len(all_inputs)]
                 elif event.key == pg.K_v and pg.key.get_mods() & pg.KMOD_CTRL:
-                    # 使用 Windows API 获取剪贴板内容（PyInstaller兼容）
+                    # 使用 pyperclip 获取剪贴板内容
                     try:
-                        import ctypes
-                        from ctypes import wintypes
-                        
-                        # 打开剪贴板
-                        if ctypes.windll.user32.OpenClipboard(0):
-                            try:
-                                # 获取 Unicode 文本格式
-                                CF_UNICODETEXT = 13
-                                handle = ctypes.windll.user32.GetClipboardData(CF_UNICODETEXT)
-                                if handle:
-                                    # 锁定内存并读取
-                                    ctypes.windll.kernel32.GlobalLock.argtypes = [wintypes.HANDLE]
-                                    ctypes.windll.kernel32.GlobalLock.restype = wintypes.LPWSTR
-                                    ctypes.windll.kernel32.GlobalUnlock.argtypes = [wintypes.HANDLE]
-                                    
-                                    text_ptr = ctypes.windll.kernel32.GlobalLock(handle)
-                                    if text_ptr:
-                                        text = text_ptr.value or ""
-                                        ctypes.windll.kernel32.GlobalUnlock(handle)
-                                        # 清理文本：只保留可打印字符
-                                        text = ''.join(c for c in text if c.isprintable())
-                                        self.input_values[self.active_input] += text
-                            finally:
-                                ctypes.windll.user32.CloseClipboard()
+                        import pyperclip
+                        text = pyperclip.paste()
+                        if text:
+                            # 只保留可打印字符，防止null字符导致渲染错误
+                            text = ''.join(c for c in text if c.isprintable())
+                            self.input_values[self.active_input] += text
                     except Exception:
                         pass
                 else:
