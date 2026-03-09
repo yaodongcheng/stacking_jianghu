@@ -225,11 +225,15 @@ class SettingsPanel:
                         idx = all_inputs.index(self.active_input)
                         self.active_input = all_inputs[(idx + 1) % len(all_inputs)]
                 elif event.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    # 使用 pygame.scrap 实现跨平台粘贴（支持PyInstaller打包）
                     try:
-                        import pyperclip
-                        text = pyperclip.paste()
-                        self.input_values[self.active_input] += text
-                    except:
+                        import pygame.scrap
+                        pygame.scrap.init()
+                        clipboard = pygame.scrap.get(pygame.SCRAP_TEXT)
+                        if clipboard:
+                            text = clipboard.decode('utf-8', errors='ignore').strip('\x00')
+                            self.input_values[self.active_input] += text
+                    except Exception:
                         pass
                 else:
                     if event.unicode and event.unicode.isprintable():
