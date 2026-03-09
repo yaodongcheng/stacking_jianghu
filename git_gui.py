@@ -32,7 +32,7 @@ def get_status():
     return ""
 
 
-def commit():
+def commit(push_after=False):
     """提交更改"""
     status = get_status()
     if not status:
@@ -47,7 +47,10 @@ def commit():
     
     success, stdout, stderr = run_git(f'git commit -m "{msg}"')
     if success:
-        messagebox.showinfo("成功", "提交成功！")
+        if push_after:
+            push()
+        else:
+            messagebox.showinfo("成功", "本地提交成功！\n记得点击'推送'上传到 GitHub")
         return True
     else:
         messagebox.showerror("错误", f"提交失败:\n{stderr}")
@@ -58,6 +61,7 @@ def push():
     """推送到远程"""
     success, stdout, stderr = run_git("git push origin main")
     if success:
+        messagebox.showinfo("成功", "已推送到 GitHub！")
         return True
     else:
         messagebox.showerror("错误", f"推送失败:\n{stderr}")
@@ -131,9 +135,9 @@ def main():
     btn_width = 20
     btn_height = 2
     
-    tk.Button(root, text="📤 仅提交", width=btn_width, height=btn_height,
+    tk.Button(root, text="📤 提交并推送", width=btn_width, height=btn_height,
               font=("Microsoft YaHei", 11),
-              command=lambda: [commit(), root.update()]).pack(pady=5)
+              command=lambda: [commit(push_after=True), root.update()]).pack(pady=5)
     
     tk.Button(root, text="🚀 提交并打包", width=btn_width, height=btn_height,
               font=("Microsoft YaHei", 11), bg="#4CAF50", fg="white",
