@@ -163,18 +163,20 @@ class SettingsPanel:
         """获取输入框区域"""
         return pygame.Rect(self.panel_x + 200, y_offset, width, 32)
     
-    def handle_event(self, event: pygame.event.Event) -> bool:
+    def handle_event(self, event) -> bool:
         """处理事件"""
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        import pygame as pg
+        
+        if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             
-            panel_rect = pygame.Rect(self.panel_x, self.panel_y, self.panel_w, self.panel_h)
+            panel_rect = pg.Rect(self.panel_x, self.panel_y, self.panel_w, self.panel_h)
             if not panel_rect.collidepoint(mx, my):
                 if self.on_close:
                     self.on_close()
                 return True
             
-            close_rect = pygame.Rect(self.panel_x + self.panel_w - 40, self.panel_y + 10, 30, 30)
+            close_rect = pg.Rect(self.panel_x + self.panel_w - 40, self.panel_y + 10, 30, 30)
             if close_rect.collidepoint(mx, my):
                 if self.on_close:
                     self.on_close()
@@ -211,20 +213,20 @@ class SettingsPanel:
             
             return True
             
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pg.KEYDOWN:
             if self.active_input:
-                if event.key == pygame.K_BACKSPACE:
+                if event.key == pg.K_BACKSPACE:
                     self.input_values[self.active_input] = self.input_values[self.active_input][:-1]
-                elif event.key == pygame.K_RETURN:
+                elif event.key == pg.K_RETURN:
                     self.active_input = None
-                elif event.key == pygame.K_ESCAPE:
+                elif event.key == pg.K_ESCAPE:
                     self.active_input = None
-                elif event.key == pygame.K_TAB:
+                elif event.key == pg.K_TAB:
                     all_inputs = [k for _, k, _, _ in self.LLM_INPUTS + self.IMAGE_INPUTS]
                     if self.active_input in all_inputs:
                         idx = all_inputs.index(self.active_input)
                         self.active_input = all_inputs[(idx + 1) % len(all_inputs)]
-                elif event.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                elif event.key == pg.K_v and pg.key.get_mods() & pg.KMOD_CTRL:
                     # 使用 pygame.scrap 实现跨平台粘贴（支持PyInstaller打包）
                     try:
                         import pygame.scrap
