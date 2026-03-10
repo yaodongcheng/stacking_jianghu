@@ -150,9 +150,7 @@ class Appearance:
     """角色外观 - 仅包含头像"""
     # 头像搜索路径（按优先级排序）
     AVATAR_SEARCH_PATHS = [
-        "assets/head_icon/{name}.png",      # 优化后的128x128头像（优先）
-        "data/avatars/{name}.png",          # 原始头像目录
-        "avatars/{name}.png",               # 旧版头像目录
+        "assets/head_icon/{name}.png",      # 优化后的128x128头像（唯一）
     ]
     
     def __init__(self, head_path=None, size=(64, 64)):

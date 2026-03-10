@@ -76,8 +76,8 @@ class LiveSnapshotPanel:
         self.panel_x = (screen_w - self.panel_w) // 2
         
         # 间距常量（可配置）
-        self.SECTION_GAP = 15  # 各部分之间的空行
-        self.COMMENT_BUTTON_GAP = 20  # 评论区和按钮区间距（增大避免重叠）
+        self.SECTION_GAP = 12  # 各部分之间的空行
+        self.COMMENT_BUTTON_GAP = 12  # 评论区和按钮区间距
         self.DANMAKU_Y_OFFSET = 30  # 弹幕位置上移（从图片顶部往下）
         
         # 当前显示的快照
@@ -99,6 +99,16 @@ class LiveSnapshotPanel:
         
         # 选项悬停
         self.hovered_choice = -1
+        
+        # 当事人头像悬停
+        self.hovered_actor_index = -1  # 当前悬浮的当事人索引
+        self.actor_name_widths = {}  # 缓存名字宽度
+        
+        # 评论区滚动
+        self.comment_scroll_y = 0  # 滚动偏移量
+        self.comment_max_scroll = 0  # 最大滚动值
+        self.comment_scroll_speed = 25  # 每次滚动像素数
+        self.comment_area_rect = None  # 评论区区域（用于滚轮检测）
         
         # 两级选择状态
         self.choice_level = 1  # 1=第一级(当面/快信), 2=第二级(具体选项)
@@ -269,29 +279,12 @@ class LiveSnapshotPanel:
                 self.hide()
                 return True
             
-            # 点击选项（使用与绘制相同的动态计算）
-            if self.snapshot and self.snapshot.choices:
-                # 重新计算按钮位置（与draw方法一致）
-                num_choices = len(self.snapshot.choices)
-                # 先计算评论区底部位置
-                temp_y = 20
-                temp_y = self._get_image_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_title_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_tags_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_comments_bottom_y(temp_y)
-                buttons_y = temp_y + self.COMMENT_BUTTON_GAP
-                
-                for i, choice in enumerate(self.snapshot.choices):
-                    choice_rect = pygame.Rect(
-                        self.panel_x + 30,
-                        self.panel_y + buttons_y + i * 60,
-                        self.panel_w - 60,
-                        50
-                    )
-                    if choice_rect.collidepoint(mx, my):
+            # 点击选项 - 使用缓存的按钮位置（在draw中计算）
+            if self.snapshot and self.snapshot.choices and hasattr(self, '_cached_button_rects'):
+                for i, btn_rect in enumerate(self._cached_button_rects):
+                    # 将相对坐标转换为屏幕坐标
+                    screen_rect = btn_rect.move(self.panel_x, self.panel_y)
+                    if screen_rect.collidepoint(mx, my):
                         # [!] 播放选择确认音效
                         try:
                             from src.audio.sound_manager import get_sound_manager
@@ -299,6 +292,7 @@ class LiveSnapshotPanel:
                         except Exception:
                             pass
                         
+                        choice = self.snapshot.choices[i]
                         action = choice.get('action', '')
                         
                         # 第一级选择处理
@@ -355,28 +349,26 @@ class LiveSnapshotPanel:
             mx, my = event.pos
             self.hovered_choice = -1
             
-            if self.snapshot and self.snapshot.choices:
-                # 重新计算按钮位置（与draw方法一致）
-                temp_y = 20
-                temp_y = self._get_image_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_title_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_tags_bottom_y(temp_y)
-                temp_y += self.SECTION_GAP
-                temp_y = self._get_comments_bottom_y(temp_y)
-                buttons_y = temp_y + self.COMMENT_BUTTON_GAP
-                
-                for i, choice in enumerate(self.snapshot.choices):
-                    choice_rect = pygame.Rect(
-                        self.panel_x + 30,
-                        self.panel_y + buttons_y + i * 60,
-                        self.panel_w - 60,
-                        50
-                    )
-                    if choice_rect.collidepoint(mx, my):
+            # 使用缓存的按钮位置检测悬停
+            if self.snapshot and self.snapshot.choices and hasattr(self, '_cached_button_rects'):
+                for i, btn_rect in enumerate(self._cached_button_rects):
+                    screen_rect = btn_rect.move(self.panel_x, self.panel_y)
+                    if screen_rect.collidepoint(mx, my):
                         self.hovered_choice = i
                         break
+        
+        # 处理评论区滚轮事件
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 4 or event.button == 5:  # 滚轮上/下
+                mx, my = event.pos
+                # 检查鼠标是否在评论区区域内
+                if self.comment_area_rect and self.comment_area_rect.collidepoint(mx, my):
+                    # 计算滚动方向：4=上滚(向上滚动内容)，5=下滚(向下滚动内容)
+                    direction = -1 if event.button == 4 else 1
+                    self.comment_scroll_y += direction * self.comment_scroll_speed
+                    # 限制滚动范围
+                    self.comment_scroll_y = max(0, min(self.comment_scroll_y, self.comment_max_scroll))
+                    return True  # 消费事件
         
         return True  # 面板打开时消费所有事件
     
@@ -409,11 +401,10 @@ class LiveSnapshotPanel:
         anim_x = self.panel_x + (self.panel_w - anim_w) // 2
         anim_y = (self.screen_h - anim_h) // 2  # 屏幕居中
         
-        # 主面板背景
+        # 主面板背景 - 使用实际计算出的高度
         panel_surface = pygame.Surface((self.panel_w, self.panel_h), pygame.SRCALPHA)
         
         # 报纸黄色背景（复古风格）- 纯色
-        #如果希望更黄一点怎么办 
         paper_color = (255, 250, 220)  # 更黄的报纸黄
         panel_surface.fill(paper_color)
         
@@ -427,8 +418,8 @@ class LiveSnapshotPanel:
         y_offset = self._draw_image(panel_surface, y_offset)
         y_offset += self.SECTION_GAP  # 空行
         
-        # === 标题和描述 ===
-        y_offset = self._draw_title(panel_surface, y_offset)
+        # === 标题和描述（双列布局：左侧参与人，右侧标题+正文）===
+        y_offset = self._draw_title_and_actors(panel_surface, y_offset)
         y_offset += self.SECTION_GAP  # 空行
         
         # === 标签（小红书风格：正文下方）===
@@ -436,23 +427,51 @@ class LiveSnapshotPanel:
         y_offset += self.SECTION_GAP  # 空行
         
         # === 评论区 ===
-        y_offset = self._draw_comments(panel_surface, y_offset)
+        # 第一次调用：估算评论区高度（用于计算面板总高度）
+        # 限制评论区最大高度为150px，避免占用过多空间
+        comments_temp_y = self._draw_comments(panel_surface, y_offset, max_height=150)
+        comments_actual_height = comments_temp_y - y_offset
         
         # 【关键】根据实际内容高度，动态计算按钮位置和面板的最终高度
         # 按钮紧跟在评论区下方，留出 COMMENT_BUTTON_GAP 间距
         num_choices = len(self.snapshot.choices) if self.snapshot.choices else 0
         buttons_height = num_choices * 60  # 按钮总高度
         
-        # 计算按钮起始位置
-        buttons_y = y_offset + self.COMMENT_BUTTON_GAP
+        # 计算按钮起始位置（评论区高度 + 间距）
+        buttons_y = y_offset + comments_actual_height + self.COMMENT_BUTTON_GAP
         
         # 计算所需总高度（内容 + 间距 + 按钮 + 底部边距）
-        required_height = buttons_y + buttons_height + 30  # 30是底部边距
+        required_height = buttons_y + buttons_height + 50  # 50是底部边距，确保按钮完全可见
         
-        # 限制最小和最大高度
-        min_h = 500
-        max_h = self.screen_h - 100
-        self.panel_h = max(min_h, min(required_height, max_h))
+        # 限制最小和最大高度，确保按钮完全显示
+        min_h = max(500, required_height)  # 最小高度必须能容纳所有内容
+        max_h = self.screen_h - 50  # 留50px边距
+        
+        # 如果内容超出屏幕，需要滚动，但目前先确保高度足够
+        if required_height > max_h:
+            # 内容太多，使用最大高度（后续可以考虑添加滚动）
+            self.panel_h = max_h
+        else:
+            self.panel_h = required_height
+        
+        # 重新创建面板surface（因为高度可能改变了）
+        panel_surface = pygame.Surface((self.panel_w, self.panel_h), pygame.SRCALPHA)
+        panel_surface.fill(paper_color)
+        pygame.draw.rect(panel_surface, (80, 70, 100), (0, 0, self.panel_w, self.panel_h), 2, border_radius=15)
+        
+        # 重新绘制所有内容到新的surface
+        y_offset = 20
+        y_offset = self._draw_image(panel_surface, y_offset)
+        y_offset += self.SECTION_GAP
+        y_offset = self._draw_title_and_actors(panel_surface, y_offset)
+        y_offset += self.SECTION_GAP
+        y_offset = self._draw_tags(panel_surface, y_offset)
+        y_offset += self.SECTION_GAP
+        # 第二次绘制使用相同的max_height，确保Y值一致
+        y_offset = self._draw_comments(panel_surface, y_offset, max_height=150)
+        
+        # 计算按钮位置
+        buttons_y = y_offset + self.COMMENT_BUTTON_GAP
         
         # === 选项按钮 ===
         self._draw_choices_at_y(panel_surface, buttons_y)
@@ -467,15 +486,21 @@ class LiveSnapshotPanel:
         self._draw_danmaku(screen)
     
     def _draw_choices_at_y(self, surface: pygame.Surface, start_y: int):
-        """在指定Y位置绘制选项按钮"""
+        """在指定Y位置绘制选项按钮，并缓存按钮位置用于点击检测"""
         if not self.snapshot.choices:
             return
         
         font = self._get_font(22)
         num_choices = len(self.snapshot.choices)
         
+        # 初始化按钮位置缓存
+        self._cached_button_rects = []
+        
         for i, choice in enumerate(self.snapshot.choices):
             btn_rect = pygame.Rect(30, start_y + i * 60, self.panel_w - 60, 50)
+            
+            # 缓存按钮位置（相对坐标，用于handle_event）
+            self._cached_button_rects.append(btn_rect)
             
             is_hover = (i == self.hovered_choice)
             
@@ -529,6 +554,13 @@ class LiveSnapshotPanel:
         y = start_y
         # 标题（最多2行）
         y += 32 * 2 + 5
+        # 当事人头像（如果有）- 36px头像+名字，可能换行
+        if self.snapshot.actor_names:
+            num_actors = len(self.snapshot.actor_names)
+            # 估算每行能放几个头像（头像36+间距12+名字约40）
+            actors_per_row = max(1, (self.panel_w - 40) // 100)
+            num_rows = (num_actors + actors_per_row - 1) // actors_per_row
+            y += (36 + 8) * num_rows + 4  # 头像高度 + 间距
         # 描述（最多3行）
         if self.snapshot.description:
             y += 28 * 3
@@ -542,13 +574,34 @@ class LiveSnapshotPanel:
         return start_y + 32
     
     def _get_comments_bottom_y(self, start_y: int) -> int:
-        """计算评论区底部Y坐标"""
+        """计算评论区底部Y坐标 - 小红书风格布局"""
         if not self.snapshot.comments:
             return start_y
+        
         y = start_y
-        y += 15  # 标题
-        num_comments = min(self.visible_comment_count, 5)
-        y += 18 * num_comments + 10
+        y += 32  # 标题高度
+        
+        font_content = self._get_font(15)
+        AVATAR_COL_WIDTH = 55
+        content_x = 25 + AVATAR_COL_WIDTH
+        content_width = self.panel_w - content_x - 25
+        LINE_HEIGHT = 18  # 减小行高
+        COMMENT_GAP = 8  # 减小评论间距
+        
+        num_comments = min(self.visible_comment_count, 6)
+        for comment in self.snapshot.comments[:num_comments]:
+            text = comment.get('text', '')
+            
+            # 计算内容需要的行数
+            content_prefix_width = font_content.size("[赞] ")[0]
+            content_lines = self._wrap_comment_text(text, font_content, content_width - content_prefix_width)
+            total_lines = 1 + len(content_lines)  # 名字行 + 内容行
+            
+            # 评论高度 = max(头像高度, 内容行数*行高) + 间距
+            comment_height = max(44, total_lines * LINE_HEIGHT + 8)
+            y += comment_height + COMMENT_GAP
+        
+        y += 10  # 底部间距
         return y
     
     def _estimate_content_height(self) -> int:
@@ -565,6 +618,10 @@ class LiveSnapshotPanel:
         # 标题高度（最多2行）
         h += 32 * 2 + 5
         
+        # 当事人头像（如果有）
+        if self.snapshot.actor_names:
+            h += 28 + 8  # 头像高度 + 间距
+        
         # 描述高度（最多3行）
         if self.snapshot.description:
             h += 28 * 3
@@ -576,15 +633,45 @@ class LiveSnapshotPanel:
             h += 32
         h += self.SECTION_GAP
         
-        # 评论区高度
+        # 评论区高度 - 考虑换行
         if self.snapshot.comments:
-            h += 15  # 标题
-            num_comments = min(len(self.snapshot.comments), 5)  # 最多显示5条
-            h += 18 * num_comments + 10
+            h += 28  # 标题
+            font_xs = self._get_font(16)
+            content_start_x = 25 + 20 + 6  # avatar_x + avatar_size + spacing
+            max_line_width = self.panel_w - content_start_x - 25
+            
+            num_comments = min(len(self.snapshot.comments), 5)
+            for comment in self.snapshot.comments[:num_comments]:
+                user = comment.get('user', '路人')
+                text = comment.get('text', '')
+                user_prefix = f"@{user}[评]："
+                user_prefix_width = font_xs.size(user_prefix)[0]
+                remaining_width = self.panel_w - content_start_x - user_prefix_width - 25
+                
+                # 估算行数（考虑用户名占用空间后剩余的宽度）
+                if remaining_width > 50:
+                    # 第一行可用宽度
+                    first_line_available = remaining_width
+                    # 后续行可用宽度
+                    other_lines_available = max_line_width
+                    
+                    # 估算需要多少行
+                    text_width = font_xs.size(text)[0]
+                    if text_width <= first_line_available:
+                        lines_needed = 1
+                    else:
+                        # 第一行 + 剩余文字需要的行数
+                        remaining_text_width = text_width - first_line_available
+                        lines_needed = 1 + max(1, int(remaining_text_width / other_lines_available))
+                else:
+                    lines_needed = max(1, int(font_xs.size(text)[0] / max_line_width) + 1)
+                
+                h += 22 * lines_needed  # 每行22像素
+            h += 10  # 底部间距
         
-        # 按钮区域高度
+        # 按钮区域高度 - 确保按钮完全可见
         num_choices = len(self.snapshot.choices) if self.snapshot.choices else 0
-        h += self.COMMENT_BUTTON_GAP + num_choices * 60 + 30  # 间距 + 按钮 + 底部边距
+        h += self.COMMENT_BUTTON_GAP + num_choices * 60 + 50  # 间距 + 按钮 + 更大的底部边距
         
         return h
     
@@ -607,9 +694,9 @@ class LiveSnapshotPanel:
             surface.blit(text_surf, (x + 6, y + 4))
             x += tag_w + 8
         
-        # 热度（使用纯文本代替emoji，避免渲染问题）
-        heat_text = f"[热] {int(self.heat_anim):,}"
-        heat_surf = font_sm.render(heat_text, True, (255, 150, 100))
+        # 热度（使用文字）
+        heat_text = f"热度 {int(self.heat_anim):,}"
+        heat_surf = font_sm.render(heat_text, True, (255, 100, 50))
         surface.blit(heat_surf, (self.panel_w - heat_surf.get_width() - 50, y + 3))
         
         return y + 35
@@ -639,10 +726,6 @@ class LiveSnapshotPanel:
             # 尝试加载头像
             avatar_surface = None
             avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
-            if not avatar_path.exists():
-                avatar_path = PyPath(resource_path(f"data/avatars/{actor_name}.png"))
-            if not avatar_path.exists():
-                avatar_path = PyPath(resource_path(f"avatars/{actor_name}.png"))
             
             if avatar_path.exists():
                 try:
@@ -684,10 +767,6 @@ class LiveSnapshotPanel:
     def _draw_image(self, surface: pygame.Surface, y: int) -> int:
         """绘制事件图片 - 小红书/报纸风格：保持原始比例，优雅留白"""
         
-        # 【新增】先绘制主要演员头像
-        y = self._draw_actor_avatars_header(surface, y)
-        y += 10  # 头像和图片之间的间距
-
         margin_x = 40  # 左右边距
         max_img_w = self.panel_w - margin_x * 2  # 最大可用宽度
         max_img_h = 360  # 最大高度（避免过大）
@@ -828,144 +907,397 @@ class LiveSnapshotPanel:
         text_rect = text.get_rect(center=(cx, cy + 50))
         surface.blit(text, text_rect)
     
-    def _draw_title(self, surface: pygame.Surface, y: int) -> int:
-        """绘制标题和描述（小红书风格：正文内容）"""
-        font_lg = self._get_font(28)  # 增大标题字体
-        font_md = self._get_font(22)  # 描述字体
+    def _draw_title_and_actors(self, surface: pygame.Surface, y: int) -> int:
+        """绘制标题+正文，标题下方一行显示参与人（默认只显示头像，悬浮时显示名字并推开后面的头像）"""
+        font_lg = self._get_font(26)  # 标题字体
+        font_md = self._get_font(20)  # 正文字体
+        font_name = self._get_font(14)  # 名字字体
         
-        # 主标题（自动换行）
+        MARGIN = 20
+        content_width = self.panel_w - MARGIN * 2
+        
+        start_y = y
+        
+        # ===== 主标题（自动换行）=====
         title = self.snapshot.title
-        max_width = self.panel_w - 40
+        title_lines = self._wrap_text(title, font_lg, content_width)
         
-        # 简单换行处理
-        words = []
+        for i, line in enumerate(title_lines[:2]):  # 最多2行
+            text_surf = font_lg.render(line, True, (30, 30, 30))
+            surface.blit(text_surf, (MARGIN, y + i * 30))
+        
+        y += len(title_lines[:2]) * 30 + 6
+        
+        # ===== 参与人一行显示（在标题下方）=====
+        if self.snapshot.actor_names:
+            AVATAR_SIZE = 40  # 和评论区头像一样大
+            SPACING = 8  # 头像间距
+            
+            # 预计算每个名字宽度（用于悬浮时推开效果）
+            for actor_name in self.snapshot.actor_names:
+                if actor_name not in self.actor_name_widths:
+                    name_surf = font_name.render(actor_name, True, (80, 80, 80))
+                    self.actor_name_widths[actor_name] = name_surf.get_width()
+            
+            # 计算每个头像的位置（考虑悬浮推开效果）
+            actor_positions = []  # [(x, show_name), ...]
+            current_x = MARGIN
+            
+            for i, actor_name in enumerate(self.snapshot.actor_names[:6]):  # 最多6个
+                # 检查是否悬浮在这个头像上
+                avatar_rect = pygame.Rect(
+                    self.panel_x + current_x,
+                    self.panel_y + y,
+                    AVATAR_SIZE,
+                    AVATAR_SIZE
+                )
+                is_hovered = avatar_rect.collidepoint(pygame.mouse.get_pos())
+                
+                # 更新悬浮状态（用于handle_event）
+                if is_hovered:
+                    self.hovered_actor_index = i
+                
+                show_name = is_hovered
+                name_width = self.actor_name_widths.get(actor_name, 40) if show_name else 0
+                
+                actor_positions.append((current_x, show_name, actor_name, name_width))
+                
+                # 计算下一个头像的位置
+                if show_name:
+                    # 显示名字：头像 + 间距 + 名字 + 间距
+                    current_x += AVATAR_SIZE + 6 + name_width + SPACING
+                else:
+                    # 只显示头像：头像 + 间距
+                    current_x += AVATAR_SIZE + SPACING
+                
+                # 如果超出面板宽度，停止
+                if current_x > self.panel_w - MARGIN - AVATAR_SIZE:
+                    break
+            
+            # 绘制头像和名字
+            for x, show_name, actor_name, name_width in actor_positions:
+                # 绘制头像
+                self._draw_actor_avatar_small(surface, actor_name, x, y, AVATAR_SIZE)
+                
+                # 如果悬浮，显示名字（在头像右侧）
+                if show_name:
+                    name_surf = font_name.render(actor_name, True, (80, 80, 80))
+                    name_y = y + (AVATAR_SIZE - name_surf.get_height()) // 2
+                    surface.blit(name_surf, (x + AVATAR_SIZE + 6, name_y))
+            
+            y += AVATAR_SIZE + 10  # 头像高度 + 间距
+        
+        # ===== 事件描述（正文）=====
+        description = self.snapshot.description
+        if description:
+            desc_lines = self._wrap_text(description, font_md, content_width)
+            
+            for line in desc_lines[:3]:  # 最多3行
+                desc_surf = font_md.render(line, True, (70, 70, 70))
+                surface.blit(desc_surf, (MARGIN, y))
+                y += 24
+        
+        return y + 8
+    
+    def _wrap_text(self, text: str, font: pygame.font.Font, max_width: int) -> List[str]:
+        """通用文本换行"""
+        if not text:
+            return []
+        
+        lines = []
         current_line = ""
-        for char in title:
+        
+        for char in text:
             test_line = current_line + char
-            if font_lg.size(test_line)[0] > max_width:
+            if font.size(test_line)[0] > max_width:
                 if current_line:
-                    words.append(current_line)
+                    lines.append(current_line)
                 current_line = char
             else:
                 current_line = test_line
+        
         if current_line:
-            words.append(current_line)
+            lines.append(current_line)
         
-        for line in words[:2]:  # 最多两行
-            #希望标题加粗
-            text_surf = font_lg.render(line, True, (30, 30, 30))  # 黑色文字
-            surface.blit(text_surf, (20, y))
-            y += 32
+        return lines if lines else [text]
+    
+    def _draw_actor_avatar_small(self, surface: pygame.Surface, actor_name: str, x: int, y: int, size: int):
+        """绘制小型演员头像"""
+        from pathlib import Path
         
-        y += 5  # 空行
+        avatar_surface = None
+        avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
         
-        # 事件劲爆描述
-        description = self.snapshot.description
-        if description:
-            # 自动换行处理描述
-            desc_words = []
-            current_line = ""
-            for char in description:
-                test_line = current_line + char
-                if font_md.size(test_line)[0] > max_width:
-                    if current_line:
-                        desc_words.append(current_line)
-                    current_line = char
-                else:
-                    current_line = test_line
-            if current_line:
-                desc_words.append(current_line)
+        if avatar_path.exists():
+            try:
+                avatar_surface = pygame.image.load(str(avatar_path))
+                avatar_surface = pygame.transform.smoothscale(avatar_surface, (size, size))
+            except:
+                pass
+        
+        # 圆形裁剪
+        circle_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.ellipse(circle_surf, (255, 255, 255), (0, 0, size, size))
+        
+        if avatar_surface:
+            avatar_surface.blit(circle_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            surface.blit(avatar_surface, (x, y))
+        else:
+            # 默认头像
+            pygame.draw.ellipse(surface, (100, 100, 130), (x, y, size, size))
+            font = self._get_font(max(12, size // 3))
+            initial = actor_name[0] if actor_name else "?"
+            text_surf = font.render(initial, True, (240, 240, 240))
+            text_x = x + (size - text_surf.get_width()) // 2
+            text_y = y + (size - text_surf.get_height()) // 2
+            surface.blit(text_surf, (text_x, text_y))
+        
+        # 边框
+        pygame.draw.ellipse(surface, (80, 80, 100), (x, y, size, size), 1)
+    
+    def _draw_actor_avatars_inline(self, surface: pygame.Surface, y: int, title_height: int):
+        """在标题行右侧绘制当事人头像（紧凑排列，与标题同高）"""
+        if not self.snapshot or not self.snapshot.actor_names:
+            return
+        
+        from pathlib import Path
+        
+        avatar_size = 28  # 更小的头像，与标题行高匹配
+        spacing = 8  # 头像间距
+        
+        # 计算头像区域总宽度
+        num_actors = min(len(self.snapshot.actor_names), 3)  # 最多显示3个
+        total_width = num_actors * avatar_size + (num_actors - 1) * spacing
+        
+        # 靠右排列，留出边距
+        start_x = self.panel_w - total_width - 25
+        # 垂直居中（基于标题高度）
+        avatar_y = y + (title_height - avatar_size) // 2
+        
+        for i, actor_name in enumerate(self.snapshot.actor_names[:3]):
+            x = start_x + i * (avatar_size + spacing)
             
-            for line in desc_words[:3]:  # 最多三行
-                desc_surf = font_md.render(line, True, (50, 50, 50))  # 深灰色
-                surface.blit(desc_surf, (20, y))
-                y += 28
+            # 尝试加载头像
+            avatar_surface = None
+            avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
+            
+            if avatar_path.exists():
+                try:
+                    avatar_surface = pygame.image.load(str(avatar_path))
+                    avatar_surface = pygame.transform.smoothscale(avatar_surface, (avatar_size, avatar_size))
+                except:
+                    pass
+            
+            # 绘制圆形裁剪区域
+            circle_surf = pygame.Surface((avatar_size, avatar_size), pygame.SRCALPHA)
+            pygame.draw.ellipse(circle_surf, (255, 255, 255), (0, 0, avatar_size, avatar_size))
+            
+            if avatar_surface:
+                avatar_surface.blit(circle_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                surface.blit(avatar_surface, (x, avatar_y))
+            else:
+                # 使用默认头像
+                pygame.draw.ellipse(surface, (100, 100, 130), (x, avatar_y, avatar_size, avatar_size))
+                font = self._get_font(12)
+                initial = actor_name[0] if actor_name else "?"
+                text_surf = font.render(initial, True, (240, 240, 240))
+                text_x = x + (avatar_size - text_surf.get_width()) // 2
+                text_y = avatar_y + (avatar_size - text_surf.get_height()) // 2
+                surface.blit(text_surf, (text_x, text_y))
+            
+            # 绘制边框
+            pygame.draw.ellipse(surface, (80, 80, 100), (x, avatar_y, avatar_size, avatar_size), 1)
+    
+    def _draw_actor_avatars_compact(self, surface: pygame.Surface, y: int) -> int:
+        """绘制主要演员头像和名字（小红书风格：头像+名字横向排列）"""
+        if not self.snapshot or not self.snapshot.actor_names:
+            return y  # 没有演员，直接返回
         
-        return y + 0  # 空行
+        from pathlib import Path
+        
+        avatar_size = 36  # 增大头像大小
+        spacing = 12  # 每个演员之间的间距
+        margin_x = 20  # 左边距
+        
+        start_x = margin_x
+        current_x = start_x
+        
+        # 绘制每个演员（头像+名字）
+        for i, actor_name in enumerate(self.snapshot.actor_names[:4]):  # 最多显示4个
+            # 尝试加载头像
+            avatar_surface = None
+            avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
+            
+            if avatar_path.exists():
+                try:
+                    avatar_surface = pygame.image.load(str(avatar_path))
+                    avatar_surface = pygame.transform.smoothscale(avatar_surface, (avatar_size, avatar_size))
+                except:
+                    pass
+            
+            # 绘制圆形裁剪区域
+            circle_surf = pygame.Surface((avatar_size, avatar_size), pygame.SRCALPHA)
+            pygame.draw.ellipse(circle_surf, (255, 255, 255), (0, 0, avatar_size, avatar_size))
+            
+            avatar_y = y
+            if avatar_surface:
+                # 使用头像
+                avatar_surface.blit(circle_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                surface.blit(avatar_surface, (current_x, avatar_y))
+            else:
+                # 使用默认头像（名字首字）
+                pygame.draw.ellipse(surface, (100, 100, 130), (current_x, avatar_y, avatar_size, avatar_size))
+                font = self._get_font(16)
+                initial = actor_name[0] if actor_name else "?"
+                text_surf = font.render(initial, True, (240, 240, 240))
+                text_x = current_x + (avatar_size - text_surf.get_width()) // 2
+                text_y = avatar_y + (avatar_size - text_surf.get_height()) // 2
+                surface.blit(text_surf, (text_x, text_y))
+            
+            # 绘制边框
+            pygame.draw.ellipse(surface, (80, 80, 100), (current_x, avatar_y, avatar_size, avatar_size), 2)
+            
+            # 绘制演员名字（头像右侧）
+            name_font = self._get_font(13)
+            name_surf = name_font.render(actor_name, True, (60, 60, 60))
+            name_x = current_x + avatar_size + 6
+            name_y = avatar_y + (avatar_size - name_surf.get_height()) // 2
+            surface.blit(name_surf, (name_x, name_y))
+            
+            # 计算下一个演员的位置
+            actor_width = avatar_size + 6 + name_surf.get_width() + spacing
+            current_x += actor_width
+            
+            # 如果超出面板宽度，换行
+            if current_x > self.panel_w - 80 and i < len(self.snapshot.actor_names) - 1:
+                current_x = start_x
+                y += avatar_size + 8
+        
+        # 返回新的Y位置
+        return y + avatar_size + 12
     
     def _draw_tags(self, surface: pygame.Surface, y: int) -> int:
-        """绘制标签（小红书风格：纯文字蓝色标签）"""
-        if not self.snapshot.tags:
-            # 即使没有标签，也要显示热度
-            font = self._get_font(18)
-            heat_text = f"[热] {int(self.heat_anim):,}"
-            heat_surf = font.render(heat_text, True, (255, 120, 80))
-            surface.blit(heat_surf, (20, y + 4))
-            return y + 32  # 返回热度区域底部
-        
+        """绘制标签（小红书风格：纯文字蓝色标签），热度右对齐"""
         font = self._get_font(18)
-        x = 20
         start_y = y
+        x = 20
         
-        for tag in self.snapshot.tags[:4]:  # 最多显示4个标签
-            tag_text = f"#{tag}"
-            text_surf = font.render(tag_text, True, (80, 160, 255))  # 纯蓝色，无背景
-            surface.blit(text_surf, (x, y + 4))
-            x += text_surf.get_width() + 15  # 间距稍大
-            
-            # 换行处理
-            if x > self.panel_w - 100:
-                x = 20
-                y += 28
-        
-        # 热度标签（纯文本，无emoji）
-        heat_text = f"[热] {int(self.heat_anim):,}"
+        # 先计算热度文字的宽度
+        heat_text = f"热度 {int(self.heat_anim):,}"
         heat_surf = font.render(heat_text, True, (255, 120, 80))
-        surface.blit(heat_surf, (x + 10, y + 4))
+        heat_width = heat_surf.get_width()
         
-        # 返回标签区域底部（确保下一部分从这里开始）
-        return max(y, start_y) + 32
+        # 可用宽度（留出热度区域）
+        available_width = self.panel_w - 40 - heat_width - 20  # 边距 + 热度宽度 + 间距
+        
+        # 绘制标签
+        if self.snapshot.tags:
+            for tag in self.snapshot.tags[:4]:  # 最多显示4个标签
+                tag_text = f"#{tag}"
+                text_surf = font.render(tag_text, True, (80, 160, 255))
+                
+                # 检查是否超出可用宽度
+                if x + text_surf.get_width() > available_width:
+                    break  # 超出空间，停止绘制标签
+                
+                surface.blit(text_surf, (x, y + 4))
+                x += text_surf.get_width() + 15
+        
+        # 热度右对齐
+        heat_x = self.panel_w - heat_width - 25
+        surface.blit(heat_surf, (heat_x, y + 4))
+        
+        return y + 32
     
-    def _draw_comments(self, surface: pygame.Surface, y: int) -> int:
-        """绘制评论区 - 改进版：支持更多评论显示，带头像"""
+    def _draw_comments(self, surface: pygame.Surface, y: int, max_height: int = 200) -> int:
+        """绘制评论区 - 小红书风格：左侧头像，右侧3行（名字/[赞]+内容），支持滚动
+        
+        Args:
+            surface: 绘制目标
+            y: 起始Y坐标
+            max_height: 评论区最大高度（默认200px）
+        
+        Returns:
+            评论区实际占用的高度
+        """
         if not self.snapshot.comments:
             return y
         
-        font_sm = self._get_font(20)  # 增大标题字体
-        font_xs = self._get_font(16)  # 评论字体稍小
+        font_sm = self._get_font(20)  # 标题字体
+        font_name = self._get_font(15)  # 名字字体
+        font_content = self._get_font(15)  # 评论内容字体
         
         # 评论区标题（黑色文字）
         title_surf = font_sm.render("[热评] 吃瓜群众怎么看:", True, (30, 30, 30))
         surface.blit(title_surf, (20, y))
-        y += 28
+        y += 32
         
-        # 【修复】计算可用空间：评论区到选项按钮之间的空间
-        # 先计算按钮位置（与draw方法一致）
-        temp_y = 20
-        temp_y = self._get_image_bottom_y(temp_y)
-        temp_y += self.SECTION_GAP
-        temp_y = self._get_title_bottom_y(temp_y)
-        temp_y += self.SECTION_GAP
-        temp_y = self._get_tags_bottom_y(temp_y)
-        temp_y += self.SECTION_GAP
-        comments_start_y = temp_y + 15  # 评论区标题高度
-        num_comments = min(len(self.snapshot.comments), 5)
-        comments_end_y = comments_start_y + 18 * num_comments + 10
-        buttons_y = comments_end_y + self.COMMENT_BUTTON_GAP
+        # 布局常量
+        AVATAR_SIZE = 40  # 头像大小
+        AVATAR_COL_WIDTH = 55  # 头像列固定宽度
+        LINE_HEIGHT = 18  # 每行文字高度
+        COMMENT_GAP = 8  # 评论间距
         
-        # 可用高度 = 按钮位置 - 当前y - 间距
-        available_height = buttons_y - y - 20
-        
-        # 每条评论需要约28px高度（带头像）
-        max_visible_comments = max(3, min(8, available_height // 28))  # 至少3条，最多8条
-        
-        # 显示评论（逐个出现动画）
-        displayed_count = 0
-        for i, comment in enumerate(self.snapshot.comments[:self.visible_comment_count]):
-            if displayed_count >= max_visible_comments:
-                break
+        # 计算所有评论的总高度
+        total_comments_height = 0
+        comment_heights = []  # 记录每条评论的高度
+        for comment in self.snapshot.comments[:self.visible_comment_count]:
+            text = comment.get('text', '')
+            content_x = 25 + AVATAR_COL_WIDTH
+            content_width = self.panel_w - content_x - 25
             
+            # 计算内容行数
+            content_prefix = "[赞] "
+            content_lines = self._wrap_comment_text(text, font_content, content_width - font_content.size(content_prefix)[0])
+            total_lines = 1 + len(content_lines)  # 名字行 + 内容行数
+            comment_height = max(AVATAR_SIZE + 4, total_lines * LINE_HEIGHT + 8)
+            
+            comment_heights.append(comment_height)
+            total_comments_height += comment_height + COMMENT_GAP
+        
+        # 评论区可见区域
+        comments_area_top = y
+        # 实际显示高度 = min(总高度, 最大高度)
+        actual_display_height = min(total_comments_height, max_height)
+        comments_area_bottom = comments_area_top + actual_display_height
+        
+        # 记录评论区区域（用于滚轮检测）- 使用屏幕坐标
+        self.comment_area_rect = pygame.Rect(
+            self.panel_x + 25,
+            self.panel_y + comments_area_top,
+            self.panel_w - 50,
+            actual_display_height
+        )
+        
+        # 更新最大滚动值
+        self.comment_max_scroll = max(0, total_comments_height - actual_display_height)
+        self.comment_scroll_y = min(self.comment_scroll_y, self.comment_max_scroll)
+        
+        # 创建裁剪区域（只显示评论区内）
+        clip_rect = pygame.Rect(25, comments_area_top, self.panel_w - 50, actual_display_height)
+        
+        # 保存原始裁剪区域
+        original_clip = surface.get_clip()
+        # 设置评论区裁剪区域
+        surface.set_clip(clip_rect)
+        
+        # 绘制评论（考虑滚动偏移）
+        current_y = y - self.comment_scroll_y
+        displayed_count = 0
+        
+        for i, comment in enumerate(self.snapshot.comments[:self.visible_comment_count]):
             user = comment.get('user', '路人')
             text = comment.get('text', '')
             ctype = comment.get('type', '中立')
             
-            # 【新增】绘制评论者小头像
-            avatar_size = 20
-            avatar_x = 25
-            avatar_y = y + 2
-            self._draw_small_avatar(surface, user, avatar_x, avatar_y, avatar_size)
+            comment_height = comment_heights[i] if i < len(comment_heights) else 44
             
-            # 评论类型图标（纯文本）
+            # 跳过完全在可见区域外的评论
+            if current_y + comment_height < comments_area_top or current_y > comments_area_bottom:
+                current_y += comment_height + COMMENT_GAP
+                continue
+            
+            # 评论类型图标
             type_icons = {
                 '支持': '[赞]',
                 '反对': '[踩]', 
@@ -974,39 +1306,97 @@ class LiveSnapshotPanel:
             }
             type_icon = type_icons.get(ctype, '[评]')
             
-            # 用户名（在头像右侧）
-            user_color = self._get_comment_color(ctype)
-            user_text = f" {type_icon}@{user}: "
-            user_surf = font_xs.render(user_text, True, user_color)
-            surface.blit(user_surf, (avatar_x + avatar_size + 4, y + 2))
+            # 计算布局
+            avatar_x = 25
+            content_x = avatar_x + AVATAR_COL_WIDTH
+            content_width = self.panel_w - content_x - 25
             
-            # 评论内容 - 计算可显示的最大宽度
-            content_start_x = avatar_x + avatar_size + 4 + user_surf.get_width()
-            max_content_width = self.panel_w - content_start_x - 30  # 留30px右边距
+            # 换行处理评论内容
+            content_prefix = f"{type_icon} "
+            content_lines = self._wrap_comment_text(text, font_content, content_width - font_content.size(content_prefix)[0])
             
-            # 截断文本以适应宽度
-            display_text = text
-            while font_xs.size(display_text)[0] > max_content_width and len(display_text) > 0:
-                display_text = display_text[:-1]
-            if len(display_text) < len(text):
-                display_text = display_text[:-2] + "..."
+            # 绘制头像（左侧固定列，垂直居中）
+            avatar_y = current_y + (comment_height - AVATAR_SIZE) // 2
+            self._draw_small_avatar(surface, user, avatar_x, avatar_y, AVATAR_SIZE)
             
-            # 加深评论文字颜色，提高对比度
-            text_surf = font_xs.render(display_text, True, (60, 60, 60))
-            surface.blit(text_surf, (content_start_x, y + 2))
+            # 第1行：用户名
+            name_color = self._get_comment_color(ctype)
+            name_surf = font_name.render(user, True, name_color)
+            surface.blit(name_surf, (content_x, current_y + 2))
             
-            y += 28  # 每条评论28像素高度（带头像）
+            # 第2行及以后：[赞]+评论内容
+            content_y = current_y + 2 + LINE_HEIGHT
+            for line_idx, line_text in enumerate(content_lines):
+                if line_idx == 0:
+                    # 第一行带[赞]前缀
+                    prefix_surf = font_content.render(content_prefix, True, (200, 120, 60))
+                    surface.blit(prefix_surf, (content_x, content_y))
+                    
+                    text_surf = font_content.render(line_text, True, (60, 60, 60))
+                    surface.blit(text_surf, (content_x + prefix_surf.get_width(), content_y))
+                else:
+                    # 后续行对齐到内容起始位置
+                    text_surf = font_content.render(line_text, True, (60, 60, 60))
+                    surface.blit(text_surf, (content_x, content_y))
+                
+                content_y += LINE_HEIGHT
+            
+            current_y += comment_height + COMMENT_GAP
             displayed_count += 1
+        
+        # 恢复原始裁剪区域
+        surface.set_clip(original_clip)
+        
+        # 绘制滚动条（如果有可滚动内容）
+        if self.comment_max_scroll > 0:
+            scrollbar_x = self.panel_w - 15
+            scrollbar_top = comments_area_top + 5
+            scrollbar_height = actual_display_height - 10
+            
+            # 滚动条背景
+            pygame.draw.rect(surface, (200, 200, 200), (scrollbar_x, scrollbar_top, 8, scrollbar_height), border_radius=4)
+            
+            # 滚动条滑块
+            scroll_ratio = self.comment_scroll_y / self.comment_max_scroll if self.comment_max_scroll > 0 else 0
+            thumb_height = max(30, scrollbar_height * (actual_display_height / total_comments_height))
+            thumb_y = scrollbar_top + (scrollbar_height - thumb_height) * scroll_ratio
+            pygame.draw.rect(surface, (100, 100, 120), (scrollbar_x, thumb_y, 8, thumb_height), border_radius=4)
         
         # 如果还有更多评论未显示，添加提示
         total_comments = len(self.snapshot.comments)
-        if total_comments > displayed_count:
-            more_text = f"...还有 {total_comments - displayed_count} 条热评"
-            more_surf = font_xs.render(more_text, True, (120, 120, 150))
-            surface.blit(more_surf, (25 + avatar_size + 4, y))
-            y += 18
+        if total_comments > self.visible_comment_count:
+            more_text = f"...还有 {total_comments - self.visible_comment_count} 条热评"
+            more_surf = font_content.render(more_text, True, (120, 120, 150))
+            surface.blit(more_surf, (25 + AVATAR_COL_WIDTH, comments_area_bottom - 20))
         
-        return y + 10
+        # 返回评论区底部Y坐标（标题32px + 评论区域高度）
+        return comments_area_bottom + 5
+    
+    def _wrap_comment_text(self, text: str, font: pygame.font.Font, max_width: int) -> List[str]:
+        """将评论文本按最大宽度换行"""
+        if not text:
+            return [""]
+        
+        lines = []
+        current_line = ""
+        
+        for char in text:
+            test_line = current_line + char
+            if font.size(test_line)[0] > max_width:
+                if current_line:
+                    lines.append(current_line)
+                current_line = char
+            else:
+                current_line = test_line
+        
+        if current_line:
+            lines.append(current_line)
+        
+        # 如果没有换行，返回原文本
+        if not lines:
+            lines = [text]
+        
+        return lines
     
     # 注意：_draw_choices 已被 _draw_choices_at_y 替代
     # 此方法已不再使用
@@ -1041,10 +1431,8 @@ class LiveSnapshotPanel:
     def _draw_small_avatar(self, surface: pygame.Surface, user_name: str, x: int, y: int, size: int = 20):
         """绘制小头像（用于评论区）"""
         
-        # 头像路径
-        avatar_path = PyPath(resource_path(f"data/avatars/{user_name}.png"))
-        if not avatar_path.exists():
-            avatar_path = PyPath(resource_path(f"avatars/{user_name}.png"))
+        # 头像路径 - 唯一路径
+        avatar_path = PyPath(resource_path(f"assets/head_icon/{user_name}.png"))
         
         # 尝试加载头像
         avatar_surface = None
@@ -1052,7 +1440,8 @@ class LiveSnapshotPanel:
             try:
                 avatar_surface = pygame.image.load(str(avatar_path))
                 avatar_surface = pygame.transform.smoothscale(avatar_surface, (size, size))
-            except:
+            except Exception as e:
+                print(f"[LiveSnapshotPanel] 头像加载失败: {avatar_path}, 错误: {e}")
                 pass
         
         # 绘制圆形裁剪区域

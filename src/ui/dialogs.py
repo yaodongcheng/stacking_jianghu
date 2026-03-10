@@ -1165,6 +1165,46 @@ class UIDialogsMixin:
         else:
             screen.blit(self.font_small.render("(无装备)", True, (100, 100, 100)), (x_left, y))
         
+        y += line_h + 5
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】仿太阁5性格维度显示
+        # ═══════════════════════════════════════════════════════════════
+        if hasattr(npc, 'personality') and npc.personality:
+            # 检查是否还有足够空间
+            if y + line_h * 4 < content_rect.bottom - 10:
+                pygame.draw.line(screen, (80, 80, 100), (x_left, y), (content_rect.right - 10, y))
+                y += 10
+                
+                title_p = self.font_small.render("【性格特质】", True, (150, 200, 250))
+                screen.blit(title_p, (x_left, y))
+                y += line_h
+                
+                p = npc.personality
+                # 第一行：脾气 + 胆量
+                temper_color = (255, 150, 150) if p.temper_str == "急躁" else (150, 255, 150) if p.temper_str == "温和" else (255, 255, 200)
+                spirit_color = (255, 200, 100) if p.spirit_str == "勇敢" else (150, 200, 255) if p.spirit_str == "胆小" else (200, 200, 200)
+                
+                line1 = f"脾气:{p.temper_str}  胆量:{p.spirit_str}"
+                screen.blit(self.font_small.render(line1, True, (220, 220, 220)), (x_left, y))
+                y += line_h
+                
+                # 第二行：主义 + 风格
+                line2 = f"主义:{p.ism_str}  风格:{p.act_style_str}"
+                screen.blit(self.font_small.render(line2, True, (220, 220, 220)), (x_left, y))
+                y += line_h
+                
+                # 第三行：情义 + 野心 + 物欲
+                ambition_str = "高" if p.ambition >= 70 else "中" if p.ambition >= 40 else "低"
+                line3 = f"情义:{p.friendship_str}  野心:{ambition_str}"
+                screen.blit(self.font_small.render(line3, True, (220, 220, 220)), (x_left, y))
+                y += line_h
+                
+                # 物欲（如果有）
+                if p.desire_type_str:
+                    line4 = f"物欲:{p.desire_type_str}({p.desire_str})"
+                    screen.blit(self.font_small.render(line4, True, (220, 220, 220)), (x_left, y))
+        
         return None  # 属性页没有操作按钮
     
     def _draw_npc_tab_inventory(self, screen, npc, player, is_self, content_rect, mx, my, click_event):

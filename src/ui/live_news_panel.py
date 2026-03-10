@@ -161,8 +161,10 @@ class LiveNewsPanel:
             auto_popup=False,
             tags=["郁芊芊", "泼皮牛二", "商会", "勒索"],
             comments=[
-                {"user": "路人甲", "text": "这泼皮太可恶了，必须严惩！", "type": "支持"},
-                {"user": "吃瓜群众", "text": "郁大小姐太可怜了，希望有人能帮她", "type": "中立"},
+                {"user": "张青", "text": "这泼皮太可恶了，必须严惩！", "type": "支持"},
+                {"user": "孙二娘", "text": "郁大小姐太可怜了，希望有人能帮她", "type": "中立"},
+                {"user": "李师师", "text": "郁姐姐人很好的，牛二太过分了", "type": "支持"},
+                {"user": "高衙内", "text": "嘿嘿，有意思，本公子去看看", "type": "搞笑"},
             ],
             heat_score=25888,
             image_prompt="A dramatic scene in ancient Chinese market..."
@@ -183,6 +185,44 @@ class LiveNewsPanel:
         test_news_1.read = False
         test_news_1.created_at = base_time - 20 * 60  # 20分钟前
         
+        # 【添加对话扩写】测试事件1：郁芊芊 vs 泼皮牛二
+        from src.llm.event_dialog_generator import EventScriptFull, EventDialogLine
+        test_news_1._pregen_script = EventScriptFull(
+            intro_dialogs=[
+                EventDialogLine('NARRATOR', '甜水巷人来人往，一队商队被堵在路中央。', ''),
+                EventDialogLine('OTHER', '郁大小姐，这条路是我牛二开的，想过就得留下买路钱！', ''),
+                EventDialogLine('SELF', '牛二！你不要太放肆，我郁家商队你也敢拦？', ''),
+                EventDialogLine('OTHER', '嘿嘿，郁家又怎样？今天不给钱，谁也别想走！', ''),
+                EventDialogLine('NARRATOR', '牛二一挥手，几个泼皮围了上来，气氛剑拔弩张。', 'SHAKE_CAMERA:3'),
+                EventDialogLine('SELF', '你...你们想怎样？', 'SET_EMOTION:郁芊芊:SCARED'),
+                EventDialogLine('OTHER', '很简单，一百两银子，或者...把货留下！', ''),
+                EventDialogLine('NARRATOR', '围观百姓指指点点，却无人敢上前。你，会怎么做？', 'SHOW_EVENT_CHOICE')
+            ],
+            choice_a_dialogs=[
+                EventDialogLine('PLAYER', '光天化日，竟敢当街勒索！给我住手！', ''),
+                EventDialogLine('OTHER', '你、你是什么人？敢管老子的闲事！', 'SET_EMOTION:泼皮牛二:ANGRY'),
+                EventDialogLine('SELF', '恩公！多谢恩公仗义执言！', 'SET_EMOTION:郁芊芊:HAPPY'),
+                EventDialogLine('PLAYER', '还不快滚？再让我看见你作恶，定不轻饶！', ''),
+                EventDialogLine('OTHER', '哼...算你们狠！咱们走着瞧！', 'NPC_FLEE:泼皮牛二'),
+                EventDialogLine('NARRATOR', '泼皮们灰溜溜地逃走了，郁芊芊感激地看着你。', 'SET_AFFINITY:郁芊芊:+30;PLAYER_FAME:+10')
+            ],
+            choice_b_dialogs=[
+                EventDialogLine('PLAYER', '两位且慢动手，听我一言。', ''),
+                EventDialogLine('OTHER', '哦？你想说什么？', ''),
+                EventDialogLine('PLAYER', '牛二哥，郁家商队常走这条路，何必把事情做绝？三十两银子，买杯茶喝，如何？', ''),
+                EventDialogLine('OTHER', '嗯...既然有人求情，那就给这个面子。', ''),
+                EventDialogLine('SELF', '多谢恩公调解...只是这三十两...', ''),
+                EventDialogLine('NARRATOR', '你帮郁芊芊解了围，也给了牛二台阶下，双方各退一步。', 'PLAYER_MONEY:-30;INTEL:+15')
+            ],
+            choice_c_dialogs=[
+                EventDialogLine('PLAYER', '（站在人群中静静观察）', ''),
+                EventDialogLine('OTHER', '怎么样？想好了没有？', ''),
+                EventDialogLine('SELF', '你...你别欺人太甚！', ''),
+                EventDialogLine('NARRATOR', '双方僵持不下，最终郁芊芊咬牙掏了五十两银子，牛二得意洋洋地离开了。', 'SET_AFFINITY:郁芊芊:-10'),
+                EventDialogLine('NARRATOR', '你选择了旁观，这件事与你无关。', '')
+            ]
+        )
+        
         # ═══════════════════════════════════════════════════════════════════════
         # 测试事件2：多个当事人（测试头像和名字省略）- 15分钟前
         # 使用角色：黑风寨众人 - 黑风大王(1021), 山贼甲(1022), 山贼乙(1023) + 泼皮牛二(1024) + 洪小六(1015)
@@ -201,7 +241,12 @@ class LiveNewsPanel:
             ],
             priority=3,
             tags=["黑风寨", "斗殴", "骚乱"],
-            comments=[],
+            comments=[
+                {"user": "鱼西施", "text": "这些土匪太嚣张了，官府人呢？", "type": "反对"},
+                {"user": "赵师爷", "text": "此事需从长计议，不可轻举妄动", "type": "中立"},
+                {"user": "王小乐", "text": "哈哈哈打得好热闹，比戏班子还好看", "type": "搞笑"},
+                {"user": "郁芊芊", "text": "洪小六也在其中？他平时看着挺老实的", "type": "中立"},
+            ],
             heat_score=15234,
         )
         snapshot_2 = LiveSnapshotData(
@@ -220,6 +265,40 @@ class LiveNewsPanel:
         test_news_2.read = False
         test_news_2.created_at = base_time - 15 * 60  # 15分钟前
         
+        # 【添加对话扩写】测试事件2：黑风寨斗殴
+        test_news_2._pregen_script = EventScriptFull(
+            intro_dialogs=[
+                EventDialogLine('NARRATOR', '东街酒肆前，两拨人马对峙，剑拔弩张。', ''),
+                EventDialogLine('OTHER', '黑风大王，你抢了我们牛哥的生意，今天必须给个说法！', ''),
+                EventDialogLine('SELF', '哼，无更市的街道，谁拳头硬谁说了算！', ''),
+                EventDialogLine('OTHER', '好大的口气！兄弟们，给我上！', ''),
+                EventDialogLine('NARRATOR', '双方瞬间混战在一起，刀光剑影，百姓四散奔逃。', 'SHAKE_CAMERA:8;FLASH_WHITE:100'),
+                EventDialogLine('SELF', '来得好！让尔等见识见识黑风寨的厉害！', ''),
+                EventDialogLine('OTHER', '洪小六，你还愣着干什么？动手啊！', ''),
+                EventDialogLine('NARRATOR', '洪小六犹豫地站在一旁。你，会怎么做？', 'SHOW_EVENT_CHOICE')
+            ],
+            choice_a_dialogs=[
+                EventDialogLine('PLAYER', '都给我住手！光天化日之下，成何体统！', ''),
+                EventDialogLine('SELF', '你是什么人？敢管我们的闲事？', 'SET_EMOTION:黑风大王:ANGRY'),
+                EventDialogLine('PLAYER', '我乃无更市侠客，专管不平之事！', ''),
+                EventDialogLine('OTHER', '大侠饶命！我们不敢了！', 'SET_EMOTION:泼皮牛二:SCARED'),
+                EventDialogLine('NARRATOR', '你的威名震慑了众人，双方各自散去，街道恢复平静。', 'NPC_FLEE:黑风大王;NPC_FLEE:泼皮牛二;PLAYER_FAME:+30')
+            ],
+            choice_b_dialogs=[
+                EventDialogLine('PLAYER', '（躲在暗处观察，寻找时机）', ''),
+                EventDialogLine('NARRATOR', '双方打得难解难分，洪小六趁机溜走了。', ''),
+                EventDialogLine('SELF', '今日算你们走运，改日再算账！', ''),
+                EventDialogLine('OTHER', '哼，谁怕谁！', ''),
+                EventDialogLine('NARRATOR', '你选择了旁观，这场斗殴最终不了了之。', '')
+            ],
+            choice_c_dialogs=[
+                EventDialogLine('PLAYER', '（悄悄离开，去报官）', ''),
+                EventDialogLine('NARRATOR', '你快步走向衙门，将此事告知捕快。', ''),
+                EventDialogLine('NARRATOR', '等捕快赶到时，双方已经散去，只留下一片狼藉。', ''),
+                EventDialogLine('NARRATOR', '虽然没有制止斗殴，但你尽了一个市民的责任。', '')
+            ]
+        )
+        
         # ═══════════════════════════════════════════════════════════════════════
         # 测试事件3：超长标题（测试省略）- 10分钟前
         # 使用角色：老李头(1019) - 城郊老农，负责看守粮仓
@@ -235,7 +314,12 @@ class LiveNewsPanel:
             choices=[{"text": "组织救火", "effect": "FAME:+50"}],
             priority=5,  # 最高优先级
             tags=["火灾", "紧急"],
-            comments=[],
+            comments=[
+                {"user": "鲁智深", "text": "阿弥陀佛，老衲这就去救火救人！", "type": "支持"},
+                {"user": "钱掌柜", "text": "我的货啊！全在粮仓里！", "type": "反对"},
+                {"user": "阿禅", "text": "火势凶猛，需从长计议", "type": "中立"},
+                {"user": "铁牛", "text": "俺来帮忙！水桶在哪？", "type": "支持"},
+            ],
             heat_score=99999,
         )
         snapshot_3 = LiveSnapshotData(
@@ -254,6 +338,40 @@ class LiveNewsPanel:
         test_news_3.read = False
         test_news_3.created_at = base_time - 10 * 60  # 10分钟前
         
+        # 【添加对话扩写】测试事件3：粮仓大火
+        test_news_3._pregen_script = EventScriptFull(
+            intro_dialogs=[
+                EventDialogLine('NARRATOR', '粮仓方向浓烟滚滚，火光冲天！', ''),
+                EventDialogLine('SELF', '救火啊！快来人救火啊！粮仓要烧没了！', 'SET_EMOTION:老李头:SCARED'),
+                EventDialogLine('NARRATOR', '老李头浑身是灰，拼命呼救。', ''),
+                EventDialogLine('OTHER', '我的货！我的货还在里面！', 'SET_EMOTION:钱掌柜:PANIC'),
+                EventDialogLine('NARRATOR', '火势凶猛，热浪逼人，百姓们惊慌失措。', 'SHAKE_CAMERA:5;FLASH_WHITE:150'),
+                EventDialogLine('SELF', '求求各位，帮忙救火啊！这是全城的粮食啊！', ''),
+                EventDialogLine('NARRATOR', '如果再不行动，整个粮仓都将化为灰烬。你，会怎么做？', 'SHOW_EVENT_CHOICE')
+            ],
+            choice_a_dialogs=[
+                EventDialogLine('PLAYER', '大家跟我来！用水桶、用衣服，能救多少是多少！', ''),
+                EventDialogLine('SELF', '多谢恩公！多谢各位！', 'SET_EMOTION:老李头:HAPPY'),
+                EventDialogLine('OTHER', '我的货...我的货保住了！多谢大侠！', 'SET_EMOTION:钱掌柜:RELIEVED'),
+                EventDialogLine('NARRATOR', '在你的带领下，众人齐心协力，终于将大火扑灭。', 'SHAKE_CAMERA:3'),
+                EventDialogLine('NARRATOR', '虽然损失了一部分粮食，但大部分都保住了。', 'PLAYER_FAME:+50;SET_AFFINITY:老李头:+40')
+            ],
+            choice_b_dialogs=[
+                EventDialogLine('PLAYER', '（组织附近百姓撤离，防止火势蔓延）', ''),
+                EventDialogLine('NARRATOR', '你指挥百姓远离火场，设立隔离带。', ''),
+                EventDialogLine('SELF', '完了...全完了...', 'SET_EMOTION:老李头:SAD'),
+                EventDialogLine('NARRATOR', '最终粮仓被烧毁，但至少没有人员伤亡。', ''),
+                EventDialogLine('NARRATOR', '你尽力了，但火势太大，无力回天。', 'PLAYER_FAME:+10')
+            ],
+            choice_c_dialogs=[
+                EventDialogLine('PLAYER', '（远远观望，不靠近火场）', ''),
+                EventDialogLine('NARRATOR', '火势越来越大，浓烟遮蔽了半边天。', ''),
+                EventDialogLine('SELF', '救命啊...谁来帮帮我...', ''),
+                EventDialogLine('NARRATOR', '你选择了保全自己，粮仓最终被完全烧毁。', ''),
+                EventDialogLine('NARRATOR', '这件事很快传遍了无更市，人们议论纷纷。', 'PLAYER_FAME:-10')
+            ]
+        )
+        
         # ═══════════════════════════════════════════════════════════════════════
         # 测试事件4：无当事人（系统事件）- 5分钟前（最新）
         # 使用角色：弥乐(1013) - 以算命为幌子的骗子和尚，可以解读天象
@@ -269,7 +387,12 @@ class LiveNewsPanel:
             choices=[{"text": "观测天象", "effect": "INTEL:+10"}],
             priority=2,
             tags=["天象", "异象"],
-            comments=[],
+            comments=[
+                {"user": "李师师", "text": "好可怕的红月，怕是要出大事了", "type": "反对"},
+                {"user": "林冲", "text": "兵戈之兆，看来无更市不太平了", "type": "中立"},
+                {"user": "袁桐", "text": "弥乐大师说得对，此乃不祥之兆", "type": "支持"},
+                {"user": "阿禅", "text": "阿弥陀佛，愿众生平安", "type": "中立"},
+            ],
             heat_score=5000,
         )
         snapshot_4 = LiveSnapshotData(
@@ -287,6 +410,39 @@ class LiveNewsPanel:
         test_news_4.is_resolved = False  # 未解决
         test_news_4.read = False
         test_news_4.created_at = base_time - 5 * 60  # 5分钟前（最新）
+        
+        # 【添加对话扩写】测试事件4：天降异象，红月当空
+        test_news_4._pregen_script = EventScriptFull(
+            intro_dialogs=[
+                EventDialogLine('NARRATOR', '夜幕降临，一轮血红的月亮悄然升起。', ''),
+                EventDialogLine('NARRATOR', '街市上的人们纷纷驻足，仰望这诡异的天象。', ''),
+                EventDialogLine('SELF', '阿弥陀佛...此乃大凶之兆啊！', ''),
+                EventDialogLine('OTHER', '弥乐大师，这红月预示着什么？', ''),
+                EventDialogLine('SELF', '血光之灾，兵戈之祸...无更市将有大难！', 'SET_EMOTION:弥乐:WORRIED'),
+                EventDialogLine('NARRATOR', '弥乐神色凝重，手指掐算。', ''),
+                EventDialogLine('SELF', '老衲观天象，三日之内，必有大事发生...', ''),
+                EventDialogLine('NARRATOR', '围观百姓议论纷纷。你，会怎么做？', 'SHOW_EVENT_CHOICE')
+            ],
+            choice_a_dialogs=[
+                EventDialogLine('PLAYER', '大师可否详细说说，如何能化解此劫？', ''),
+                EventDialogLine('SELF', '施主有心了...此劫乃天降，非人力可逆。', ''),
+                EventDialogLine('SELF', '唯有积德行善，或可减轻灾祸...', ''),
+                EventDialogLine('PLAYER', '多谢大师指点，我定当谨记。', ''),
+                EventDialogLine('NARRATOR', '弥乐为你细细解读天象，你获得了一些情报。', 'INTEL:+10;SET_AFFINITY:弥乐:+20')
+            ],
+            choice_b_dialogs=[
+                EventDialogLine('PLAYER', '装神弄鬼，不过是骗钱的把戏！', ''),
+                EventDialogLine('SELF', '施主不信，老衲也不强求...只是这灾祸，唉...', 'SET_EMOTION:弥乐:SAD'),
+                EventDialogLine('OTHER', '就是！什么大凶之兆，我看就是瞎说！', ''),
+                EventDialogLine('NARRATOR', '你拂袖而去，但红月依旧挂在天上，心中隐隐不安。', 'PLAYER_FAME:+5')
+            ],
+            choice_c_dialogs=[
+                EventDialogLine('PLAYER', '（默默观察，不置可否）', ''),
+                EventDialogLine('NARRATOR', '你静静看着红月，心中若有所思。', ''),
+                EventDialogLine('SELF', '天意难测，各人有各人的造化...', ''),
+                EventDialogLine('NARRATOR', '你选择了沉默，让时间来验证一切。', '')
+            ]
+        )
         
         # 添加到通知管理器
         mgr = get_notification_manager()
@@ -735,12 +891,8 @@ class LiveNewsPanel:
     def _draw_actor_avatar(self, surf: pygame.Surface, actor_name: str, x: int, y: int, size: int = 36):
         """绘制角色头像"""
         
-        # 头像路径（优先使用优化后的head_icon）
+        # 头像路径（唯一路径）
         avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
-        if not avatar_path.exists():
-            avatar_path = PyPath(resource_path(f"data/avatars/{actor_name}.png"))
-        if not avatar_path.exists():
-            avatar_path = PyPath(resource_path(f"avatars/{actor_name}.png"))
         
         # 尝试加载头像
         avatar_surface = None

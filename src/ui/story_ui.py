@@ -446,17 +446,38 @@ class StoryUI:
         max_width = BUBBLE_MAX_WIDTH
         padding = 15
         line_height = 22
+        avatar_size = 48
         name_height = 24 if speaker_name and speaker_name != 'NARRATOR' else 0
         
+        # 【新布局】上下结构：第一行头像+名字，第二行文字
+        # 文字区域可用宽度 = 最大宽度 - 两侧padding
+        text_area_width = max_width - padding * 2
+        
         # 计算文字行
-        lines = wrap_text(display_txt, self.font_bubble, max_width - padding * 2)
+        lines = wrap_text(display_txt, self.font_bubble, text_area_width)
         if not lines:
             lines = [""]
         
         # 计算气泡尺寸
         text_width = max(self.font_bubble.size(line)[0] for line in lines) if lines else 50
-        bubble_w = min(max_width, text_width + padding * 2 + 10)
-        bubble_h = name_height + len(lines) * line_height + padding * 2
+        
+        # 第一行宽度：头像 + 名字
+        name_width = 0
+        if speaker_name and speaker_name != 'NARRATOR':
+            name_surf_temp = self.font_bubble_name.render(f"【{speaker_name}】", True, BUBBLE_NAME_COLOR)
+            name_width = name_surf_temp.get_width()
+        
+        if speaker_avatar:
+            # 有头像时，第一行宽度 = 头像 + 间距 + 名字
+            header_width = avatar_size + 10 + name_width
+            # 气泡宽度 = max(第一行宽度, 文字宽度) + 两侧padding
+            bubble_w = min(max_width, max(header_width, text_width) + padding * 2)
+            # 气泡高度 = padding + 第一行(头像高度) + 间距 + 文字高度 + padding
+            bubble_h = padding + max(avatar_size, name_height) + 10 + len(lines) * line_height + padding
+        else:
+            # 无头像时
+            bubble_w = min(max_width, max(name_width, text_width) + padding * 2)
+            bubble_h = padding + name_height + len(lines) * line_height + padding
         
         # ═══════════════════════════════════════════════════════════════
         # 【智能定位算法】检查四个方向的可用空间
@@ -535,13 +556,14 @@ class StoryUI:
         avatar_x = bx + padding
         avatar_y = by + padding
         
+        # 【新布局】第一行：头像 + 名字（水平排列）
         if speaker_avatar:
             # 头像背景框
             avatar_bg_rect = pygame.Rect(avatar_x - 2, avatar_y - 2, avatar_size + 4, avatar_size + 4)
             pygame.draw.rect(screen, (60, 60, 70), avatar_bg_rect, border_radius=4)
-            # 绘制头像（已经过平滑缩放）
+            # 绘制头像
             screen.blit(speaker_avatar, (avatar_x, avatar_y))
-            # 名字在头像右侧
+            # 名字在头像右侧，垂直居中
             name_x = avatar_x + avatar_size + 10
             name_y = avatar_y + (avatar_size - self.font_bubble_name.get_height()) // 2
         else:
@@ -550,21 +572,21 @@ class StoryUI:
             name_y = avatar_y
         
         # 绘制名字
-        y_offset = by + padding
         if speaker_name and speaker_name != 'NARRATOR':
             name_surf = self.font_bubble_name.render(f"【{speaker_name}】", True, BUBBLE_NAME_COLOR)
-            if speaker_avatar:
-                # 有头像时名字在头像右侧垂直居中
-                screen.blit(name_surf, (name_x, name_y))
-                y_offset = avatar_y + avatar_size + 10  # 文字从头像下方开始
-            else:
-                screen.blit(name_surf, (name_x, name_y))
-                y_offset += name_height
+            screen.blit(name_surf, (name_x, name_y))
         
-        # 绘制文字（如果有头像，文字区域需要偏移）
-        text_x = bx + padding
+        # 【新布局】第二行：文字内容（从第一行下方开始）
+        # 计算文字起始Y位置
         if speaker_avatar:
-            text_x = bx + padding  # 文字从头像左侧开始对齐
+            # 有头像时，文字从头像下方开始
+            y_offset = avatar_y + avatar_size + 10
+        else:
+            # 无头像时，文字从名字下方开始
+            y_offset = by + padding + name_height + 5
+        
+        # 文字X位置统一从左侧padding开始
+        text_x = bx + padding
         
         for line in lines:
             line_surf = self.font_bubble.render(line, True, BUBBLE_TEXT_COLOR)
@@ -715,7 +737,7 @@ class StoryUI:
                     speaker_card = card
                     break
         else:
-            # 查找NPC
+            # 查找NPC - 先按ID查找
             for card in self._all_cards_ref:
                 card_id = getattr(card, 'id', None)
                 if card_id is not None and card_id == speaker_id:
@@ -726,10 +748,28 @@ class StoryUI:
                 if npc_data and getattr(npc_data, 'id', None) == speaker_id:
                     speaker_card = card
                     break
+            
+            # 【修复】如果没找到，尝试按名字匹配（备用方案）
+            if speaker_card is None and self.current_line:
+                speaker_name = self.current_line.speaker
+                if speaker_name and speaker_name not in ('NARRATOR', '旁白', '我'):
+                    for card in self._all_cards_ref:
+                        card_name = getattr(card, 'name', '')
+                        if not card_name:
+                            continue
+                        # 模糊匹配：名字互相包含
+                        if speaker_name in card_name or card_name in speaker_name:
+                            speaker_card = card
+                            print(f"[StoryUI] 按名字匹配到头像: {speaker_name} -> {card_name}")
+                            break
         
         # 获取头像
         if speaker_card and hasattr(speaker_card, 'appearance'):
             return speaker_card.appearance.get_head_surface(size)
+        
+        # 【调试】如果找不到头像，打印日志
+        if speaker_card is None:
+            print(f"[StoryUI] 警告: 找不到说话者头像 ID={speaker_id}, name={getattr(self.current_line, 'speaker', '???')}")
         
         return None
     

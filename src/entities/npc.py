@@ -9,6 +9,7 @@ from .building import Building
 from .resource import Resource  # <--- [新增] 补上这一行导入
 import json # <--- [建议] 顺便检查一下 json 是否已导入，因为后面用到了 json.loads
 from src.item_system import ItemManager 
+from src.npc_personality import NPCPersonality, generate_personality_from_job, get_social_credit_system
 
 # ═══════════════════════════════════════════════════════════════════
 # 势力颜色系统 - 让玩家直观感知社会分层
@@ -147,6 +148,35 @@ class NPC(CardBase):
         self.affinity_to_player = 0      # 对玩家好感度 (-100 ~ +100)
         self.knows_player = False        # 是否认识玩家
         self.last_interaction_day = 0    # 上次与玩家互动的天数
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】性格维度系统 (基于太阁立志传5)
+        # ═══════════════════════════════════════════════════════════════
+        # 从数据加载或根据职业生成性格
+        personality_data = data.get('personality')
+        if personality_data:
+            # 从存档数据加载
+            if isinstance(personality_data, dict):
+                self.personality = NPCPersonality.from_dict(personality_data)
+            else:
+                self.personality = generate_personality_from_job(self.job, self.tags)
+        else:
+            # 根据职业和标签自动生成
+            self.personality = generate_personality_from_job(self.job, self.tags)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】初始困境 (从种子数据加载)
+        # ═══════════════════════════════════════════════════════════════
+        self.initial_dilemma = data.get('initial_dilemma', None)
+        # 当前困境状态（由StoryDirector管理）
+        self.current_dilemma = None
+        self.dilemma_phase = None  # 'latent', 'surfaced', 'escalated', 'crisis', 'aftermath'
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】人情值系统 (社交货币)
+        # ═══════════════════════════════════════════════════════════════
+        # 获取全局人情值系统实例
+        self._social_credit_system = get_social_credit_system()
 
         # --- 外观加载 (仅头像) ---
         # 头像路径：优先使用优化后的head_icon目录
@@ -1422,6 +1452,181 @@ class NPC(CardBase):
                 info.append(f"  护甲: {self.equip_armor}")
             if self.equip_clothing:
                 info.append(f"  服装: {self.equip_clothing}")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】性格维度信息
+        # ═══════════════════════════════════════════════════════════════
+        if hasattr(self, 'personality') and self.personality:
+            info.append("─" * 16)
+            info.append("性格维度:")
+            p = self.personality
+            info.append(f"  脾气: {p.temper_str} | 胆量: {p.spirit_str}")
+            info.append(f"  主义: {p.ism_str} | 风格: {p.act_style_str}")
+            info.append(f"  情义: {p.friendship_str} | 野心: {p.ambition}")
+            if p.desire_type_str:
+                info.append(f"  物欲: {p.desire_type_str} ({p.desire_str})")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 【新增】人情值信息
+        # ═══════════════════════════════════════════════════════════════
+        if hasattr(self, '_social_credit_system') and self._social_credit_system:
+            info.append("─" * 16)
+            info.append("人情往来:")
+            # 获取与玩家的关系
+            player_id = 0  # 假设玩家ID为0
+            credit = self._social_credit_system.get_credit(player_id, self.id)
+            if credit > 0:
+                info.append(f"  欠我人情: {credit}")
+            elif credit < 0:
+                info.append(f"  我欠人情: {-credit}")
+            else:
+                info.append(f"  人情值: 0")
 
         return info
+    
+    # ═══════════════════════════════════════════════════════════════
+    # 【新增】人情值系统相关方法
+    # ═══════════════════════════════════════════════════════════════
+    def get_social_credit(self, target_id: int) -> int:
+        """获取与目标NPC的人情值"""
+        if hasattr(self, '_social_credit_system') and self._social_credit_system:
+            return self._social_credit_system.get_credit(self.id, target_id)
+        return 0
+    
+    def add_social_credit(self, target_id: int, amount: int):
+        """增加人情值（正数=对方欠我，负数=我欠对方）"""
+        if hasattr(self, '_social_credit_system') and self._social_credit_system:
+            self._social_credit_system.add_credit(self.id, target_id, amount)
+    
+    def can_ask_favor(self, target_id: int, favor_cost: int) -> tuple[bool, str]:
+        """
+        检查是否可以向目标NPC请求帮助
+        
+        Args:
+            target_id: 目标NPC的ID
+            favor_cost: 请求帮助需要的人情值成本
+            
+        Returns:
+            (是否可以请求, 原因说明)
+        """
+        if not hasattr(self, '_social_credit_system') or not self._social_credit_system:
+            return False, "人情值系统未初始化"
+        
+        # 获取当前人情值（负数表示我欠对方）
+        credit = self._social_credit_system.get_credit(self.id, target_id)
+        
+        # 获取目标NPC对象
+        target_npc = None
+        # 这里需要通过外部传入或全局查找
+        # 暂时返回计算结果，实际调用时需要传入target_npc
+        
+        return self._social_credit_system.can_spend_credit(self.id, target_id, favor_cost)
+    
+    def spend_social_credit(self, target_id: int, amount: int) -> tuple[bool, str]:
+        """
+        消耗人情值来请求帮助
+        
+        Args:
+            target_id: 目标NPC的ID
+            amount: 需要消耗的人情值
+            
+        Returns:
+            (是否成功, 结果说明)
+        """
+        if not hasattr(self, '_social_credit_system') or not self._social_credit_system:
+            return False, "人情值系统未初始化"
+        
+        return self._social_credit_system.spend_credit(self.id, target_id, amount)
+    
+    def get_personality_description(self) -> str:
+        """获取性格描述文本（用于AI叙事）"""
+        if not hasattr(self, 'personality') or not self.personality:
+            return f"{self.name}性格普通。"
+        
+        p = self.personality
+        desc_parts = []
+        
+        # 脾气描述
+        temper_desc = {
+            "温和": f"{self.name}脾气温和，不易动怒",
+            "性急": f"{self.name}性子急躁，容易冲动",
+            "普通": f"{self.name}脾气普通"
+        }.get(p.temper_str, f"{self.name}脾气{p.temper_str}")
+        desc_parts.append(temper_desc)
+        
+        # 胆量描述
+        spirit_desc = {
+            "胆小": "胆小怕事",
+            "大胆": "胆大心细",
+            "普通": "胆量普通"
+        }.get(p.spirit_str, f"胆量{p.spirit_str}")
+        desc_parts.append(spirit_desc)
+        
+        # 主义描述
+        ism_desc = {
+            "现实主义": "注重实际利益",
+            "理想主义": "追求理想",
+            "普通": "现实主义与理想主义平衡"
+        }.get(p.ism_str, p.ism_str)
+        desc_parts.append(ism_desc)
+        
+        # 风格描述
+        style_desc = {
+            "保守": "行事保守稳重",
+            "激进": "行事激进冒险",
+            "普通": "行事风格中庸"
+        }.get(p.act_style_str, f"行事{p.act_style_str}")
+        desc_parts.append(style_desc)
+        
+        return "。".join(desc_parts) + "。"
+    
+    def to_aistory_format(self) -> dict:
+        """
+        转换为aistory模块使用的NPCData格式
+        
+        Returns:
+            符合dilemma_deriver.NPCData.from_dict()要求的字典
+        """
+        data = {
+            'npc_id': str(self.id),
+            'name': self.name,
+            'gender': getattr(self, 'gender', ''),
+            'age': getattr(self, 'age', 30),
+            'identity': self.job,
+            'org': self.org_id if self.org_id != 'NONE' else '',
+            'personality': getattr(self, 'desc', ''),  # 向后兼容
+            'backstory': getattr(self, 'backstory', ''),
+            'wealth': self.money,
+            'emotion': getattr(self, 'emotion', 50),
+            'health': self.hp,
+            'tags': self.tags,
+            'desc': getattr(self, 'desc', ''),
+            'location': getattr(self, 'location', ''),
+        }
+        
+        # 添加多维度性格数据
+        if hasattr(self, 'personality') and self.personality:
+            p = self.personality
+            data.update({
+                'temper': p.temper_str,
+                'spirit': p.spirit_str,
+                'ism': p.ism_str,
+                'act_style': p.act_style_str,
+                'friendship': p.friendship_str,
+                'ambition': p.ambition,
+                'desire_type': p.desire_type_str,
+                'desire_level': p.desire_str,
+            })
+        
+        # 添加人情值
+        if hasattr(self, '_social_credit_system') and self._social_credit_system:
+            player_id = 0  # 假设玩家ID为0
+            credit = self._social_credit_system.get_credit(player_id, self.id)
+            data['social_credit'] = credit
+        
+        # 添加初始困境
+        if hasattr(self, 'initial_dilemma') and self.initial_dilemma:
+            data['initial_dilemma'] = self.initial_dilemma
+        
+        return data
        

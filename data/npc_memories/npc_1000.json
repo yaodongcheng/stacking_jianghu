@@ -54,7 +54,7 @@
         "玩家"
       ],
       "decay_rate": 1.0,
-      "access_count": 1
+      "access_count": 2
     },
     {
       "id": "mem_1772937790183",
@@ -108,6 +108,24 @@
         "玩家"
       ],
       "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1773024687751",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你好？」",
+      "importance": 2,
+      "timestamp": 1773024687.7517607,
+      "real_timestamp": 1773024687.7517607,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
       "access_count": 0
     }
   ],
@@ -122,5 +140,5 @@
     }
   },
   "core_beliefs": [],
-  "saved_at": 1772937799.045281
+  "saved_at": 1773024715.2583606
 }

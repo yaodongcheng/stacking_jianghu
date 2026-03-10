@@ -363,15 +363,13 @@ class EventNotificationManager:
             self._draw_notification(screen, i, notif)
     
     def _load_avatar(self, name: str) -> Optional[pygame.Surface]:
-        """加载头像图片，优先从data/avatars目录"""
+        """加载头像图片，从assets/head_icon目录"""
         if name in self._avatar_cache:
             return self._avatar_cache[name]
         
-        # 尝试加载头像（优先使用优化后的head_icon）
+        # 尝试加载头像（唯一路径）
         avatar_paths = [
             f"assets/head_icon/{name}.png",
-            f"data/avatars/{name}.png",
-            f"avatars/{name}.png",
         ]
         
         for path in avatar_paths:
@@ -973,11 +971,9 @@ def draw_avatar_inline(
     img = avatar_cache.get(name)
     
     if img is None:
-        # 尝试加载
+        # 尝试加载（唯一路径）
         paths = [
             f"assets/head_icon/{name}.png",
-            f"data/avatars/{name}.png",
-            f"avatars/{name}.png"
         ]
         for path in paths:
             try:

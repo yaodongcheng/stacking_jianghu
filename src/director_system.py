@@ -43,40 +43,8 @@ from src.llm.event_dialog_generator import (
 # UI数据类
 from src.ui.live_snapshot_panel import LiveSnapshotData
 
-
-class DramaticTension(Enum):
-    """戏剧张力等级"""
-    LOW = 1       # 日常小事
-    MEDIUM = 2    # 有趣冲突
-    HIGH = 3      # 重大事件
-    CRITICAL = 4  # 命运转折
-
-
-@dataclass
-class WorldSnapshot:
-    """世界状态快照 - 导演的"全知视角"""
-    timestamp: float
-    
-    # 势力状态
-    faction_tensions: Dict[str, Dict[str, float]] = field(default_factory=dict)  # 势力间张力
-    faction_power_balance: Dict[str, float] = field(default_factory=dict)  # 势力实力对比
-    recent_conflicts: List[Dict] = field(default_factory=list)  # 近期冲突记录
-    
-    # NPC状态 - 完整演员池
-    all_available_npcs: List[Dict] = field(default_factory=list)  # 所有可用NPC的基本信息
-    npcs_in_crisis: List[Dict] = field(default_factory=list)  # 处于危机中的NPC
-    npcs_with_secrets: List[Dict] = field(default_factory=list)  # 有秘密的NPC
-    relationship_tensions: List[Dict] = field(default_factory=list)  # 关系紧张的NPC对
-    
-    # 玩家相关
-    player_reputation: Dict[str, float] = field(default_factory=dict)  # 玩家在各势力的声望
-    player_recent_actions: List[str] = field(default_factory=list)  # 玩家近期行为
-    player_relationships: List[Dict] = field(default_factory=list)  # 玩家与NPC的关系
-    
-    # 戏剧节奏
-    recent_event_types: List[str] = field(default_factory=list)  # 最近事件类型（避免重复）
-    time_since_last_big_event: float = 0  # 距上次大事件的时间
-    current_dramatic_arc: str = "rising"  # 当前戏剧弧线阶段
+# 从aistory导入共享类型（避免重复定义）
+from src.aistory.shared_types import WorldSnapshot, DramaticTension
 
 
 @dataclass
@@ -106,6 +74,54 @@ class WorldObserver:
         
         # 2. 收集NPC状态
         self._observe_npcs(ctx, snapshot)
+        
+        # 3. 收集玩家状态
+        self._observe_player(ctx, snapshot)
+        
+        # 4. 分析戏剧节奏
+        self._analyze_dramatic_rhythm(snapshot)
+        
+        # 保存历史
+        self.history.append(snapshot)
+        if len(self.history) > self.max_history:
+            self.history.pop(0)
+            
+        return snapshot
+
+
+    def _observe_factions(self, ctx, snapshot: WorldSnapshot):
+        """观察势力状态"""
+        faction_war = getattr(ctx, 'faction_war', None)
+        if not faction_war:
+            return
+        
+        # 获取所有组织ID
+        from src.faction_war_system import ORGANIZATIONS
+        org_ids = list(ORGANIZATIONS.keys())
+        
+        # 势力实力对比 - 基于控制点数量估算
+        for org_id in org_ids:
+            controlled_points = faction_war.get_org_controlled_points(org_id)
+            # 简单用控制点数量作为实力指标
+            snapshot.faction_power_balance[org_id] = len(controlled_points) * 10
+        
+        # 势力间张力（敌对关系）
+        relation_mgr = getattr(faction_war, 'relation_manager', None)
+        if relation_mgr:
+            # 遍历所有组织对检查关系
+            for i, org1 in enumerate(org_ids):
+                for org2 in org_ids[i+1:]:
+                    relation = relation_mgr.get_relation(org1, org2)
+                    if relation < 0:  # 敌对
+                        key = f"{org1}_vs_{org2}"
+                        snapshot.faction_tensions[key] = {
+                            'orgs': [org1, org2],
+                            'hostility': abs(relation),
+                            'at_war': relation <= -50
+                        }
+        
+        # 近期冲突
+        # TODO: 从faction_war获取战斗记录
         
         # 3. 收集玩家状态
         self._observe_player(ctx, snapshot)
@@ -1196,15 +1212,10 @@ class AIDirector:
             log_game_event(f"[Director] 收到LLM响应,耗时 {elapsed:.2f}s,内容 {response.raw_response}...", tag="DIRECTOR")
             
             # 导演系统自己解析JSON响应
-            import json
-            try:
-                result = json.loads(response.raw_response)
+            result = self._parse_llm_response(response.raw_response)
+            if result is not None:
                 log_game_event(f"[Director] JSON解析成功", tag="DIRECTOR")
-                return result
-            except json.JSONDecodeError as e:
-                # 导演系统：JSON解析失败直接中止，不修复
-                log_game_event(f"[Director] JSON解析失败，中止事件生成: {e}", tag="DIRECTOR")
-                return None
+            return result
                     
         except Exception as e:
             log_game_event(f"[Director] LLM API调用异常: {e}", tag="DIRECTOR")
@@ -1513,7 +1524,7 @@ class AIDirector:
         
         # 获取当事人头像路径（优先使用高清版本用于AI参考图）
         if news_item.actor_names:
-            avatar_dirs = [Path("assets/head_icon_hd"), Path("data/avatars"), Path("avatars")]
+            avatar_dirs = [Path("assets/head_icon_hd")]
             ref_image_info = []  # 存储 (路径, 角色名) 元组
             
             for actor_name in news_item.actor_names:

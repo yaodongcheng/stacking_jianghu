@@ -1,0 +1,72 @@
+{
+  "npc_id": 1010,
+  "npc_name": "袁桐",
+  "short_term": [
+    {
+      "id": "mem_1773024747862",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你好？」",
+      "importance": 2,
+      "timestamp": 1773024747.8624885,
+      "real_timestamp": 1773024747.8624885,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1773024751761",
+      "memory_type": "conversation",
+      "content": "袁桐说：「嗯？风中有人招呼贫道？这位爷有何见教？」",
+      "importance": 1,
+      "timestamp": 1773024751.7611198,
+      "real_timestamp": 1773024751.7611198,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "袁桐"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773024751761",
+      "memory_type": "knowledge",
+      "content": "记住对方名叫姚东成，江湖人士，主动与我打招呼",
+      "importance": 3,
+      "timestamp": 1773024751.7611198,
+      "real_timestamp": 1773024751.7611198,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1773024751.762199,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1773024755.7108045
+}

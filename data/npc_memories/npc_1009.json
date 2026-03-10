@@ -1,0 +1,72 @@
+{
+  "npc_id": 1009,
+  "npc_name": "李师师",
+  "short_term": [
+    {
+      "id": "mem_1773024848505",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你好」",
+      "importance": 2,
+      "timestamp": 1773024848.505361,
+      "real_timestamp": 1773024848.505361,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1773024852147",
+      "memory_type": "conversation",
+      "content": "李师师说：「这位官人好。奴家李师师，不知官人如何称呼？」",
+      "importance": 1,
+      "timestamp": 1773024852.1476421,
+      "real_timestamp": 1773024852.1476421,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "李师师"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773024852147",
+      "memory_type": "knowledge",
+      "content": "遇到一位自称姚东成的江湖人士，手持朴刀，看起来精神饱满",
+      "importance": 3,
+      "timestamp": 1773024852.1476421,
+      "real_timestamp": 1773024852.1476421,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1773024852.1476421,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1773024854.5813022
+}
