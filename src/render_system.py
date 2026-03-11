@@ -17,7 +17,7 @@ class RenderSystem:
         # ═══════════════════════════════════════════════════════════════
         self.system_menu_expanded = False  # 是否展开系统功能菜单
 
-    def render(self, context, mx, my, click_event):
+    def render(self, context, mx, my, click_event, event=None):
         """
         统一渲染入口
         context: GameContext 对象 (或包含必要引用的对象)
@@ -170,7 +170,7 @@ class RenderSystem:
 
         # ── 7. 剧情与调试层 ──────────────────────────────────────
         story_ui.draw(screen)
-        self._draw_modals(context, mx, my, click_event)
+        self._draw_modals(context, mx, my, click_event, event)
 
         if DEBUG_NPCPATHFINDING and hasattr(self.world_map, 'pathfinder'):
             self.world_map.pathfinder.draw_debug(screen, self.ui_manager.font_small)
@@ -203,7 +203,7 @@ class RenderSystem:
             ctx.current_state = GAME_STATE_FOLLOWER_PANEL
 
 
-    def _draw_modals(self, ctx, mx, my,click_event):
+    def _draw_modals(self, ctx, mx, my, click_event, event=None):
         screen = self.screen
         
         if ctx.current_state == GAME_STATE_TECH_TREE:
@@ -232,7 +232,7 @@ class RenderSystem:
         elif ctx.current_state == GAME_STATE_NPC_DETAIL and ctx.active_event_npc:
             # 临时注入 all_cards，供 get_display_info 内仇恨列表反查名字使用
             self.ui_manager.all_cards = ctx.all_cards
-            res = self.ui_manager.draw_npc_detail(screen, ctx.active_event_npc, ctx.player, mx, my, click_event, ctx.ft_manager)
+            res = self.ui_manager.draw_npc_detail(screen, ctx.active_event_npc, ctx.player, mx, my, click_event, ctx.ft_manager, event)
             
             # 处理 UI 返回的逻辑
             if isinstance(res, tuple) and res[0] == "DROP_ITEM_CONFIRM":

@@ -1,5 +1,6 @@
 # src/data_loader.py
 import csv
+import json
 from src.entities import NPC
 from src.utils import resource_path
 
@@ -27,6 +28,27 @@ def load_npcs_from_csv(filepath):
                 # 将 key 和 value 组合成字典
                 # 比如 {'id': '101', 'name': '张三', ...}
                 row_data = dict(zip(keys, row))
+                
+                # 解析 JSON 字段 (personality 和 initial_dilemma)
+                # 将 personality_json 解析为 personality 对象
+                personality_json = row_data.pop('personality_json', '{}')
+                if personality_json and personality_json != '{}':
+                    try:
+                        row_data['personality'] = json.loads(personality_json)
+                    except json.JSONDecodeError:
+                        row_data['personality'] = None
+                else:
+                    row_data['personality'] = None
+                
+                # 将 initial_dilemma_json 解析为 initial_dilemma 对象
+                dilemma_json = row_data.pop('initial_dilemma_json', '{}')
+                if dilemma_json and dilemma_json != '{}':
+                    try:
+                        row_data['initial_dilemma'] = json.loads(dilemma_json)
+                    except json.JSONDecodeError:
+                        row_data['initial_dilemma'] = None
+                else:
+                    row_data['initial_dilemma'] = None
                 
                 # 创建 NPC 对象
                 new_npc = NPC(row_data)

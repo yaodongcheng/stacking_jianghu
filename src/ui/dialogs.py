@@ -9,7 +9,7 @@ class UIDialogsMixin:
     包含：NPC面板、事件弹窗、以及事件选项按钮的逻辑处理
     """
 
-    def draw_npc_detail(self, screen, npc, player, mx, my, click_event, ft_manager):
+    def draw_npc_detail(self, screen, npc, player, mx, my, click_event, ft_manager, event=None):
         """绘制NPC详细信息面板（重构版 v3 - 带 Tab 分页）
         布局采用四栏式：
           A. 顶部：头像 + 名字 + 基础状态 (固定高度 70px)
@@ -81,7 +81,7 @@ class UIDialogsMixin:
         # ══════════════════════════════════════════════════════════════
         # B. Tab 栏
         # ══════════════════════════════════════════════════════════════
-        TAB_LABELS = ['属性', '背包', '记忆', '关系']
+        TAB_LABELS = ['属性', '背包', '记忆', '关系', '内心']
         tab_y = panel_rect.y + 85  # 调整Tab栏位置以适应更大的头像区域
         tab_h = 26
         tab_w = (panel_w - 20) // len(TAB_LABELS)
@@ -156,6 +156,18 @@ class UIDialogsMixin:
             # Tab 3: 人际关系
             # ─────────────────────────────────────────────────────────────
             self._draw_npc_tab_relations(screen, npc, player, content_rect)
+        
+        elif current_tab == 4:
+            # ─────────────────────────────────────────────────────────────
+            # Tab 4: 内心 (性格特质 + 人生困境)
+            # ─────────────────────────────────────────────────────────────
+            # 处理滚轮事件（翻转方向：y>0向上滚动，y<0向下滚动）
+            if event and event.type == pygame.MOUSEWHEEL:
+                if hasattr(self, '_inner_heart_scroll'):
+                    self._inner_heart_scroll -= event.y * 20  # 翻转方向：y>0时向上（减小scroll值）
+                    self._inner_heart_scroll = max(0, self._inner_heart_scroll)
+            
+            self._draw_npc_tab_inner_heart(screen, npc, content_rect, mx, my, click_event)
 
         # ══════════════════════════════════════════════════════════════
         # D. 底部操作栏
@@ -1951,3 +1963,415 @@ class UIDialogsMixin:
                 return 'CANCEL'
         
         return None
+
+    def _draw_npc_tab_inner_heart(self, screen, npc, content_rect, mx=None, my=None, click_event=None):
+        """
+        绘制"内心"页签：上部分性格特质，下部分内心隐秘（人生困境）
+        """
+        font_title = self.font_ui
+        font_text = self.font_small
+        
+        # 绘制内容区域背景
+        pygame.draw.rect(screen, (30, 35, 45), content_rect, border_radius=5)
+        pygame.draw.rect(screen, (80, 80, 100), content_rect, 1, border_radius=5)
+        
+        # 获取personality数据
+        personality_obj = getattr(npc, 'personality', None)
+        if personality_obj is None:
+            personality = {}
+        elif hasattr(personality_obj, 'to_dict'):
+            personality = personality_obj.to_dict()
+        else:
+            personality = personality_obj
+        
+        initial_dilemma = getattr(npc, 'initial_dilemma', {}) or {}
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 上半部分：性格特质（居中布局）
+        # ═══════════════════════════════════════════════════════════════
+        content_center_x = content_rect.centerx
+        y = content_rect.y + 12
+        
+        # 标题
+        section_title = font_title.render("性格特质", True, (255, 215, 0))
+        screen.blit(section_title, (content_center_x - section_title.get_width() // 2, y))
+        y += 28
+        
+        # 性格维度 - 使用进度条显示（全部居中）
+        dimensions = [
+            ('temper', '性情', '性急', '温和', (220, 100, 100), (100, 180, 220)),
+            ('spirit', '精神', '胆小', '勇敢', (180, 100, 180), (100, 200, 150)),
+            ('ism', '主义', '理想', '现实', (220, 150, 80), (80, 150, 220)),
+            ('act_style', '作风', '轻率', '慎重', (220, 120, 100), (100, 180, 180)),
+            ('friendship', '情义', '凉薄', '深重', (200, 100, 120), (100, 200, 180))
+        ]
+        
+        bar_width = 100
+        bar_height = 12
+        label_width = 45  # 左侧标签宽度
+        
+        for key, name, left_label, right_label, left_color, right_color in dimensions:
+            raw_value = personality.get(key, '普通')
+            if isinstance(raw_value, (int, float)):
+                value = int(raw_value)
+            else:
+                value = self._map_personality_str_to_value(key, raw_value)
+            
+            # 计算总宽度用于居中
+            total_width = label_width + bar_width + 50  # 标签+进度条+右侧文字
+            start_x = content_center_x - total_width // 2
+            
+            # 维度名称
+            name_surf = font_text.render(name, True, (200, 200, 200))
+            screen.blit(name_surf, (start_x, y))
+            
+            # 进度条背景
+            bar_x = start_x + label_width
+            bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
+            pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
+            
+            # 计算填充
+            center_x = bar_x + bar_width // 2
+            fill_width = abs(value - 50) * bar_width // 100
+            
+            if value < 50:
+                fill_rect = pygame.Rect(center_x - fill_width, y + 2, fill_width, bar_height)
+                color = left_color
+                tendency = left_label
+            else:
+                fill_rect = pygame.Rect(center_x, y + 2, fill_width, bar_height)
+                color = right_color
+                tendency = right_label
+            
+            if fill_width > 0:
+                pygame.draw.rect(screen, color, fill_rect, border_radius=3)
+            
+            # 中心线
+            pygame.draw.line(screen, (150, 150, 150), (center_x, y + 2), (center_x, y + bar_height), 1)
+            
+            # 倾向文字（在进度条右侧）
+            tendency_surf = font_text.render(tendency, True, color if fill_width > 5 else (120, 120, 120))
+            screen.blit(tendency_surf, (bar_x + bar_width + 8, y))
+            
+            y += 22
+        
+        # 野心（进度条形式，居中）
+        ambition = personality.get('ambition', 50)
+        if hasattr(ambition, 'value'):
+            ambition = ambition.value
+        ambition_value = int(ambition) if isinstance(ambition, (int, float)) else 50
+        
+        total_width = label_width + bar_width + 50
+        start_x = content_center_x - total_width // 2
+        
+        name_surf = font_text.render("野心", True, (200, 180, 150))
+        screen.blit(name_surf, (start_x, y))
+        
+        bar_x = start_x + label_width
+        bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
+        pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
+        
+        # 野心是单向进度条（0-100）
+        fill_width = ambition_value * bar_width // 100
+        fill_rect = pygame.Rect(bar_x, y + 2, fill_width, bar_height)
+        pygame.draw.rect(screen, (200, 150, 100), fill_rect, border_radius=3)
+        
+        # 数值显示
+        value_surf = font_text.render(f"{ambition_value}", True, (200, 180, 150))
+        screen.blit(value_surf, (bar_x + bar_width + 8, y))
+        y += 22
+        
+        # 物欲（进度条形式，居中）
+        desire = personality.get('desire', '')
+        desire_value = self._map_desire_to_value(desire)
+        
+        total_width = label_width + bar_width + 50
+        start_x = content_center_x - total_width // 2
+        
+        name_surf = font_text.render("物欲", True, (180, 160, 140))
+        screen.blit(name_surf, (start_x, y))
+        
+        bar_x = start_x + label_width
+        bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
+        pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
+        
+        # 物欲是单向进度条
+        fill_width = desire_value * bar_width // 100
+        fill_rect = pygame.Rect(bar_x, y + 2, fill_width, bar_height)
+        pygame.draw.rect(screen, (180, 140, 120), fill_rect, border_radius=3)
+        
+        # 文字显示
+        desire_text = str(desire) if desire else "普通"
+        value_surf = font_text.render(desire_text, True, (180, 160, 140))
+        screen.blit(value_surf, (bar_x + bar_width + 8, y))
+        y += 22
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 分隔线
+        # ═══════════════════════════════════════════════════════════════
+        y += 5
+        pygame.draw.line(screen, (80, 80, 100), (content_rect.x + 10, y), (content_rect.right - 10, y))
+        y += 15
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 下半部分：内心隐秘（人生困境）带滚动条
+        # ═══════════════════════════════════════════════════════════════
+        if initial_dilemma:
+            # 困境标题与"内心隐秘"标题放在同一行（居中）
+            d_title = initial_dilemma.get('title', '未名之困')
+            
+            # 左侧：内心隐秘标题
+            secret_title = font_title.render("内心隐秘", True, (220, 180, 220))
+            # 右侧：困境标题
+            title_surf = font_title.render(f"「{d_title}」", True, (255, 200, 150))
+            
+            # 计算位置：两个标题靠在一起，整体居中
+            title_y = y
+            combined_width = secret_title.get_width() + 10 + title_surf.get_width()  # 10px间距
+            combined_start_x = content_center_x - combined_width // 2  # 居中对齐
+            
+            secret_title_x = combined_start_x
+            dilemma_title_x = combined_start_x + secret_title.get_width() + 10
+            
+            screen.blit(secret_title, (secret_title_x, title_y))
+            screen.blit(title_surf, (dilemma_title_x, title_y))
+            y += 28
+            
+            # 计算内心隐秘正文区域（标题下方）
+            secret_area_top = y
+            secret_area_bottom = content_rect.bottom - 10
+            secret_area_height = secret_area_bottom - secret_area_top
+            
+            # 准备所有文本行（每个条目内部居中）
+            all_lines = []
+            fields = [
+                ('surface', '表象', (200, 200, 200)),
+                ('core_conflict', '心结', (220, 150, 150)),
+                ('desire', '渴望', (150, 200, 150)),
+                ('block', '阻碍', (150, 150, 200))
+            ]
+            
+            # 计算最大内容宽度用于居中
+            max_content_width = content_rect.width - 50  # 留出滚动条空间
+            
+            for field_key, field_name, field_color in fields:
+                text = initial_dilemma.get(field_key, '')
+                if text:
+                    # 添加字段名行（居中）
+                    name_text = f"{field_name}:"
+                    name_width = font_text.size(name_text)[0]
+                    name_indent = (max_content_width - name_width) // 2
+                    all_lines.append(('label', name_text, field_color, name_indent))
+                    
+                    # 对心结字段特殊处理：将" vs "替换为换行
+                    if field_key == 'core_conflict' and ' vs ' in text:
+                        text = text.replace(' vs ', '\n')
+                    
+                    # 添加内容行（自动换行，左对齐）
+                    wrapped = self._wrap_text(text, font_text, max_content_width)
+                    for line in wrapped:
+                        all_lines.append(('text', line, field_color, 0))  # 左对齐，无缩进
+                    
+                    # 条目间间距（减半）
+                    all_lines.append(('half_spacer', '', None, 0))
+            
+            # 计算滚动
+            line_height = font_text.get_height() + 4
+            total_content_height = len(all_lines) * line_height
+            
+            # 初始化滚动偏移和拖动状态
+            if not hasattr(self, '_inner_heart_scroll'):
+                self._inner_heart_scroll = 0
+            if not hasattr(self, '_inner_heart_scroll_dragging'):
+                self._inner_heart_scroll_dragging = False
+            
+            # 鼠标滚轮处理（翻转方向：y>0时向上滚动）
+            mouse_pos = pygame.mouse.get_pos()
+            secret_rect = pygame.Rect(content_rect.x, secret_area_top, content_rect.width, secret_area_height)
+            
+            # 检查是否需要滚动
+            can_scroll = total_content_height > secret_area_height
+            max_scroll = max(0, total_content_height - secret_area_height)
+            
+            # 滚动条参数
+            scrollbar_x = content_rect.right - 14
+            scrollbar_width = 8
+            scrollbar_track_rect = pygame.Rect(scrollbar_x, secret_area_top, scrollbar_width, secret_area_height)
+            # 滑块高度：根据内容比例计算，最小30px
+            scrollbar_height = max(30, int(secret_area_height * secret_area_height / total_content_height)) if can_scroll else secret_area_height
+            # 可滚动距离（轨道高度减去滑块高度）
+            scroll_track_height = secret_area_height - scrollbar_height
+            
+            # 处理鼠标拖动滚动条
+            if can_scroll:
+                # 计算滑块位置：scroll=0时在顶部，scroll=max_scroll时在底部
+                visible_ratio = self._inner_heart_scroll / max_scroll if max_scroll > 0 else 0
+                scrollbar_y = secret_area_top + visible_ratio * scroll_track_height
+                scrollbar_rect = pygame.Rect(scrollbar_x, scrollbar_y, scrollbar_width, scrollbar_height)
+                
+                # 检测点击滚动条
+                if click_event and scrollbar_rect.collidepoint(mouse_pos):
+                    self._inner_heart_scroll_dragging = True
+                    self._inner_heart_scroll_drag_start_y = mouse_pos[1]
+                    self._inner_heart_scroll_drag_start_scroll = self._inner_heart_scroll
+                
+                # 检测点击轨道（跳转到该位置）
+                if click_event and scrollbar_track_rect.collidepoint(mouse_pos) and not scrollbar_rect.collidepoint(mouse_pos):
+                    click_ratio = (mouse_pos[1] - secret_area_top) / secret_area_height
+                    self._inner_heart_scroll = int(click_ratio * max_scroll)
+                    self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
+            
+            # 处理拖动中
+            if self._inner_heart_scroll_dragging:
+                if pygame.mouse.get_pressed()[0]:  # 左键按住
+                    if can_scroll:
+                        drag_delta = mouse_pos[1] - self._inner_heart_scroll_drag_start_y
+                        scroll_ratio = drag_delta / scroll_track_height
+                        self._inner_heart_scroll = self._inner_heart_scroll_drag_start_scroll + int(scroll_ratio * max_scroll)
+                        self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
+                else:
+                    self._inner_heart_scroll_dragging = False
+            
+            # 限制滚动范围
+            self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
+            
+            # 绘制可见内容（每个条目内部居中）
+            text_surface = pygame.Surface((content_rect.width - 30, total_content_height), pygame.SRCALPHA)
+            text_y = 0
+            
+            for line_type, line_text, line_color, indent in all_lines:
+                if line_type == 'label':
+                    surf = font_text.render(line_text, True, line_color)
+                    text_surface.blit(surf, (indent, text_y))
+                    text_y += line_height
+                elif line_type == 'text':
+                    surf = font_text.render(line_text, True, line_color)
+                    text_surface.blit(surf, (indent, text_y))
+                    text_y += line_height
+                elif line_type == 'half_spacer':
+                    text_y += line_height // 2  # 半行间距
+            
+            # 应用滚动偏移并绘制
+            visible_y = self._inner_heart_scroll
+            screen.blit(text_surface, (content_rect.x + 10, secret_area_top), 
+                       (0, visible_y, content_rect.width - 30, secret_area_height))
+            
+            # 绘制滚动条
+            if can_scroll:
+                visible_ratio = visible_y / max_scroll if max_scroll > 0 else 0
+                scrollbar_y = secret_area_top + visible_ratio * scroll_track_height
+                
+                # 滚动条轨道背景
+                pygame.draw.rect(screen, (50, 50, 55), 
+                               (scrollbar_x, secret_area_top, scrollbar_width, secret_area_height), 
+                               border_radius=4)
+                # 滚动条滑块（根据是否悬停或拖动改变颜色）
+                is_hover = scrollbar_rect.collidepoint(mouse_pos) if can_scroll else False
+                thumb_color = (160, 160, 180) if is_hover or self._inner_heart_scroll_dragging else (120, 120, 140)
+                pygame.draw.rect(screen, thumb_color, 
+                               (scrollbar_x, int(scrollbar_y), scrollbar_width, scrollbar_height), 
+                               border_radius=4)
+        else:
+            # 无数据时显示提示
+            no_data = font_text.render("此人心如明镜，暂无隐秘", True, (120, 120, 120))
+            screen.blit(no_data, (content_center_x - no_data.get_width() // 2, y + 20))
+
+    def _get_dimension_labels(self, key):
+        """获取性格维度的左右标签（用于数值映射）"""
+        labels = {
+            'temper': ('性急', '温和'),
+            'spirit': ('胆小', '勇敢'),
+            'ism': ('理想', '现实'),
+            'act_style': ('轻率', '慎重'),
+            'friendship': ('凉薄', '重义')
+        }
+        return labels.get(key, ('低', '高'))
+
+    def _map_desire_to_value(self, desire_str):
+        """将物欲字符串映射为0-100的数值"""
+        if not desire_str or desire_str == '普通':
+            return 50
+        mappings = {
+            '淡泊': 10, '清心寡欲': 15, '低': 20,
+            '一般': 50, '普通': 50,
+            '贪心': 70, '重利': 75, '高': 80,
+            '极度贪婪': 90, '欲壑难填': 95, '极高': 100
+        }
+        return mappings.get(desire_str, 50)
+
+    def _wrap_text(self, text, font, max_width):
+        """将文本按最大宽度换行，返回行列表"""
+        if not text:
+            return []
+        
+        # 首先按显式换行符分割
+        paragraphs = text.split('\n')
+        all_lines = []
+        
+        for para_idx, paragraph in enumerate(paragraphs):
+            if para_idx > 0:
+                # 段落之间添加空行（可选）
+                pass
+            
+            if not paragraph:
+                all_lines.append("")
+                continue
+            
+            # 对每段进行自动换行
+            lines = []
+            current_line = ""
+            
+            for char in paragraph:
+                test_line = current_line + char
+                if font.size(test_line)[0] <= max_width:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        lines.append(current_line)
+                    current_line = char
+            
+            if current_line:
+                lines.append(current_line)
+            
+            all_lines.extend(lines)
+        
+        return all_lines if all_lines else [text]
+
+    def _map_personality_str_to_value(self, key, value_str):
+        """将性格字符串映射为0-100的数值"""
+        # 映射表：低值对应负面/极端，高值对应正面/温和，普通对应50
+        mappings = {
+            'temper': {'性急': 20, '温和': 80, '普通': 50},
+            'spirit': {'胆小': 20, '勇敢': 80, '普通': 50},
+            'ism': {'理想': 20, '现实': 80, '普通': 50},
+            'act_style': {'轻率': 20, '慎重': 80, '普通': 50},
+            'friendship': {'凉薄': 20, '重视情义': 80, '不重情义': 20, '重义': 80, '普通': 50},
+        }
+        mapping = mappings.get(key, {})
+        return mapping.get(value_str, 50)
+
+    def _draw_wrapped_text(self, screen, text, font, rect, color):
+        """绘制自动换行的文本"""
+        words = text
+        x, y = rect.x, rect.y
+        max_width = rect.width
+        line_height = font.get_height() + 2
+        
+        # 简单按字符换行（中文）
+        current_line = ""
+        for char in words:
+            test_line = current_line + char
+            if font.size(test_line)[0] <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    line_surface = font.render(current_line, True, color)
+                    screen.blit(line_surface, (x, y))
+                    y += line_height
+                current_line = char
+                if y > rect.bottom - line_height:
+                    break
+        
+        if current_line and y <= rect.bottom - line_height:
+            line_surface = font.render(current_line, True, color)
+            screen.blit(line_surface, (x, y))

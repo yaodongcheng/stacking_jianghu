@@ -207,6 +207,8 @@ def _recruit_actor_from_seeds(name):
                 'org_id': seed.get('org_id'),
                 'org_role': seed.get('org_role'),
                 'org_rank': seed.get('org_rank', 0),
+                'personality': seed.get('personality'),
+                'initial_dilemma': seed.get('initial_dilemma'),
             }
     
     raise ValueError(f"[WorldLoader] 致命错误：角色 '{name}' 不存在于 SEEDS 中！")
@@ -298,6 +300,9 @@ class WorldLoader:
             # 【核心理念】所有角色都从 character_seeds.py 征调，不再硬编码
             # 他们是沙盒世界里真正存在的居民，只是被临时"征调"来演出开场剧情
             
+            # 首先加载所有预定义NPC（从CSV）
+            predefined_npcs = load_npcs_from_csv("data/npc_data.csv")
+            
             # ═══════════════════════════════════════════════════════════════
             # 【开场站位设计】
             # - 事件中心在东门外（玩家从远处看到）
@@ -305,17 +310,36 @@ class WorldLoader:
             # - 玩家在事件东侧远处，需要走过去才能介入
             # ═══════════════════════════════════════════════════════════════
             
-            # 鱼西施（卖鱼妹子）- 从 SEEDS 中征调
-            yuxishi_data = _recruit_actor_from_seeds('鱼西施')
-            yuxishi = NPC(yuxishi_data)
+            # 辅助函数：从已加载的NPC列表中查找角色
+            def find_npc_by_name(npcs, name):
+                for npc in npcs:
+                    if npc.name == name:
+                        return npc
+                return None
+            
+            # 鱼西施（卖鱼妹子）- 从CSV加载的NPC中查找
+            yuxishi = find_npc_by_name(predefined_npcs, '鱼西施')
+            if yuxishi is None:
+                # 兜底：如果CSV中没有，从SEEDS征调
+                yuxishi_data = _recruit_actor_from_seeds('鱼西施')
+                yuxishi = NPC(yuxishi_data)
+            else:
+                # 从列表中移除，避免重复
+                predefined_npcs.remove(yuxishi)
+            
             yuxishi.set_pos(event_center_x, event_center_y)  # 事件中心
             yuxishi.ai_reason = "卖鱼中..."
             yuxishi.state = STATE_EVENT  # 事件状态，不乱跑
             all_cards.append(yuxishi)
             
-            # 泼皮牛二（骚扰者1 - 主说话者）- 从 SEEDS 中征调
-            popi1_data = _recruit_actor_from_seeds('泼皮牛二')
-            popi1 = NPC(popi1_data)
+            # 泼皮牛二（骚扰者1 - 主说话者）- 从CSV加载的NPC中查找
+            popi1 = find_npc_by_name(predefined_npcs, '泼皮牛二')
+            if popi1 is None:
+                popi1_data = _recruit_actor_from_seeds('泼皮牛二')
+                popi1 = NPC(popi1_data)
+            else:
+                predefined_npcs.remove(popi1)
+            
             # 站在鱼西施左前方（不与其他人重叠）
             popi1.set_pos(event_center_x - 70, event_center_y + 35)
             popi1.ai_reason = "调戏中..."
@@ -323,9 +347,14 @@ class WorldLoader:
             popi1.is_main_speaker = True  # 标记为主说话者（对话中"泼皮"指他）
             all_cards.append(popi1)
             
-            # 泼皮狗蛋（骚扰者2 - 帮腔者）- 从 SEEDS 中征调
-            popi2_data = _recruit_actor_from_seeds('泼皮狗蛋')
-            popi2 = NPC(popi2_data)
+            # 泼皮狗蛋（骚扰者2 - 帮腔者）- 从CSV加载的NPC中查找
+            popi2 = find_npc_by_name(predefined_npcs, '泼皮狗蛋')
+            if popi2 is None:
+                popi2_data = _recruit_actor_from_seeds('泼皮狗蛋')
+                popi2 = NPC(popi2_data)
+            else:
+                predefined_npcs.remove(popi2)
+            
             # 站在鱼西施右前方（不与其他人重叠）
             popi2.set_pos(event_center_x + 70, event_center_y + 35)
             popi2.ai_reason = "帮腔中..."
@@ -342,10 +371,8 @@ class WorldLoader:
             # 存储所有事件演员，确保他们保持在 EVENT 状态
             ctx.event_actors = [yuxishi, popi1, popi2]
 
-            print(f"[WorldLoader] 征调演员完成: 鱼西施, 泼皮牛二, 泼皮狗蛋 (均来自 character_seeds.py)")
+            print(f"[WorldLoader] 征调演员完成: 鱼西施, 泼皮牛二, 泼皮狗蛋 (来自CSV数据)")
             print(f"[WorldLoader] 所有事件演员已设置为 STATE_EVENT 状态")
-            
-            predefined_npcs = load_npcs_from_csv("data/npc_data.csv")
             org_building_map = {
                 'SCHOOL': 'SCHOOL',
                 'INN': 'INN',

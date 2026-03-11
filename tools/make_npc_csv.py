@@ -26,22 +26,25 @@ print(f"Assign IDs for {len(SEEDS)} characters. Max ID: {current_id-1}")
 # 2. 第二遍扫描：解析关系 (将名字转换为 ID)
 final_rows = []
 
-# 定义 CSV 表头 - 增加新的社会分层字段
+# 定义 CSV 表头 - 增加新的社会分层字段和内心数据字段
 headers = [
     ['id', 'name', 'job', 'hidden_job', 'head_img', 'body_img', 
      'eco_status', 'soc_status', 'freedom', 'emotion', 
      'tags', 'safety', 'org_id', 'rank', 'relations_json', 'desc',
-     'power_type', 'org_role', 'social_level', 'wealth_level', 'influence_level'],
+     'power_type', 'org_role', 'social_level', 'wealth_level', 'influence_level',
+     'personality_json', 'initial_dilemma_json'],
      
     ['int', 'str', 'enum', 'str', 'str', 'str', 
      'enum', 'enum', 'enum', 'enum', 
      'list', 'enum', 'str', 'int', 'json', 'str',
-     'str', 'str', 'int', 'int', 'int'],
+     'str', 'str', 'int', 'int', 'int',
+     'json', 'json'],
      
     ['编号', '姓名', '当前职业', '潜能职业', '头图', '身图', 
      '经济', '地位', '自由', '心情', 
      '标签', '安全', '组织ID', '职级', '关系数据', '描述',
-     '势力类型', '组织角色', '社会等级', '财富等级', '影响力等级']
+     '势力类型', '组织角色', '社会等级', '财富等级', '影响力等级',
+     '性格数据', '初始困境数据']
 ]
 
 for npc in SEEDS:
@@ -131,12 +134,20 @@ for npc in SEEDS:
     rels_json = json.dumps(processed_rels)
     
     desc = npc.get('desc', '')
+    
+    # --- 内心数据序列化 ---
+    personality = npc.get('personality', {})
+    personality_json = json.dumps(personality, ensure_ascii=False) if personality else '{}'
+    
+    initial_dilemma = npc.get('initial_dilemma', {})
+    initial_dilemma_json = json.dumps(initial_dilemma, ensure_ascii=False) if initial_dilemma else '{}'
 
     row = [
         pid, name, job, hidden_job, head_img, body_img,
         eco, soc, free, emo,
         tags_str, safe, org, rank, rels_json, desc,
-        power_type, org_role, social_level, wealth_level, influence_level
+        power_type, org_role, social_level, wealth_level, influence_level,
+        personality_json, initial_dilemma_json
     ]
     final_rows.append(row)
 

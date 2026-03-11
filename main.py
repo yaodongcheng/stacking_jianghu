@@ -928,7 +928,9 @@ def main():
                 camera.update(dt, mx, my)
 
         # 1. 输入事件处理
+        current_event = None  # 保存当前事件用于渲染
         for event in pygame.event.get():
+            current_event = event  # 保存最新事件
             #退出游戏
             if event.type == pygame.QUIT:
                 running = False
@@ -1553,7 +1555,7 @@ def main():
             pass
                 
         # --- 渲染 ---
-        renderer.render(ctx, mx, my, click_event)
+        renderer.render(ctx, mx, my, click_event, current_event)
         
         # [!] 绘制视觉效果（边缘光晕等，在所有UI之上）
         try:
