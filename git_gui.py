@@ -12,12 +12,13 @@ import os
 # 切换到项目目录
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-GIT_PATH = r'"C:\Program Files\Git\bin\git.exe"'
+GIT_PATH = r"C:\Program Files\Git\cmd\git.exe"
 
+#Releally？
 
 def run_git(cmd):
     """运行 git 命令"""
-    full_cmd = cmd.replace('git ', f'{GIT_PATH} ', 1)
+    full_cmd = cmd.replace('git ', f'"{GIT_PATH}" ', 1)
     result = subprocess.run(full_cmd, shell=True, capture_output=True)
     stdout = result.stdout.decode('gbk', errors='ignore') if result.stdout else ""
     stderr = result.stderr.decode('gbk', errors='ignore') if result.stderr else ""
