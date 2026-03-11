@@ -63,133 +63,248 @@ class DesireTypeEnum(Enum):
 @dataclass
 class NPCPersonality:
     """
-    NPC性格维度数据类
+    NPC性格维度数据类 - 数值化拔河进度条格式
     
-    所有维度默认值为"普通"，可以根据NPC人设进行调整。
+    所有维度默认值为50（中间平衡），范围0-100。
+    0-50偏向左侧特质，50-100偏向右侧特质。
     """
-    # 字符串表示（用于数据存储和显示）
-    temper_str: str = "普通"           # 脾气：温和、性急、普通
-    spirit_str: str = "普通"           # 胆量：胆小、勇敢、普通
-    ism_str: str = "普通"              # 主义：理想、现实、普通
-    act_style_str: str = "普通"        # 行动风格：慎重、轻率、普通
-    friendship_str: str = "普通"       # 情义重视：不重情义、重视情义、普通
-    desire_str: str = "普通"           # 物欲：无欲、贪心、普通
-    desire_type_str: str = "金钱"      # 物欲类型：书籍、武具、金钱、南蛮物、艺术品
+    # 数值化性格维度 (0-100，50为中间平衡)
+    temper: int = 50           # 脾气：0温和 ←→ 100暴躁
+    spirit: int = 50           # 胆量：0胆小 ←→ 100勇敢
+    ism: int = 50              # 主义：0理想 ←→ 100现实
+    act_style: int = 50        # 风格：0缜密 ←→ 100豪放
+    friendship: int = 50       # 情义：0重情义 ←→ 100不重情义
     
-    # 野心值 (0-100，独立数值)
+    # 野心值 (0-100，单向进度条)
     ambition: int = 50
     
+    # 物欲类型（字符串）
+    desire_type: str = "金钱"  # 金钱、权力、美色、安定等
+    
+    # 向后兼容：保留字符串属性（通过计算属性实现）
     @property
-    def temper(self) -> TemperEnum:
+    def temper_str(self) -> str:
+        """脾气字符串表示（向后兼容）"""
+        if self.temper < 30:
+            return "温和"
+        elif self.temper > 70:
+            return "暴躁"
+        return "普通"
+    
+    @property
+    def spirit_str(self) -> str:
+        """胆量字符串表示（向后兼容）"""
+        if self.spirit < 30:
+            return "胆小"
+        elif self.spirit > 70:
+            return "勇敢"
+        return "普通"
+    
+    @property
+    def ism_str(self) -> str:
+        """主义字符串表示（向后兼容）"""
+        if self.ism < 30:
+            return "理想"
+        elif self.ism > 70:
+            return "现实"
+        return "普通"
+    
+    @property
+    def act_style_str(self) -> str:
+        """风格字符串表示（向后兼容）"""
+        if self.act_style < 30:
+            return "缜密"
+        elif self.act_style > 70:
+            return "豪放"
+        return "普通"
+    
+    @property
+    def friendship_str(self) -> str:
+        """情义字符串表示（向后兼容）"""
+        if self.friendship < 30:
+            return "重情义"
+        elif self.friendship > 70:
+            return "不重情义"
+        return "普通"
+    
+    @property
+    def desire_str(self) -> str:
+        """物欲程度字符串表示（向后兼容）"""
+        if self.ambition < 30:
+            return "无欲"
+        elif self.ambition > 70:
+            return "贪心"
+        return "普通"
+    
+    @property
+    def desire_type_str(self) -> str:
+        """物欲类型字符串表示（向后兼容）"""
+        return self.desire_type
+    
+    def get_temper_enum(self) -> TemperEnum:
         """脾气性情枚举"""
-        mapping = {
-            "温和": TemperEnum.Mild,
-            "性急": TemperEnum.Impatient,
-        }
-        return mapping.get(self.temper_str, TemperEnum.Normal)
+        if self.temper < 30:
+            return TemperEnum.Mild
+        elif self.temper > 70:
+            return TemperEnum.Impatient
+        return TemperEnum.Normal
     
-    @property
-    def spirit(self) -> SpiritEnum:
+    def get_spirit_enum(self) -> SpiritEnum:
         """精神胆量枚举"""
-        mapping = {
-            "胆小": SpiritEnum.Timid,
-            "勇敢": SpiritEnum.Brave,
-        }
-        return mapping.get(self.spirit_str, SpiritEnum.Normal)
+        if self.spirit < 30:
+            return SpiritEnum.Timid
+        elif self.spirit > 70:
+            return SpiritEnum.Brave
+        return SpiritEnum.Normal
     
-    @property
-    def ism(self) -> IsmEnum:
+    def get_ism_enum(self) -> IsmEnum:
         """主义倾向枚举"""
-        mapping = {
-            "理想": IsmEnum.Ideal,
-            "现实": IsmEnum.Realistic,
-        }
-        return mapping.get(self.ism_str, IsmEnum.Normal)
+        if self.ism < 30:
+            return IsmEnum.Ideal
+        elif self.ism > 70:
+            return IsmEnum.Realistic
+        return IsmEnum.Normal
     
-    @property
-    def act_style(self) -> ActStyleEnum:
+    def get_act_style_enum(self) -> ActStyleEnum:
         """行动风格枚举"""
-        mapping = {
-            "慎重": ActStyleEnum.Considerate,
-            "轻率": ActStyleEnum.Flippancy,
-        }
-        return mapping.get(self.act_style_str, ActStyleEnum.Normal)
+        if self.act_style < 30:
+            return ActStyleEnum.Considerate
+        elif self.act_style > 70:
+            return ActStyleEnum.Flippancy
+        return ActStyleEnum.Normal
     
-    @property
-    def friendship_importance(self) -> FriendshipImportanceEnum:
+    def get_friendship_enum(self) -> FriendshipImportanceEnum:
         """情义重视程度枚举"""
-        mapping = {
-            "不重情义": FriendshipImportanceEnum.NotImportant,
-            "重视情义": FriendshipImportanceEnum.Important,
-        }
-        return mapping.get(self.friendship_str, FriendshipImportanceEnum.Normal)
+        if self.friendship < 30:
+            return FriendshipImportanceEnum.Important
+        elif self.friendship > 70:
+            return FriendshipImportanceEnum.NotImportant
+        return FriendshipImportanceEnum.Normal
     
-    @property
-    def desire(self) -> DesireEnum:
-        """物欲程度枚举"""
-        mapping = {
-            "无欲": DesireEnum.DesireLess,
-            "贪心": DesireEnum.Greedy,
-        }
-        return mapping.get(self.desire_str, DesireEnum.Normal)
+    def get_desire_enum(self) -> DesireEnum:
+        """物欲程度枚举（基于野心值）"""
+        if self.ambition < 30:
+            return DesireEnum.DesireLess
+        elif self.ambition > 70:
+            return DesireEnum.Greedy
+        return DesireEnum.Normal
     
-    @property
-    def desire_type(self) -> DesireTypeEnum:
+    def get_desire_type_enum(self) -> DesireTypeEnum:
         """物欲类型枚举"""
         mapping = {
+            "金钱": DesireTypeEnum.Money,
+            "财富": DesireTypeEnum.Money,
             "书籍": DesireTypeEnum.Book,
             "武具": DesireTypeEnum.Weapon,
+            "武器": DesireTypeEnum.Weapon,
             "南蛮物": DesireTypeEnum.Nanman,
             "艺术品": DesireTypeEnum.Art,
+            "艺术": DesireTypeEnum.Art,
         }
-        return mapping.get(self.desire_type_str, DesireTypeEnum.Money)
+        return mapping.get(self.desire_type, DesireTypeEnum.Money)
     
     def to_dict(self) -> Dict:
-        """转换为字典（用于序列化）"""
+        """转换为字典（用于序列化）- 新格式：数值化"""
         return {
-            "temper": self.temper_str,
-            "spirit": self.spirit_str,
-            "ism": self.ism_str,
-            "act_style": self.act_style_str,
-            "friendship": self.friendship_str,
-            "desire": self.desire_str,
-            "desire_type": self.desire_type_str,
+            "temper": self.temper,
+            "spirit": self.spirit,
+            "ism": self.ism,
+            "act_style": self.act_style,
+            "friendship": self.friendship,
+            "desire_type": self.desire_type,
             "ambition": self.ambition,
         }
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'NPCPersonality':
-        """从字典创建（用于反序列化）"""
+        """从字典创建（用于反序列化）- 兼容新旧格式"""
+        # 检测数据格式：如果是数值，直接读取；如果是字符串，转换为数值
+        def parse_value(value, left_str, right_str, left_val=20, right_val=80):
+            """解析性格值，支持数值和字符串"""
+            if isinstance(value, (int, float)):
+                return int(value)
+            elif isinstance(value, str):
+                # 旧格式字符串映射
+                if value == left_str or left_str in value:
+                    return left_val
+                elif value == right_str or right_str in value:
+                    return right_val
+                elif value == "普通":
+                    return 50
+                else:
+                    # 尝试解析为数字
+                    try:
+                        return int(value)
+                    except ValueError:
+                        return 50
+            return 50
+        
+        # 解析各维度
+        temper = parse_value(data.get("temper", 50), "温和", "暴躁")
+        spirit = parse_value(data.get("spirit", 50), "胆小", "勇敢")
+        ism = parse_value(data.get("ism", 50), "理想", "现实")
+        act_style = parse_value(data.get("act_style", 50), "缜密", "豪放")
+        friendship = parse_value(data.get("friendship", 50), "重情义", "不重情义")
+        
+        # 野心直接读取
+        ambition = data.get("ambition", 50)
+        if isinstance(ambition, str):
+            try:
+                ambition = int(ambition)
+            except ValueError:
+                ambition = 50
+        
+        # 物欲类型
+        desire_type = data.get("desire_type", "金钱")
+        if not desire_type or desire_type == "None":
+            desire_type = "金钱"
+        
         return cls(
-            temper_str=data.get("temper", "普通"),
-            spirit_str=data.get("spirit", "普通"),
-            ism_str=data.get("ism", "普通"),
-            act_style_str=data.get("act_style", "普通"),
-            friendship_str=data.get("friendship", "普通"),
-            desire_str=data.get("desire", "普通"),
-            desire_type_str=data.get("desire_type", "金钱"),
-            ambition=data.get("ambition", 50),
+            temper=temper,
+            spirit=spirit,
+            ism=ism,
+            act_style=act_style,
+            friendship=friendship,
+            desire_type=desire_type,
+            ambition=ambition,
         )
     
     def get_description(self) -> str:
         """获取性格描述文本"""
         parts = []
-        if self.temper_str != "普通":
-            parts.append(f"性情{self.temper_str}")
-        if self.spirit_str != "普通":
-            parts.append(f"为人{self.spirit_str}")
-        if self.ism_str != "普通":
-            parts.append(f"倾向{self.ism_str}")
-        if self.act_style_str != "普通":
-            parts.append(f"行事{self.act_style_str}")
-        if self.friendship_str != "普通":
-            parts.append(f"{self.friendship_str}")
-        if self.desire_str != "普通":
-            parts.append(f"{self.desire_str}")
+        # 根据数值生成描述
+        if self.temper < 30:
+            parts.append("性情温和")
+        elif self.temper > 70:
+            parts.append("性情暴躁")
+        
+        if self.spirit < 30:
+            parts.append("为人胆小")
+        elif self.spirit > 70:
+            parts.append("为人勇敢")
+        
+        if self.ism < 30:
+            parts.append("倾向理想")
+        elif self.ism > 70:
+            parts.append("倾向现实")
+        
+        if self.act_style < 30:
+            parts.append("行事缜密")
+        elif self.act_style > 70:
+            parts.append("行事豪放")
+        
+        if self.friendship < 30:
+            parts.append("重情义")
+        elif self.friendship > 70:
+            parts.append("不重情义")
+        
         if self.ambition > 70:
             parts.append("野心勃勃")
         elif self.ambition < 30:
             parts.append("淡泊名利")
+        
+        if self.desire_type:
+            parts.append(f"追求{self.desire_type}")
         
         return "，".join(parts) if parts else "性格普通"
 
@@ -286,7 +401,7 @@ PERSONALITY_TEMPLATES = {
 
 def generate_personality_from_job(job: str, tags: list = None) -> NPCPersonality:
     """
-    根据职业和标签生成性格
+    根据职业和标签生成性格 - 新格式：数值化
     
     Args:
         job: 职业类型
@@ -300,35 +415,44 @@ def generate_personality_from_job(job: str, tags: list = None) -> NPCPersonality
     tags = tags or []
     template = PERSONALITY_TEMPLATES.get(job, PERSONALITY_TEMPLATES["DEFAULT"])
     
-    # 基础性格从模板选择
+    # 辅助函数：将字符串选择转换为数值
+    def str_to_value(choices, left_val=20, right_val=80, mid_val=50):
+        """根据字符串选择返回数值"""
+        choice = random.choice(choices)
+        if choice in ["温和", "胆小", "理想", "缜密", "重情义", "无欲"]:
+            return left_val
+        elif choice in ["暴躁", "勇敢", "现实", "豪放", "不重情义", "贪心"]:
+            return right_val
+        return mid_val
+    
+    # 基础性格从模板选择（转换为数值）
     personality = NPCPersonality(
-        temper_str=random.choice(template["temper"]),
-        spirit_str=random.choice(template["spirit"]),
-        ism_str=random.choice(template["ism"]),
-        act_style_str=random.choice(template["act_style"]),
-        friendship_str=random.choice(template["friendship"]),
-        desire_str=random.choice(template["desire"]),
-        desire_type_str=random.choice(template["desire_type"]),
+        temper=str_to_value(template["temper"], 20, 80, 50),
+        spirit=str_to_value(template["spirit"], 20, 80, 50),
+        ism=str_to_value(template["ism"], 20, 80, 50),
+        act_style=str_to_value(template["act_style"], 20, 80, 50),
+        friendship=str_to_value(template["friendship"], 20, 80, 50),
+        desire_type=random.choice(template["desire_type"]),
         ambition=random.randint(*template["ambition_range"]),
     )
     
-    # 根据标签调整
+    # 根据标签调整（直接调整数值）
     if "BRAVE" in tags:
-        personality.spirit_str = "勇敢"
+        personality.spirit = 80  # 勇敢
     if "COWARD" in tags:
-        personality.spirit_str = "胆小"
+        personality.spirit = 20  # 胆小
     if "GREEDY" in tags:
-        personality.desire_str = "贪心"
+        personality.ambition = max(personality.ambition, 70)  # 贪心
     if "RIGHTEOUS" in tags:
-        personality.friendship_str = "重视情义"
-        personality.ism_str = "理想"
+        personality.friendship = 20  # 重情义
+        personality.ism = 20  # 理想
     if "HERO" in tags:
-        personality.spirit_str = "勇敢"
-        personality.friendship_str = "重视情义"
+        personality.spirit = 80  # 勇敢
+        personality.friendship = 20  # 重情义
         personality.ambition = max(personality.ambition, 60)
     if "VILLAIN" in tags:
-        personality.friendship_str = "不重情义"
-        personality.ism_str = "现实"
+        personality.friendship = 80  # 不重情义
+        personality.ism = 80  # 现实
     
     return personality
 

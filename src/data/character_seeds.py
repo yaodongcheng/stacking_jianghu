@@ -196,16 +196,15 @@ SEEDS = [
         'tags': ['POWERFUL', 'RICH', 'NOBLE', 'CUNNING'],
         'relations': {'BODYGUARD': '林冲', 'SUBORDINATE': '无情'},
         'wealth_level': 5, 'influence_level': 5,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面）
-            'spirit': '勇敢',      # 胆量：勇敢
-            'ism': '现实',         # 主义：现实（实用主义者）
-            'act_style': '缜密',   # 风格：缜密（心思深沉）
-            'friendship': '不重情义',  # 情义：不重情义（政治动物）
-            'ambition': 85,        # 野心：高（权倾朝野）
-            'desire_type': '权力', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 30,          # 脾气：温和(0) ←→ 暴躁(100)，方承意表面温和
+            'spirit': 80,          # 胆量：胆小(0) ←→ 勇敢(100)
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，实用主义者
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，心思深沉
+            'friendship': 80,      # 情义：重情义(0) ←→ 不重情义(100)，政治动物
+            'ambition': 85,        # 野心：0-100单向进度条
+            'desire_type': '权力'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 权力危机
         'initial_dilemma': {
@@ -225,16 +224,15 @@ SEEDS = [
         'tags': ['SMART', 'CALM', 'DETECTIVE', 'DISABLED'],
         'relations': {'SUPERIOR': '方承意'},
         'wealth_level': 3, 'influence_level': 4,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（冷静理智）
-            'spirit': '勇敢',      # 胆量：勇敢（不畏权贵）
-            'ism': '现实',         # 主义：现实（注重证据）
-            'act_style': '缜密',   # 风格：缜密（神探本色）
-            'friendship': '重情义',  # 情义：重情义（对兄弟有情有义）
-            'ambition': 60,        # 野心：中等（追求正义而非权力）
-            'desire_type': '名誉', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 25,          # 脾气：温和(0) ←→ 暴躁(100)，冷静理智
+            'spirit': 85,          # 胆量：胆小(0) ←→ 勇敢(100)，不畏权贵
+            'ism': 70,             # 主义：理想(0) ←→ 现实(100)，注重证据
+            'act_style': 20,       # 风格：缜密(0) ←→ 豪放(100)，神探本色
+            'friendship': 20,      # 情义：重情义(0) ←→ 不重情义(100)，对兄弟有情有义
+            'ambition': 60,        # 野心：0-100单向进度条
+            'desire_type': '名誉'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 身份困境
         'initial_dilemma': {
@@ -254,16 +252,15 @@ SEEDS = [
         'tags': ['HERO', 'JUSTICE', 'LOYAL', 'WARRIOR'],
         'relations': {'LEADER': '方承意', 'FRIEND': '鲁智深'},
         'wealth_level': 2, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（但隐忍）
-            'spirit': '勇敢',      # 胆量：勇敢（武艺高强）
-            'ism': '理想',         # 主义：理想（忠君爱国）
-            'act_style': '豪放',   # 风格：豪放（武将本色）
-            'friendship': '重情义',  # 情义：重情义（对朋友肝胆相照）
-            'ambition': 40,        # 野心：较低（只想安稳度日）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 75,          # 脾气：温和(0) ←→ 暴躁(100)，本性暴躁但隐忍
+            'spirit': 90,          # 胆量：胆小(0) ←→ 勇敢(100)，武艺高强
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，忠君爱国
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，武将本色
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对朋友肝胆相照
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 身份困境
         'initial_dilemma': {
@@ -285,16 +282,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'LUSTFUL', 'RICH', 'ARROGANT'],
         'relations': {'BODYGUARD': '高大胜'},
         'wealth_level': 4, 'influence_level': 3,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（纨绔子弟）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（享乐主义者）
-            'act_style': '豪放',   # 风格：豪放（行事张扬）
-            'friendship': '不重情义',  # 情义：不重情义（利用他人）
-            'ambition': 70,        # 野心：较高（想证明自己不是废物）
-            'desire_type': '美色', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 80,          # 脾气：温和(0) ←→ 暴躁(100)，纨绔子弟
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 80,             # 主义：理想(0) ←→ 现实(100)，享乐主义者
+            'act_style': 75,       # 风格：缜密(0) ←→ 豪放(100)，行事张扬
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，利用他人
+            'ambition': 70,        # 野心：0-100单向进度条
+            'desire_type': '美色'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 继承危机
         'initial_dilemma': {
@@ -314,16 +310,15 @@ SEEDS = [
         'tags': ['FILIAL', 'STRONG', 'CONFLICTED'],
         'relations': {'LEADER': '高衙内'},
         'wealth_level': 2, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（本性善良）
-            'spirit': '勇敢',      # 胆量：勇敢（武艺高强）
-            'ism': '现实',         # 主义：现实（为母治病）
-            'act_style': '豪放',   # 风格：豪放（武将本色）
-            'friendship': '重情义',  # 情义：重情义（孝顺母亲）
-            'ambition': 35,        # 野心：低（只想救母）
-            'desire_type': '亲情', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 25,          # 脾气：温和(0) ←→ 暴躁(100)，本性善良
+            'spirit': 80,          # 胆量：胆小(0) ←→ 勇敢(100)，武艺高强
+            'ism': 70,             # 主义：理想(0) ←→ 现实(100)，为母治病
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，武将本色
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，孝顺母亲
+            'ambition': 35,        # 野心：0-100单向进度条
+            'desire_type': '亲情'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 道德困境
         'initial_dilemma': {
@@ -343,16 +338,15 @@ SEEDS = [
         'tags': ['HENPECKED', 'HONEST', 'HARDWORKING'],
         'relations': {'WIFE': '孙二娘'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（老实人）
-            'spirit': '胆小',      # 胆量：胆小（怕老婆）
-            'ism': '现实',         # 主义：现实（只求安稳）
-            'act_style': '缜密',   # 风格：缜密（种菜需要耐心）
-            'friendship': '重情义',  # 情义：重情义（对妻子百依百顺）
-            'ambition': 20,        # 野心：很低（只想种菜）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，老实人
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，怕老婆
+            'ism': 60,             # 主义：理想(0) ←→ 现实(100)，只求安稳
+            'act_style': 30,       # 风格：缜密(0) ←→ 豪放(100)，种菜需要耐心
+            'friendship': 10,      # 情义：重情义(0) ←→ 不重情义(100)，对妻子百依百顺
+            'ambition': 20,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 婚姻困境
         'initial_dilemma': {
@@ -374,16 +368,15 @@ SEEDS = [
         'tags': ['RICH', 'ARROGANT', 'SMART', 'BUSINESS_GENIUS'],
         'relations': {'SUBORDINATE': '王小乐'},
         'wealth_level': 5, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（大小姐脾气）
-            'spirit': '勇敢',      # 胆量：勇敢（敢想敢做）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '豪放',   # 风格：豪放（行事果决）
-            'friendship': '不重情义',  # 情义：不重情义（商人本色）
-            'ambition': 75,        # 野心：高（想超越父辈）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 75,          # 脾气：温和(0) ←→ 暴躁(100)，大小姐脾气
+            'spirit': 80,          # 胆量：胆小(0) ←→ 勇敢(100)，敢想敢做
+            'ism': 80,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 75,       # 风格：缜密(0) ←→ 豪放(100)，行事果决
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，商人本色
+            'ambition': 75,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 家族危机
         'initial_dilemma': {
@@ -403,16 +396,15 @@ SEEDS = [
         'tags': ['TOUGH', 'COOK_DARK', 'INFORMATION_BROKER'],
         'relations': {'HUSBAND': '张青'},
         'wealth_level': 2, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（江湖儿女）
-            'spirit': '勇敢',      # 胆量：勇敢（天不怕地不怕）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '豪放',   # 风格：豪放（行事果决）
-            'friendship': '重情义',  # 情义：重情义（对丈夫刀子嘴豆腐心）
-            'ambition': 55,        # 野心：中等（想扩大十字坡势力）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 80,          # 脾气：温和(0) ←→ 暴躁(100)，江湖儿女
+            'spirit': 90,          # 胆量：胆小(0) ←→ 勇敢(100)，天不怕地不怕
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，行事果决
+            'friendship': 20,      # 情义：重情义(0) ←→ 不重情义(100)，对丈夫刀子嘴豆腐心
+            'ambition': 55,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 婚姻与事业
         'initial_dilemma': {
@@ -432,16 +424,15 @@ SEEDS = [
         'tags': ['BEAUTIFUL', 'HARDWORKING', 'GENTLE', 'POOR'],
         'relations': {},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（温柔善良）
-            'spirit': '胆小',      # 胆量：胆小（弱女子）
-            'ism': '理想',         # 主义：理想（相信好人有好报）
-            'act_style': '缜密',   # 风格：缜密（卖鱼需要精打细算）
-            'friendship': '重情义',  # 情义：重情义（对帮助过她的人感恩）
-            'ambition': 25,        # 野心：低（只想安稳生活）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 15,          # 脾气：温和(0) ←→ 暴躁(100)，温柔善良
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，弱女子
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，相信好人有好报
+            'act_style': 30,       # 风格：缜密(0) ←→ 豪放(100)，卖鱼需要精打细算
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对帮助过她的人感恩
+            'ambition': 25,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 美貌困境
         'initial_dilemma': {
@@ -461,16 +452,15 @@ SEEDS = [
         'tags': ['SLIPPERY', 'SNOB', 'EXPERIENCED'],
         'relations': {'LEADER': '郁芊芊'},
         'wealth_level': 2, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面逢迎）
-            'spirit': '胆小',      # 胆量：胆小（不敢得罪人）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '缜密',   # 风格：缜密（察言观色）
-            'friendship': '不重情义',  # 情义：不重情义（墙头草）
-            'ambition': 45,        # 野心：中等（想往上爬）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 25,          # 脾气：温和(0) ←→ 暴躁(100)，表面逢迎
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，不敢得罪人
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，察言观色
+            'friendship': 80,      # 情义：重情义(0) ←→ 不重情义(100)，墙头草
+            'ambition': 45,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 职场困境
         'initial_dilemma': {
@@ -492,16 +482,15 @@ SEEDS = [
         'tags': ['BEAUTIFUL', 'TALENTED', 'ARTISTIC', 'FAMOUS'],
         'relations': {},
         'wealth_level': 3, 'influence_level': 3,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面温婉）
-            'spirit': '勇敢',      # 胆量：勇敢（内心坚强）
-            'ism': '理想',         # 主义：理想（渴望真爱）
-            'act_style': '缜密',   # 风格：缜密（察言观色）
-            'friendship': '重情义',  # 情义：重情义（对知己倾心）
-            'ambition': 50,        # 野心：中等（想摆脱风尘）
-            'desire_type': '自由', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，表面温婉
+            'spirit': 75,          # 胆量：胆小(0) ←→ 勇敢(100)，内心坚强
+            'ism': 30,             # 主义：理想(0) ←→ 现实(100)，渴望真爱
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，察言观色
+            'friendship': 20,      # 情义：重情义(0) ←→ 不重情义(100)，对知己倾心
+            'ambition': 50,        # 野心：0-100单向进度条
+            'desire_type': '自由'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 风尘困境
         'initial_dilemma': {
@@ -523,16 +512,15 @@ SEEDS = [
         'tags': ['LOVING_MOTHER', 'SCHOLARLY', 'RESPECTED'],
         'relations': {'CHILD': '孙小溪'},
         'wealth_level': 2, 'influence_level': 4,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（慈母）
-            'spirit': '胆小',      # 胆量：胆小（不愿惹事）
-            'ism': '理想',         # 主义：理想（相信教育）
-            'act_style': '缜密',   # 风格：缜密（学者本色）
-            'friendship': '重情义',  # 情义：重情义（对女儿百依百顺）
-            'ambition': 30,        # 野心：低（只想女儿好）
-            'desire_type': '亲情', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 15,          # 脾气：温和(0) ←→ 暴躁(100)，慈母
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，不愿惹事
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，相信教育
+            'act_style': 20,       # 风格：缜密(0) ←→ 豪放(100)，学者本色
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对女儿百依百顺
+            'ambition': 30,        # 野心：0-100单向进度条
+            'desire_type': '亲情'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 教育困境
         'initial_dilemma': {
@@ -552,16 +540,15 @@ SEEDS = [
         'tags': ['PLAYFUL', 'ANIMAL_LOVER', 'INTELLIGENT'],
         'relations': {'MOTHER': '袁桐'},
         'wealth_level': 2, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（活泼好动）
-            'spirit': '勇敢',      # 胆量：勇敢（天不怕地不怕）
-            'ism': '理想',         # 主义：理想（相信世界美好）
-            'act_style': '豪放',   # 风格：豪放（不拘小节）
-            'friendship': '重情义',  # 情义：重情义（对小动物有爱心）
-            'ambition': 35,        # 野心：低（只想自由自在）
-            'desire_type': '自由', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 70,          # 脾气：温和(0) ←→ 暴躁(100)，活泼好动
+            'spirit': 85,          # 胆量：胆小(0) ←→ 勇敢(100)，天不怕地不怕
+            'ism': 20,             # 主义：理想(0) ←→ 现实(100)，相信世界美好
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，不拘小节
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对小动物有爱心
+            'ambition': 35,        # 野心：0-100单向进度条
+            'desire_type': '自由'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 成长困境
         'initial_dilemma': {
@@ -581,16 +568,15 @@ SEEDS = [
         'tags': ['JUSTICE', 'STRONG', 'DRUNK', 'MONK'],
         'relations': {'FRIEND': '林冲', 'SUBORDINATE': '弥乐'},
         'wealth_level': 1, 'influence_level': 3,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（火爆脾气）
-            'spirit': '勇敢',      # 胆量：勇敢（天不怕地不怕）
-            'ism': '理想',         # 主义：理想（路见不平拔刀相助）
-            'act_style': '豪放',   # 风格：豪放（行事洒脱）
-            'friendship': '重情义',  # 情义：重情义（为朋友两肋插刀）
-            'ambition': 30,        # 野心：低（只求快意恩仇）
-            'desire_type': '酒肉', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 85,          # 脾气：温和(0) ←→ 暴躁(100)，火爆脾气
+            'spirit': 95,          # 胆量：胆小(0) ←→ 勇敢(100)，天不怕地不怕
+            'ism': 20,             # 主义：理想(0) ←→ 现实(100)，路见不平拔刀相助
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，行事洒脱
+            'friendship': 10,      # 情义：重情义(0) ←→ 不重情义(100)，为朋友两肋插刀
+            'ambition': 30,        # 野心：0-100单向进度条
+            'desire_type': '酒肉'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 佛门困境
         'initial_dilemma': {
@@ -610,16 +596,15 @@ SEEDS = [
         'tags': ['LIAR', 'GREEDY', 'FORTUNE_TELLER'],
         'relations': {'LEADER': '鲁智深'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面和善）
-            'spirit': '胆小',      # 胆量：胆小（怕事）
-            'ism': '现实',         # 主义：现实（唯利是图）
-            'act_style': '缜密',   # 风格：缜密（骗术需要心思）
-            'friendship': '不重情义',  # 情义：不重情义（只认钱）
-            'ambition': 40,        # 野心：中等（想发财）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，表面和善
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，怕事
+            'ism': 80,             # 主义：理想(0) ←→ 现实(100)，唯利是图
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，骗术需要心思
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，只认钱
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 身份暴露危机
         'initial_dilemma': {
@@ -639,16 +624,15 @@ SEEDS = [
         'tags': ['KIND', 'ORPHAN', 'INNOCENT'],
         'relations': {},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（天真善良）
-            'spirit': '胆小',      # 胆量：胆小（年幼体弱）
-            'ism': '理想',         # 主义：理想（相信世界美好）
-            'act_style': '缜密',   # 风格：缜密（心思细腻）
-            'friendship': '重情义',  # 情义：重情义（感恩养育他的人）
-            'ambition': 15,        # 野心：很低（只想活下去）
-            'desire_type': '亲情', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 10,          # 脾气：温和(0) ←→ 暴躁(100)，天真善良
+            'spirit': 15,          # 胆量：胆小(0) ←→ 勇敢(100)，年幼体弱
+            'ism': 15,             # 主义：理想(0) ←→ 现实(100)，相信世界美好
+            'act_style': 30,       # 风格：缜密(0) ←→ 豪放(100)，心思细腻
+            'friendship': 10,      # 情义：重情义(0) ←→ 不重情义(100)，感恩养育他的人
+            'ambition': 15,        # 野心：0-100单向进度条
+            'desire_type': '亲情'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 孤儿困境
         'initial_dilemma': {
@@ -670,16 +654,15 @@ SEEDS = [
         'tags': ['POOR', 'KIND', 'LOYAL', 'STREET_SMART'],
         'relations': {},
         'wealth_level': 1, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（热心肠）
-            'spirit': '勇敢',      # 胆量：勇敢（敢作敢当）
-            'ism': '理想',         # 主义：理想（相信义气）
-            'act_style': '豪放',   # 风格：豪放（江湖儿女）
-            'friendship': '重情义',  # 情义：重情义（对兄弟讲义气）
-            'ambition': 45,        # 野心：中等（想让丐帮壮大）
-            'desire_type': '义气', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，热心肠
+            'spirit': 80,          # 胆量：胆小(0) ←→ 勇敢(100)，敢作敢当
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，相信义气
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，江湖儿女
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对兄弟讲义气
+            'ambition': 45,        # 野心：0-100单向进度条
+            'desire_type': '义气'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -704,16 +687,15 @@ SEEDS = [
         'recruit_cost': 50,
         'recruit_condition': 'Q_FIND_ZHANGSAN',
         'combat_power': 3,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（嫉恶如仇）
-            'spirit': '勇敢',      # 胆量：勇敢（敢与恶势力对抗）
-            'ism': '理想',         # 主义：理想（相信正义）
-            'act_style': '豪放',   # 风格：豪放（江湖儿女）
-            'friendship': '重情义',  # 情义：重情义（对朋友肝胆相照）
-            'ambition': 40,        # 野心：中等（想保护弱小）
-            'desire_type': '正义', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 75,          # 脾气：温和(0) ←→ 暴躁(100)，嫉恶如仇
+            'spirit': 85,          # 胆量：胆小(0) ←→ 勇敢(100)，敢与恶势力对抗
+            'ism': 20,             # 主义：理想(0) ←→ 现实(100)，相信正义
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，江湖儿女
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对朋友肝胆相照
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '正义'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 正义困境
         'initial_dilemma': {
@@ -737,16 +719,15 @@ SEEDS = [
         'tags': ['BUREAUCRAT', 'EXPERIENCED', 'SYCOPHANT'],
         'relations': {'LEADER': '方承意'},
         'wealth_level': 3, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面和善）
-            'spirit': '胆小',      # 胆量：胆小（怕得罪人）
-            'ism': '现实',         # 主义：现实（官场生存法则）
-            'act_style': '缜密',   # 风格：缜密（老谋深算）
-            'friendship': '不重情义',  # 情义：不重情义（只认利益）
-            'ambition': 50,        # 野心：中等（想保住位置）
-            'desire_type': '权力', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 25,          # 脾气：温和(0) ←→ 暴躁(100)，表面和善
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，怕得罪人
+            'ism': 80,             # 主义：理想(0) ←→ 现实(100)，官场生存法则
+            'act_style': 20,       # 风格：缜密(0) ←→ 豪放(100)，老谋深算
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，只认利益
+            'ambition': 50,        # 野心：0-100单向进度条
+            'desire_type': '权力'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 职场危机
         'initial_dilemma': {
@@ -768,16 +749,15 @@ SEEDS = [
         'tags': ['LOYAL', 'STRONG', 'DUTIFUL'],
         'relations': {'COLLEAGUE': '林冲'},
         'wealth_level': 2, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（武将本色）
-            'spirit': '勇敢',      # 胆量：勇敢（忠诚勇猛）
-            'ism': '理想',         # 主义：理想（忠君爱国）
-            'act_style': '豪放',   # 风格：豪放（武将本色）
-            'friendship': '重情义',  # 情义：重情义（对兄弟肝胆相照）
-            'ambition': 40,        # 野心：中等（想建功立业）
-            'desire_type': '荣誉', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 80,          # 脾气：温和(0) ←→ 暴躁(100)，武将本色
+            'spirit': 90,          # 胆量：胆小(0) ←→ 勇敢(100)，忠诚勇猛
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，忠君爱国
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，武将本色
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对兄弟肝胆相照
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '荣誉'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 忠诚困境
         'initial_dilemma': {
@@ -799,16 +779,15 @@ SEEDS = [
         'tags': ['MERCHANT', 'CALCULATING', 'HONEST_BUSINESS'],
         'relations': {'LEADER': '郁芊芊'},
         'wealth_level': 3, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（和气生财）
-            'spirit': '胆小',      # 胆量：胆小（怕得罪人）
-            'ism': '现实',         # 主义：现实（商人本色）
-            'act_style': '缜密',   # 风格：缜密（精于算计）
-            'friendship': '重情义',  # 情义：重情义（对老客户有情有义）
-            'ambition': 40,        # 野心：中等（想扩大生意）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，和气生财
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，怕得罪人
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，商人本色
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，精于算计
+            'friendship': 20,      # 情义：重情义(0) ←→ 不重情义(100)，对老客户有情有义
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 诚信困境
         'initial_dilemma': {
@@ -830,16 +809,15 @@ SEEDS = [
         'tags': ['POOR', 'HARDWORKING', 'SIMPLE'],
         'relations': {},
         'wealth_level': 1, 'influence_level': 0,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（老实人）
-            'spirit': '胆小',      # 胆量：胆小（怕惹事）
-            'ism': '现实',         # 主义：现实（只求温饱）
-            'act_style': '缜密',   # 风格：缜密（种地需要耐心）
-            'friendship': '重情义',  # 情义：重情义（对邻里友善）
-            'ambition': 10,        # 野心：很低（只想活下去）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 15,          # 脾气：温和(0) ←→ 暴躁(100)，老实人
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，怕惹事
+            'ism': 70,             # 主义：理想(0) ←→ 现实(100)，只求温饱
+            'act_style': 30,       # 风格：缜密(0) ←→ 豪放(100)，种地需要耐心
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对邻里友善
+            'ambition': 10,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -860,16 +838,15 @@ SEEDS = [
         'tags': ['HARDWORKING', 'SKILLFUL', 'AMBITIOUS'],
         'relations': {},
         'wealth_level': 1, 'influence_level': 0,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（温柔善良）
-            'spirit': '勇敢',      # 胆量：勇敢（敢于追梦）
-            'ism': '理想',         # 主义：理想（相信努力就有回报）
-            'act_style': '缜密',   # 风格：缜密（绣工需要耐心）
-            'friendship': '重情义',  # 情义：重情义（对帮助过她的人感恩）
-            'ambition': 65,        # 野心：较高（想开绣庄）
-            'desire_type': '事业', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，温柔善良
+            'spirit': 75,          # 胆量：胆小(0) ←→ 勇敢(100)，敢于追梦
+            'ism': 25,             # 主义：理想(0) ←→ 现实(100)，相信努力就有回报
+            'act_style': 30,       # 风格：缜密(0) ←→ 豪放(100)，绣工需要耐心
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对帮助过她的人感恩
+            'ambition': 65,        # 野心：0-100单向进度条
+            'desire_type': '事业'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 梦想困境
         'initial_dilemma': {
@@ -893,16 +870,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'STRONG', 'RUTHLESS', 'BANDIT_CHIEF', 'GAO_PUPPET'],
         'relations': {'SUBORDINATE': '泼皮牛二', 'SECRET_BACKER': '高衙内'},
         'wealth_level': 2, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（恶霸本色）
-            'spirit': '勇敢',      # 胆量：勇敢（敢作敢为）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '豪放',   # 风格：豪放（行事张扬）
-            'friendship': '不重情义',  # 情义：不重情义（只认利益）
-            'ambition': 70,        # 野心：较高（想扩大势力）
-            'desire_type': '权力', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 85,          # 脾气：温和(0) ←→ 暴躁(100)，恶霸本色
+            'spirit': 80,          # 胆量：胆小(0) ←→ 勇敢(100)，敢作敢为
+            'ism': 80,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，行事张扬
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，只认利益
+            'ambition': 70,        # 野心：0-100单向进度条
+            'desire_type': '权力'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 身份困境
         'initial_dilemma': {
@@ -922,16 +898,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'SIMPLE', 'FOLLOWER'],
         'relations': {'LEADER': '黑风大王'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（本性凶恶）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（只为混口饭吃）
-            'act_style': '豪放',   # 风格：豪放（行事鲁莽）
-            'friendship': '不重情义',  # 情义：不重情义（见风使舵）
-            'ambition': 30,        # 野心：低（只想活下去）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 80,          # 脾气：温和(0) ←→ 暴躁(100)，本性凶恶
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，只为混口饭吃
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，行事鲁莽
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，见风使舵
+            'ambition': 30,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -951,16 +926,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'SIMPLE', 'FOLLOWER'],
         'relations': {'LEADER': '黑风大王'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（本性懦弱）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（只为混口饭吃）
-            'act_style': '缜密',   # 风格：缜密（小心翼翼）
-            'friendship': '不重情义',  # 情义：不重情义（见风使舵）
-            'ambition': 20,        # 野心：很低（只想活下去）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，本性懦弱
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 70,             # 主义：理想(0) ←→ 现实(100)，只为混口饭吃
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，小心翼翼
+            'friendship': 85,      # 情义：重情义(0) ←→ 不重情义(100)，见风使舵
+            'ambition': 20,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -980,16 +954,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'DRUNK', 'BULLY', 'THUG'],
         'relations': {'PARTNER': '泼皮狗蛋', 'LEADER': '黑风大王'},
         'wealth_level': 1, 'influence_level': 0,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（恶霸本色）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（享乐主义）
-            'act_style': '豪放',   # 风格：豪放（行事张扬）
-            'friendship': '不重情义',  # 情义：不重情义（只认利益）
-            'ambition': 35,        # 野心：低（只想混吃混喝）
-            'desire_type': '酒色', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 85,          # 脾气：温和(0) ←→ 暴躁(100)，恶霸本色
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 85,             # 主义：理想(0) ←→ 现实(100)，享乐主义
+            'act_style': 80,       # 风格：缜密(0) ←→ 豪放(100)，行事张扬
+            'friendship': 90,      # 情义：重情义(0) ←→ 不重情义(100)，只认利益
+            'ambition': 35,        # 野心：0-100单向进度条
+            'desire_type': '酒色'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -1009,16 +982,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'SIMPLE', 'FOLLOWER', 'THUG'],
         'relations': {'PARTNER': '泼皮牛二', 'LEADER': '黑风大王'},
         'wealth_level': 1, 'influence_level': 0,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（本性凶恶）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（只听牛二的）
-            'act_style': '豪放',   # 风格：豪放（行事鲁莽）
-            'friendship': '重情义',  # 情义：重情义（对牛二忠心）
-            'ambition': 20,        # 野心：很低（只想跟着牛二混）
-            'desire_type': '酒肉', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 80,          # 脾气：温和(0) ←→ 暴躁(100)，本性凶恶
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，只听牛二的
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，行事鲁莽
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对牛二忠心
+            'ambition': 20,        # 野心：0-100单向进度条
+            'desire_type': '酒肉'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -1040,16 +1012,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'SMART', 'RUTHLESS', 'BANDIT_CHIEF'],
         'relations': {},
         'wealth_level': 2, 'influence_level': 2,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面和善）
-            'spirit': '勇敢',      # 胆量：勇敢（敢作敢为）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '缜密',   # 风格：缜密（狡猾阴险）
-            'friendship': '不重情义',  # 情义：不重情义（只认利益）
-            'ambition': 75,        # 野心：较高（想吞并其他山寨）
-            'desire_type': '权力', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，表面和善
+            'spirit': 85,          # 胆量：胆小(0) ←→ 勇敢(100)，敢作敢为
+            'ism': 85,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 20,       # 风格：缜密(0) ←→ 豪放(100)，狡猾阴险
+            'friendship': 90,      # 情义：重情义(0) ←→ 不重情义(100)，只认利益
+            'ambition': 75,        # 野心：0-100单向进度条
+            'desire_type': '权力'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 扩张困境
         'initial_dilemma': {
@@ -1069,16 +1040,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'STRONG', 'SIMPLE'],
         'relations': {'LEADER': '青狼'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（本性凶恶）
-            'spirit': '勇敢',      # 胆量：勇敢（力大无穷）
-            'ism': '现实',         # 主义：现实（只听青狼的）
-            'act_style': '豪放',   # 风格：豪放（行事鲁莽）
-            'friendship': '重情义',  # 情义：重情义（对青狼忠心）
-            'ambition': 30,        # 野心：低（只想跟着青狼混）
-            'desire_type': '酒肉', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 85,          # 脾气：温和(0) ←→ 暴躁(100)，本性凶恶
+            'spirit': 90,          # 胆量：胆小(0) ←→ 勇敢(100)，力大无穷
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，只听青狼的
+            'act_style': 85,       # 风格：缜密(0) ←→ 豪放(100)，行事鲁莽
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对青狼忠心
+            'ambition': 30,        # 野心：0-100单向进度条
+            'desire_type': '酒肉'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 忠诚困境
         'initial_dilemma': {
@@ -1098,16 +1068,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'AGILE', 'SCOUT'],
         'relations': {'LEADER': '青狼'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（表面和善）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（只为混口饭吃）
-            'act_style': '缜密',   # 风格：缜密（探子需要心思）
-            'friendship': '不重情义',  # 情义：不重情义（见风使舵）
-            'ambition': 40,        # 野心：中等（想往上爬）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，表面和善
+            'spirit': 25,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，只为混口饭吃
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，探子需要心思
+            'friendship': 90,      # 情义：重情义(0) ←→ 不重情义(100)，见风使舵
+            'ambition': 40,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 身份困境
         'initial_dilemma': {
@@ -1129,16 +1098,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'GREEDY', 'RUTHLESS', 'BANDIT_CHIEF'],
         'relations': {},
         'wealth_level': 2, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '暴躁',      # 脾气：暴躁（本性凶恶）
-            'spirit': '勇敢',      # 胆量：勇敢（敢作敢为）
-            'ism': '现实',         # 主义：现实（利益至上）
-            'act_style': '缜密',   # 风格：缜密（专劫商队需要计划）
-            'friendship': '不重情义',  # 情义：不重情义（只认利益）
-            'ambition': 65,        # 野心：较高（想扩大势力）
-            'desire_type': '财富', # 物欲类型
-            'desire': '贪心'       # 物欲程度
+            'temper': 85,          # 脾气：温和(0) ←→ 暴躁(100)，本性凶恶
+            'spirit': 85,          # 胆量：胆小(0) ←→ 勇敢(100)，敢作敢为
+            'ism': 85,             # 主义：理想(0) ←→ 现实(100)，利益至上
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，专劫商队需要计划
+            'friendship': 90,      # 情义：重情义(0) ←→ 不重情义(100)，只认利益
+            'ambition': 65,        # 野心：0-100单向进度条
+            'desire_type': '财富'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 生存困境
         'initial_dilemma': {
@@ -1158,16 +1126,15 @@ SEEDS = [
         'tags': ['VILLAIN', 'SIMPLE', 'FOLLOWER'],
         'relations': {'LEADER': '骆大'},
         'wealth_level': 1, 'influence_level': 1,
-        # 【新增】仿太阁5性格维度
+        # 【新增】性格维度 - 数值化拔河进度条 (0-100)
         'personality': {
-            'temper': '温和',      # 脾气：温和（本性懦弱）
-            'spirit': '胆小',      # 胆量：胆小（欺软怕硬）
-            'ism': '现实',         # 主义：现实（只听哥哥的）
-            'act_style': '缜密',   # 风格：缜密（小心翼翼）
-            'friendship': '重情义',  # 情义：重情义（对哥哥忠心）
-            'ambition': 25,        # 野心：很低（只想跟着哥哥混）
-            'desire_type': '安定', # 物欲类型
-            'desire': '一般'       # 物欲程度
+            'temper': 20,          # 脾气：温和(0) ←→ 暴躁(100)，本性懦弱
+            'spirit': 20,          # 胆量：胆小(0) ←→ 勇敢(100)，欺软怕硬
+            'ism': 75,             # 主义：理想(0) ←→ 现实(100)，只听哥哥的
+            'act_style': 25,       # 风格：缜密(0) ←→ 豪放(100)，小心翼翼
+            'friendship': 15,      # 情义：重情义(0) ←→ 不重情义(100)，对哥哥忠心
+            'ambition': 25,        # 野心：0-100单向进度条
+            'desire_type': '安定'  # 物欲类型：字符串
         },
         # 【新增】初始困境 - 家庭困境
         'initial_dilemma': {

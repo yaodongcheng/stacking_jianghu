@@ -1997,113 +1997,150 @@ class UIDialogsMixin:
         screen.blit(section_title, (content_center_x - section_title.get_width() // 2, y))
         y += 28
         
-        # 性格维度 - 使用进度条显示（全部居中）
+        # 性格维度 - 使用拔河进度条显示（全部居中）
+        # 格式: (key, 维度名称, 左端标签(0), 右端标签(100), 左端颜色, 右端颜色)
+        # 颜色设计：左冷色 → 右暖色，中间渐变，直观显示偏向
         dimensions = [
-            ('temper', '性情', '性急', '温和', (220, 100, 100), (100, 180, 220)),
-            ('spirit', '精神', '胆小', '勇敢', (180, 100, 180), (100, 200, 150)),
-            ('ism', '主义', '理想', '现实', (220, 150, 80), (80, 150, 220)),
-            ('act_style', '作风', '轻率', '慎重', (220, 120, 100), (100, 180, 180)),
-            ('friendship', '情义', '凉薄', '深重', (200, 100, 120), (100, 200, 180))
+            ('temper', '性情', '温和', '暴躁', (80, 160, 220), (220, 80, 80)),    # 蓝 → 红
+            ('spirit', '胆量', '胆小', '勇敢', (150, 150, 180), (80, 180, 80)),    # 灰紫 → 绿
+            ('ism', '主义', '理想', '现实', (220, 180, 100), (100, 140, 200)),     # 金黄 → 蓝灰
+            ('act_style', '作风', '缜密', '豪放', (100, 160, 160), (200, 140, 80)), # 青灰 → 橙
+            ('friendship', '情义', '重情义', '不重情义', (80, 180, 120), (180, 80, 100)) # 绿 → 玫红
         ]
         
         bar_width = 100
         bar_height = 12
-        label_width = 45  # 左侧标签宽度
+        name_width = 40      # 维度名称宽度
+        label_width = 50     # 左右极端标签宽度
         
         for key, name, left_label, right_label, left_color, right_color in dimensions:
-            raw_value = personality.get(key, '普通')
+            # 直接获取数值 (0-100)，新格式已经是数值化
+            raw_value = personality.get(key, 50)
             if isinstance(raw_value, (int, float)):
                 value = int(raw_value)
             else:
-                value = self._map_personality_str_to_value(key, raw_value)
+                # 兼容旧格式：如果是字符串，尝试转换或映射
+                try:
+                    value = int(raw_value)
+                except (ValueError, TypeError):
+                    value = 50  # 默认值
             
-            # 计算总宽度用于居中
-            total_width = label_width + bar_width + 50  # 标签+进度条+右侧文字
+            # 计算总宽度用于居中: 名称 + 左标签 + 进度条 + 右标签
+            total_width = name_width + label_width + bar_width + label_width
             start_x = content_center_x - total_width // 2
             
-            # 维度名称
+            # 维度名称（最左侧）
             name_surf = font_text.render(name, True, (200, 200, 200))
             screen.blit(name_surf, (start_x, y))
             
-            # 进度条背景
-            bar_x = start_x + label_width
+            # 左极端标签
+            left_label_x = start_x + name_width
+            left_label_surf = font_text.render(left_label, True, left_color)
+            screen.blit(left_label_surf, (left_label_x, y))
+            
+            # 进度条位置
+            bar_x = left_label_x + label_width
             bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
             pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
             
-            # 计算填充
+            # 中立滑块式设计：滑块位置直接代表倾向程度
+            # value 0-100，0=最左(左侧标签)，100=最右(右侧标签)，50=中间
+            
+            # 绘制轨道背景
+            track_rect = pygame.Rect(bar_x, y + 4, bar_width, bar_height - 4)
+            pygame.draw.rect(screen, (60, 60, 60), track_rect, border_radius=2)
+            
+            # 计算滑块位置
+            slider_x = bar_x + int((value / 100) * bar_width)
+            slider_y = y + bar_height // 2 + 1
+            slider_radius = 4  # 改小一点
+            
+            # 绘制滑块（圆形，颜色根据位置渐变）
+            t = value / 100  # 0.0 ~ 1.0
+            slider_color = (
+                int(left_color[0] + (right_color[0] - left_color[0]) * t),
+                int(left_color[1] + (right_color[1] - left_color[1]) * t),
+                int(left_color[2] + (right_color[2] - left_color[2]) * t)
+            )
+            
+            # 绘制滑块阴影（立体效果）
+            pygame.draw.circle(screen, (40, 40, 40), (slider_x, slider_y + 1), slider_radius)
+            # 绘制滑块主体
+            pygame.draw.circle(screen, slider_color, (slider_x, slider_y), slider_radius)
+            
+            # 中心标记点（显示50%默认位置）
             center_x = bar_x + bar_width // 2
-            fill_width = abs(value - 50) * bar_width // 100
+            pygame.draw.circle(screen, (100, 100, 100), (center_x, slider_y), 2)
             
-            if value < 50:
-                fill_rect = pygame.Rect(center_x - fill_width, y + 2, fill_width, bar_height)
-                color = left_color
-                tendency = left_label
-            else:
-                fill_rect = pygame.Rect(center_x, y + 2, fill_width, bar_height)
-                color = right_color
-                tendency = right_label
-            
-            if fill_width > 0:
-                pygame.draw.rect(screen, color, fill_rect, border_radius=3)
-            
-            # 中心线
-            pygame.draw.line(screen, (150, 150, 150), (center_x, y + 2), (center_x, y + bar_height), 1)
-            
-            # 倾向文字（在进度条右侧）
-            tendency_surf = font_text.render(tendency, True, color if fill_width > 5 else (120, 120, 120))
-            screen.blit(tendency_surf, (bar_x + bar_width + 8, y))
+            # 右极端标签
+            right_label_x = bar_x + bar_width + 5
+            right_label_surf = font_text.render(right_label, True, right_color)
+            screen.blit(right_label_surf, (right_label_x, y))
             
             y += 22
         
-        # 野心（进度条形式，居中）
+        # 野心（滑块式，与性格维度统一）
         ambition = personality.get('ambition', 50)
         if hasattr(ambition, 'value'):
             ambition = ambition.value
         ambition_value = int(ambition) if isinstance(ambition, (int, float)) else 50
         
-        total_width = label_width + bar_width + 50
+        # 使用与性格维度相同的布局: 名称 + 左标签("低") + 滑块 + 右标签("高")
+        total_width = name_width + label_width + bar_width + label_width
         start_x = content_center_x - total_width // 2
         
         name_surf = font_text.render("野心", True, (200, 180, 150))
         screen.blit(name_surf, (start_x, y))
         
-        bar_x = start_x + label_width
-        bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
-        pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
+        # 左标签"低"
+        left_label_x = start_x + name_width
+        left_label_surf = font_text.render("低", True, (150, 150, 150))
+        screen.blit(left_label_surf, (left_label_x, y))
         
-        # 野心是单向进度条（0-100）
-        fill_width = ambition_value * bar_width // 100
-        fill_rect = pygame.Rect(bar_x, y + 2, fill_width, bar_height)
-        pygame.draw.rect(screen, (200, 150, 100), fill_rect, border_radius=3)
+        # 滑块轨道
+        bar_x = left_label_x + label_width
+        track_rect = pygame.Rect(bar_x, y + 4, bar_width, bar_height - 4)
+        pygame.draw.rect(screen, (60, 60, 60), track_rect, border_radius=2)
         
-        # 数值显示
-        value_surf = font_text.render(f"{ambition_value}", True, (200, 180, 150))
-        screen.blit(value_surf, (bar_x + bar_width + 8, y))
+        # 计算滑块位置
+        slider_x = bar_x + int((ambition_value / 100) * bar_width)
+        slider_y = y + bar_height // 2 + 1
+        slider_radius = 4
+        
+        # 野心滑块颜色（低=灰，高=橙黄）
+        low_color = (150, 150, 150)
+        high_color = (220, 160, 80)
+        t = ambition_value / 100
+        slider_color = (
+            int(low_color[0] + (high_color[0] - low_color[0]) * t),
+            int(low_color[1] + (high_color[1] - low_color[1]) * t),
+            int(low_color[2] + (high_color[2] - low_color[2]) * t)
+        )
+        
+        # 绘制滑块
+        pygame.draw.circle(screen, (40, 40, 40), (slider_x, slider_y + 1), slider_radius)
+        pygame.draw.circle(screen, slider_color, (slider_x, slider_y), slider_radius)
+        
+        # 右标签"高"
+        right_label_x = bar_x + bar_width + 5
+        right_label_surf = font_text.render("高", True, high_color)
+        screen.blit(right_label_surf, (right_label_x, y))
+        
         y += 22
         
-        # 物欲（进度条形式，居中）
-        desire = personality.get('desire', '')
-        desire_value = self._map_desire_to_value(desire)
+        # 渴望类型（字符串显示，与上方对齐）
+        desire_type = personality.get('desire_type', '')
         
-        total_width = label_width + bar_width + 50
+        total_width = name_width + label_width + bar_width + label_width
         start_x = content_center_x - total_width // 2
         
-        name_surf = font_text.render("物欲", True, (180, 160, 140))
+        name_surf = font_text.render("渴望", True, (180, 160, 140))
         screen.blit(name_surf, (start_x, y))
         
-        bar_x = start_x + label_width
-        bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
-        pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
-        
-        # 物欲是单向进度条
-        fill_width = desire_value * bar_width // 100
-        fill_rect = pygame.Rect(bar_x, y + 2, fill_width, bar_height)
-        pygame.draw.rect(screen, (180, 140, 120), fill_rect, border_radius=3)
-        
-        # 文字显示
-        desire_text = str(desire) if desire else "普通"
-        value_surf = font_text.render(desire_text, True, (180, 160, 140))
-        screen.blit(value_surf, (bar_x + bar_width + 8, y))
+        # 渴望类型直接显示为文字
+        desire_text = str(desire_type) if desire_type else "普通"
+        value_surf = font_text.render(desire_text, True, (220, 180, 140))
+        screen.blit(value_surf, (start_x + name_width + 10, y))
         y += 22
         
         # ═══════════════════════════════════════════════════════════════
