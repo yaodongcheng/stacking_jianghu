@@ -1,7 +1,7 @@
 # --- src/ui/manager.py ---
 from src.ui.base import UIBase
 from src.ui.panels import UIPanelsMixin
-from src.ui.dialogs import UIDialogsMixin
+from src.ui.npc_detail_panel import UIDialogsMixin
 
 class UIManager(UIBase, UIPanelsMixin, UIDialogsMixin):
     """

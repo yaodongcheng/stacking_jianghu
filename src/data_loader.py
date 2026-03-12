@@ -4,6 +4,48 @@ import json
 from src.entities import NPC
 from src.utils import resource_path
 
+# 全局 NPC ID -> Name 映射表（运行时动态维护）
+NPC_ID_NAME_MAP = {}
+
+def register_npc_id_name(npc_id, npc_name):
+    """注册 NPC ID 和名字的映射关系"""
+    NPC_ID_NAME_MAP[str(npc_id)] = npc_name
+
+def get_npc_name_by_id_global(npc_id):
+    """
+    根据 NPC ID 获取名字（通用函数）
+    
+    查询顺序：
+    1. 运行时加载的 NPC（从 CSV 或动态生成）
+    2. 种子 NPC（从 character_seeds.py）
+    3. 特殊 ID
+    """
+    npc_id_str = str(npc_id)
+    
+    # 1. 优先从运行时映射表中查找
+    if npc_id_str in NPC_ID_NAME_MAP:
+        return NPC_ID_NAME_MAP[npc_id_str]
+    
+    # 2. 从种子 NPC 中查找（quest_system 的 ID_TO_NAME）
+    from src.quest_system import ID_TO_NAME
+    if npc_id_str in ID_TO_NAME:
+        return ID_TO_NAME[npc_id_str]
+    
+    # 3. 特殊 ID 处理
+    if npc_id_str == '9999':
+        return '（自动完成）'
+    if npc_id_str == '9000':
+        return '未指定'
+    if npc_id_str == '0' or npc_id_str == '':
+        return '玩家'
+    
+    # 4. 默认返回 ID 本身
+    return f'NPC({npc_id})'
+
+def clear_npc_id_name_map():
+    """清空映射表（用于重新加载游戏时）"""
+    NPC_ID_NAME_MAP.clear()
+
 def load_npcs_from_csv(filepath):
     npcs = []
     try:
@@ -53,6 +95,12 @@ def load_npcs_from_csv(filepath):
                 # 创建 NPC 对象
                 new_npc = NPC(row_data)
                 npcs.append(new_npc)
+                
+                # 【新增】注册到全局 ID->Name 映射表
+                npc_id = row_data.get('id')
+                npc_name = row_data.get('name', '无名氏')
+                if npc_id:
+                    register_npc_id_name(npc_id, npc_name)
                 
     except FileNotFoundError:
         print(f"错误: 找不到文件 {filepath}")

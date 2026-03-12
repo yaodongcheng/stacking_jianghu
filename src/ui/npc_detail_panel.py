@@ -1,8 +1,11 @@
-# --- src/ui/dialogs.py ---
+# --- src/ui/npc_detail_panel.py ---
 import pygame
 from src.definitions import *
 from src.utils import log_game_event, wrap_text
 from src.entities import Resource 
+from src.data.character_seeds import ORGANIZATIONS
+from src.item_system import ItemManager
+
 class UIDialogsMixin:
     """
     提供NPC详情、事件对话框的绘制
@@ -58,16 +61,18 @@ class UIDialogsMixin:
         name_txt = self.font_big.render(npc.name + status_suffix, True, name_color)
         screen.blit(name_txt, (text_start_x, panel_rect.y + 12))
         
+        #职业-组织，以及状态，可以放在名字右侧的一列
+        col3_x = text_start_x + name_txt.get_width() + 15
         # 【修复】身份行（第二行）- 职业和组织放在同一行
         job_label = JOB_LABELS.get(getattr(npc, 'job', 'NONE'), '平民')
+        power_type = getattr(npc, 'power_type', None)
         org_name = ""
-        if hasattr(npc, 'org_id') and npc.org_id and npc.org_id != 'NONE':
-            from src.data.character_seeds import ORGANIZATIONS
+        if hasattr(npc, 'org_id') and npc.org_id and npc.org_id != 'NONE':            
             org_data = ORGANIZATIONS.get(npc.org_id, {})
-            org_name = org_data.get('name', npc.org_id)[:4]
-        identity_info = f"{job_label}" + (f"·{org_name}" if org_name else "")
+            org_name = org_data.get('name', npc.org_id)
+        identity_info = f"[{power_type}]{job_label}" + (f"·{org_name}" if org_name else "")
         identity_surf = self.font_small.render(identity_info, True, (180, 180, 180))
-        screen.blit(identity_surf, (text_start_x, panel_rect.y + 38))
+        screen.blit(identity_surf, (col3_x, panel_rect.y + 12))
         
         # 【修复】AI状态行（第三行）- 与身份行保持合理间距
         ai_reason = getattr(npc, 'ai_reason', '')
@@ -76,7 +81,7 @@ class UIDialogsMixin:
             display_reason = ai_reason[:14] if len(ai_reason) > 14 else ai_reason
             ai_txt = f"状态: {display_reason}"
             ai_surf = self.font_small.render(ai_txt, True, (150, 200, 150))
-            screen.blit(ai_surf, (text_start_x, panel_rect.y + 58))
+            screen.blit(ai_surf, (col3_x, panel_rect.y + 32))
 
         # ══════════════════════════════════════════════════════════════
         # B. Tab 栏
@@ -127,6 +132,7 @@ class UIDialogsMixin:
         # C. 内容区域（根据 Tab 显示不同内容）
         # ══════════════════════════════════════════════════════════════
         content_y = tab_y + tab_h + 8
+        # 预留底部操作栏高度，内容区域可滚动显示，比如招募、闲聊、关闭按钮
         ACTION_BAR_H = 95
         content_bottom = panel_rect.bottom - ACTION_BAR_H
         content_rect = pygame.Rect(panel_rect.x + 8, content_y, panel_w - 16, content_bottom - content_y)
@@ -1050,12 +1056,13 @@ class UIDialogsMixin:
         pygame.draw.rect(screen, (80, 80, 100), content_rect, 1, border_radius=5)
         
         y = content_rect.y + 8
+        #左右两半区域
         x_left = content_rect.x + 10
         x_right = content_rect.centerx + 10
         line_h = 22
         
         # === 基础信息 ===
-        title = self.font_small.render("【基础信息】", True, (150, 200, 250))
+        title = self.font_small.render("【状态属性】", True, (150, 200, 250))
         screen.blit(title, (x_left, y))
         y += line_h
         
@@ -1076,6 +1083,15 @@ class UIDialogsMixin:
         fame_color = (100, 200, 255) if getattr(npc, 'fame', 0) >= 0 else (255, 100, 100)
         screen.blit(self.font_small.render(fame_text, True, fame_color), (x_right, y))
         y += line_h
+
+        #补充寒冷、不满值
+        cold_text = f"寒冷: {getattr(npc, 'cold', 0)}"
+        cold_color = (100, 220, 220) if getattr(npc, 'cold', 0) < 50 else (255, 150, 150)
+        screen.blit(self.font_small.render(cold_text, True, cold_color), (x_left, y))
+        discontent_text = f"不满: {getattr(npc, 'discontent', 0)}"
+        discontent_color = (100, 220, 100) if getattr(npc, 'discontent', 0) < 50 else (255, 150, 150)
+        screen.blit(self.font_small.render(discontent_text, True, discontent_color), (x_right, y))
+        y += line_h
         
         # 分隔线
         y += 5
@@ -1083,20 +1099,17 @@ class UIDialogsMixin:
         y += 10
         
         # === 六维属性 ===
-        title2 = self.font_small.render("【六维属性】", True, (150, 200, 250))
+        title2 = self.font_small.render("【能力属性】", True, (150, 200, 250))
         screen.blit(title2, (x_left, y))
         y += line_h
         
         attrs = [
-            ('武力', getattr(npc, 'attr_force', 50)),
-            ('智谋', getattr(npc, 'attr_intellect', 50)),
-            ('魅力', getattr(npc, 'attr_charisma', 50)),
-            ('勇气', getattr(npc, 'attr_courage', 50)),
-            ('敏捷', getattr(npc, 'attr_agility', 50)),
-            ('运气', getattr(npc, 'attr_luck', 50)),
+            ('力量', getattr(npc, 'strength', 0)),
+            ('敏捷', getattr(npc, 'agility', 0)),
+            ('智力', getattr(npc, 'wit', 0)),
+            ('魅力', getattr(npc, 'charm', 0)),
         ]
         
-        # 【修复】移除进度条，只显示纯文字数值，更简洁
         for i, (name, val) in enumerate(attrs):
             col = x_left if i % 2 == 0 else x_right
             if i % 2 == 0 and i > 0:
@@ -1118,7 +1131,6 @@ class UIDialogsMixin:
         y += line_h
         
         # 导入物品系统计算装备加成
-        from src.item_system import ItemManager
         item_sys = ItemManager.get_instance()
         
         # 获取装备
@@ -1178,44 +1190,31 @@ class UIDialogsMixin:
             screen.blit(self.font_small.render("(无装备)", True, (100, 100, 100)), (x_left, y))
         
         y += line_h + 5
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】仿太阁5性格维度显示
-        # ═══════════════════════════════════════════════════════════════
-        if hasattr(npc, 'personality') and npc.personality:
-            # 检查是否还有足够空间
-            if y + line_h * 4 < content_rect.bottom - 10:
-                pygame.draw.line(screen, (80, 80, 100), (x_left, y), (content_rect.right - 10, y))
-                y += 10
-                
-                title_p = self.font_small.render("【性格特质】", True, (150, 200, 250))
-                screen.blit(title_p, (x_left, y))
-                y += line_h
-                
-                p = npc.personality
-                # 第一行：脾气 + 胆量
-                temper_color = (255, 150, 150) if p.temper_str == "急躁" else (150, 255, 150) if p.temper_str == "温和" else (255, 255, 200)
-                spirit_color = (255, 200, 100) if p.spirit_str == "勇敢" else (150, 200, 255) if p.spirit_str == "胆小" else (200, 200, 200)
-                
-                line1 = f"脾气:{p.temper_str}  胆量:{p.spirit_str}"
-                screen.blit(self.font_small.render(line1, True, (220, 220, 220)), (x_left, y))
-                y += line_h
-                
-                # 第二行：主义 + 风格
-                line2 = f"主义:{p.ism_str}  风格:{p.act_style_str}"
-                screen.blit(self.font_small.render(line2, True, (220, 220, 220)), (x_left, y))
-                y += line_h
-                
-                # 第三行：情义 + 野心 + 物欲
-                ambition_str = "高" if p.ambition >= 70 else "中" if p.ambition >= 40 else "低"
-                line3 = f"情义:{p.friendship_str}  野心:{ambition_str}"
-                screen.blit(self.font_small.render(line3, True, (220, 220, 220)), (x_left, y))
-                y += line_h
-                
-                # 物欲（如果有）
-                if p.desire_type_str:
-                    line4 = f"物欲:{p.desire_type_str}({p.desire_str})"
-                    screen.blit(self.font_small.render(line4, True, (220, 220, 220)), (x_left, y))
+
+        # === 战斗仇恨 ===
+        # 检查是否有仇恨数据且空间足够
+        if hasattr(npc, 'hatred') and npc.hatred and y + line_h * 2 < content_rect.bottom - 10:
+            # 导入通用的获取NPC名字函数
+            from src.data_loader import get_npc_name_by_id_global
+            
+            pygame.draw.line(screen, (80, 80, 100), (x_left, y), (content_rect.right - 10, y))
+            y += 10
+            
+            title4 = self.font_small.render("【战斗仇恨】", True, (150, 200, 250))
+            screen.blit(title4, (x_left, y))
+            y += line_h
+            
+            # 按仇恨值排序，显示前3个
+            sorted_hatred = sorted(npc.hatred.items(), key=lambda x: x[1], reverse=True)
+            hatred_entries = []
+            for target_id, hate_val in sorted_hatred[:3]:
+                # 使用通用函数获取名字（支持CSV加载的NPC、种子NPC、动态NPC）
+                target_name = get_npc_name_by_id_global(target_id)
+                hatred_entries.append(f"{target_name}:{hate_val}")
+            
+            hatred_info = "  ".join(hatred_entries)
+            screen.blit(self.font_small.render(hatred_info, True, (200, 100, 100)), (x_left, y))
+            y += line_h
         
         return None  # 属性页没有操作按钮
     

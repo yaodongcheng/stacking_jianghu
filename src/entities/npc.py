@@ -69,8 +69,16 @@ class NPC(CardBase):
         self.name = data.get('name', '无名氏')
         self.job = data.get('job', 'NONE')         
         self.hidden_job = data.get('hidden_job', 'NONE')
-        self.card_type = CARD_TYPE_HUMAN
+        self.card_type = CARD_TYPE_HUMAN        
+
+        # 生存属性
+        self.cold = 0 #寒冷值
+        self.hunger = 0 #饥饿值
+        self.dissatisfaction = 0 #不满值
+        self.survival_timer = 0 # 计时器
+
         
+
         # 标签（必须在 generate_personality_from_job 之前初始化）
         raw_tags = data.get('tags', '') 
         self.tags = raw_tags.split(';') if raw_tags else []
@@ -153,13 +161,6 @@ class NPC(CardBase):
         except:
             print(f"Error parsing relations for {self.name}")
 
-
-
-        # 生存属性
-        self.cold = 0 #寒冷值
-        self.hunger = 0 #饥饿值
-        self.dissatisfaction = 0 #不满值
-        self.survival_timer = 0 # 计时器
 
         
         # 其他玩法功能属性
