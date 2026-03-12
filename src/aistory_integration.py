@@ -58,13 +58,21 @@ class AistoryBridge:
         # 获取旧导演实例
         self.old_director = get_old_director()
         
-        # 从游戏上下文获取所有NPC
+        # 从游戏上下文获取所有NPC（排除建筑和玩家）
         all_cards = getattr(self.ctx, 'all_cards', [])
         
         for card in all_cards:
+            # 跳过玩家
             if getattr(card, 'is_player', False):
                 continue
+            # 跳过已死亡或流放的
             if getattr(card, 'safety', '') in ['DEAD', 'EXILED']:
+                continue
+            # 跳过非NPC对象（如Building建筑）
+            if not hasattr(card, 'id') or not hasattr(card, 'name'):
+                continue
+            # 跳过建筑对象（建筑通常有building_type属性）
+            if hasattr(card, 'building_type'):
                 continue
             
             # 转换为新格式
@@ -77,27 +85,34 @@ class AistoryBridge:
         print(f"[AistoryBridge] 已注册 {len(self._npc_id_map)} 个NPC到新导演系统")
         self._initialized = True
     
-    def _convert_npc(self, card) -> NPCData:
-        """将游戏NPC对象转换为NPCData"""
-        return NPCData.from_dict({
-            'id': str(card.id),
-            'name': card.name,
-            'gender': getattr(card, 'gender', ''),
-            'age': getattr(card, 'age', 0),
-            'job': getattr(card, 'job', ''),
-            'org_id': getattr(card, 'org_id', ''),
-            'personality': getattr(card, 'personality', ''),
-            'backstory': getattr(card, 'backstory', ''),
-            'money': getattr(card, 'money', 0),
-            'emotion': getattr(card, 'emotion', 50),
-            'health': getattr(card, 'health', 100),
-            'tags': getattr(card, 'tags', []),
-            'desc': getattr(card, 'desc', ''),
-            'location': getattr(card, 'location', ''),
-            'spouse_id': getattr(card, 'spouse_id', None),
-            'master_id': getattr(card, 'master_id', None),
-            'grudge_target': getattr(card, 'grudge_target', None),
-        })
+    def _convert_npc(self, card):
+        """将游戏NPC对象转换为aistory可用的格式
+        
+        现在直接使用NPC对象的to_aistory_format()方法
+        """
+        # 确保NPC对象有必要的属性映射（用于兼容aistory模块的访问方式）
+        if not hasattr(card, 'npc_id'):
+            card.npc_id = str(card.id)
+        if not hasattr(card, 'identity'):
+            card.identity = card.job
+        if not hasattr(card, 'org'):
+            card.org = card.org_id if card.org_id != 'NONE' else ''
+        if not hasattr(card, 'wealth'):
+            card.wealth = card.money
+        
+        # 确保有性格相关的方法
+        if not hasattr(card, 'get_personality_profile'):
+            # 使用默认实现（如果NPC类没有这些方法）
+            card.get_personality_profile = lambda: getattr(card, 'desc', '') or "性格信息暂无"
+        if not hasattr(card, 'get_behavior_tendency'):
+            card.get_behavior_tendency = lambda: {
+                'risk_taking': False, 'pragmatic': False, 'loyal': False,
+                'temper_hot': False, 'temper_calm': False, 'ambitious': False, 'content': False
+            }
+        if not hasattr(card, 'get_personality_description'):
+            card.get_personality_description = lambda: {}
+        
+        return card
     
     def _create_world_snapshot(self) -> WorldSnapshot:
         """从游戏上下文创建世界快照"""

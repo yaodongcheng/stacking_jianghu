@@ -5,418 +5,6 @@
 """
 
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
-
-
-@dataclass
-class CharacterInfo:
-    """
-    通用角色信息数据类
-    
-    玩家和NPC共用同一套数据结构，实现平权设计。
-    可用于NPC自我认知、NPC对玩家的评估、甚至NPC之间的互评。
-    """
-    # 基础身份
-    entity_id: int = 0
-    name: str = ""
-    job: str = "NONE"
-    power_type: str = "民"       # 势力类型：士/农/工/商/学/兵/游/匪/民
-    org_id: str = "NONE"         # 组织ID
-    org_rank: int = 0            # 组织等级 0-5
-    desc: str = ""               # 描述
-    tags: List[str] = field(default_factory=list)
-    
-    # 数值属性
-    level: int = 1               # 角色等级
-    hp: int = 100                # 当前生命值
-    max_hp: int = 100            # 最大生命值
-    attack: int = 10             # 攻击力
-    defense: int = 5             # 防御力
-    
-    # 内在属性
-    morality: int = 50           # 道德值 0-100
-    wit: int = 5                 # 智力
-    charm: int = 5               # 魅力
-    strength: int = 5            # 力量
-    bravery: int = 50            # 勇气
-    
-    # 社会地位
-    social_level: int = 1        # 社会等级 1-5
-    wealth_level: int = 1        # 财富等级 1-5
-    money: int = 0               # 身上的钱
-    fame: int = 0                # 名声/声望
-    
-    # 装备与物品
-    equip_weapon: str = ""       # 武器
-    equip_armor: str = ""        # 防具
-    inventory_summary: str = ""  # 背包物品摘要
-    
-    # 关系
-    followers_count: int = 0     # 追随者数量
-
-
-@dataclass
-class NPCContext:
-    """NPC上下文信息（用于构建系统提示词）"""
-    # 基础信息
-    npc_id: int
-    name: str
-    job: str
-    power_type: str  # 势力类型：士/农/工/商/学/兵/游/匪/民
-    org_id: str      # 组织ID
-    org_rank: int    # 组织等级 0-5
-    desc: str        # 描述
-    tags: List[str]  # 标签
-    
-    # 数值属性
-    morality: int      # 道德值 0-100
-    wit: int           # 智力
-    charm: int         # 魅力
-    strength: int      # 力量
-    bravery: int       # 勇气
-    
-    # 状态
-    affinity_to_player: int  # 对玩家好感度 -100~100
-    knows_player: bool       # 是否认识玩家
-    emotion: str             # 当前情绪
-    
-    # 社会地位
-    social_level: int    # 社会等级 1-5
-    wealth_level: int    # 财富等级 1-5
-    eco_status: str      # 经济状况
-    
-    # 当前行为状态
-    current_state: str = ""       # NPC状态：IDLE/WORKING/MOVING/COMBAT等
-    current_activity: str = ""    # 当前活动描述（ai_reason）
-    current_location: str = ""    # 当前位置（建筑名或区域）
-    
-    # 任务上下文
-    active_quest_info: str = ""   # 当前活跃任务信息
-    quest_role: str = ""          # NPC在任务中的角色：giver/target/none
-    
-    # 与玩家的距离信息
-    distance_to_player: str = ""  # 与玩家的距离描述
-    
-    # 【新增】通用角色信息（NPC自己）
-    self_info: CharacterInfo = None
-    
-    # 【新增】通用角色信息（玩家）
-    player_info: CharacterInfo = None
-    
-    # 记忆摘要（由PromptBuilder填充）
-    memory_summary: str = ""
-    
-    # 【新增】详细状态信息
-    health_status: str = ""       # 身体状况
-    combat_status: str = ""       # 战斗能力
-    inventory_status: str = ""    # 背包物品
-    relations_status: str = ""    # 人际关系
-    player_assessment: str = ""   # 对玩家的评估
-
-
-class CharacterInfoExtractor:
-    """
-    通用角色信息提取器
-    
-    玩家和NPC平权设计 - 使用同一套方法提取角色信息。
-    可用于：
-    - NPC自我认知：提取NPC自己的信息
-    - NPC对玩家的评估：提取玩家的信息
-    - NPC对其他NPC的评估：提取任意角色的信息
-    """
-    
-    @classmethod
-    def extract(cls, entity, game_ctx=None) -> CharacterInfo:
-        """
-        从任意角色实体提取通用信息
-        
-        Args:
-            entity: 角色实体（玩家或NPC）
-            game_ctx: 游戏上下文（用于获取额外信息）
-            
-        Returns:
-            CharacterInfo: 填充完毕的角色信息数据类
-        """
-        if entity is None:
-            return CharacterInfo()
-        
-        # 基础身份
-        info = CharacterInfo(
-            entity_id=getattr(entity, 'id', 0),
-            name=getattr(entity, 'name', ''),
-            job=getattr(entity, 'job', 'NONE'),
-            power_type=getattr(entity, 'power_type', '民'),
-            org_id=getattr(entity, 'player_org_id', None) or getattr(entity, 'org_id', 'NONE'),
-            org_rank=getattr(entity, 'player_org_rank', 0) or getattr(entity, 'org_rank', 0),
-            desc=getattr(entity, 'desc', ''),
-            tags=getattr(entity, 'tags', []) or [],
-            
-            # 数值属性
-            level=getattr(entity, 'level', 1),
-            hp=getattr(entity, 'hp', 100),
-            max_hp=getattr(entity, 'max_hp', 100),
-            attack=getattr(entity, 'attack', 10),
-            defense=getattr(entity, 'defense', 5),
-            
-            # 内在属性
-            morality=getattr(entity, 'morality', 50),
-            wit=getattr(entity, 'wit', 5),
-            charm=getattr(entity, 'charm', 5),
-            strength=getattr(entity, 'strength', 5),
-            bravery=getattr(entity, 'bravery', 50),
-            
-            # 社会地位
-            social_level=getattr(entity, 'social_level', 1),
-            wealth_level=getattr(entity, 'wealth_level', 1),
-            money=getattr(entity, 'money', 0),
-            fame=getattr(entity, 'fame', 0),
-            
-            # 追随者
-            followers_count=getattr(entity, 'followers_count', 0),
-        )
-        
-        # 装备信息
-        info.equip_weapon = cls._get_weapon_name(entity)
-        info.equip_armor = cls._get_armor_name(entity)
-        info.inventory_summary = cls._get_inventory_summary(entity)
-        
-        return info
-    
-    @classmethod
-    def _get_weapon_name(cls, entity) -> str:
-        """获取武器名称"""
-        # 方法1: 直接属性
-        weapon = getattr(entity, 'equip_weapon', None)
-        if weapon:
-            return weapon if isinstance(weapon, str) else getattr(weapon, 'name', str(weapon))
-        
-        # 方法2: equipment字典
-        equipment = getattr(entity, 'equipment', {})
-        if isinstance(equipment, dict):
-            weapon = equipment.get('weapon')
-            if weapon:
-                return weapon if isinstance(weapon, str) else getattr(weapon, 'name', str(weapon))
-        
-        return ""
-    
-    @classmethod
-    def _get_armor_name(cls, entity) -> str:
-        """获取防具名称"""
-        # 方法1: 直接属性
-        armor = getattr(entity, 'equip_armor', None)
-        if armor:
-            return armor if isinstance(armor, str) else getattr(armor, 'name', str(armor))
-        
-        # 方法2: equipment字典
-        equipment = getattr(entity, 'equipment', {})
-        if isinstance(equipment, dict):
-            armor = equipment.get('armor')
-            if armor:
-                return armor if isinstance(armor, str) else getattr(armor, 'name', str(armor))
-        
-        return ""
-    
-    @classmethod
-    def _get_inventory_summary(cls, entity) -> str:
-        """获取背包物品摘要"""
-        inventory = getattr(entity, 'inventory', [])
-        
-        # 处理字典类型的 inventory（转换为列表）
-        if isinstance(inventory, dict):
-            inventory = list(inventory.values())
-        
-        if not inventory or len(inventory) == 0:
-            return ""
-        
-        item_names = []
-        for item in inventory[:5]:
-            if hasattr(item, 'name'):
-                item_names.append(item.name)
-            elif isinstance(item, dict) and 'name' in item:
-                item_names.append(item['name'])
-            elif isinstance(item, str):
-                item_names.append(item)
-        
-        if not item_names:
-            return ""
-        
-        summary = "、".join(item_names)
-        if len(inventory) > 5:
-            summary += f"（还有{len(inventory)-5}件其他东西）"
-        return summary
-    
-    # ═══════════════════════════════════════════════════════════════
-    # 文本描述生成（基于CharacterInfo生成人类可读的描述）
-    # ═══════════════════════════════════════════════════════════════
-    
-    @classmethod
-    def describe_health(cls, info: CharacterInfo) -> str:
-        """生成身体状况描述"""
-        max_hp = max(info.max_hp, 1)
-        hp_percent = (info.hp / max_hp) * 100
-        
-        if hp_percent >= 90:
-            return f"身体很好，精力充沛（{info.hp}/{info.max_hp}）"
-        elif hp_percent >= 60:
-            return f"有些小伤，但不碍事（{info.hp}/{info.max_hp}）"
-        elif hp_percent >= 30:
-            return f"受了伤，需要休息（{info.hp}/{info.max_hp}）"
-        else:
-            return f"伤势很重，快撑不住了（{info.hp}/{info.max_hp}）"
-    
-    @classmethod
-    def describe_combat_power(cls, info: CharacterInfo) -> str:
-        """生成战斗能力描述"""
-        lines = []
-        
-        if info.attack >= 30:
-            lines.append(f"武艺高强（攻击{info.attack}）")
-        elif info.attack >= 15:
-            lines.append(f"有些身手（攻击{info.attack}）")
-        else:
-            lines.append(f"不擅长打架（攻击{info.attack}）")
-        
-        if info.defense >= 20:
-            lines.append(f"防御不错（防御{info.defense}）")
-        
-        if info.equip_weapon:
-            lines.append(f"带着{info.equip_weapon}")
-        
-        return "，".join(lines)
-    
-    @classmethod
-    def describe_wealth(cls, info: CharacterInfo) -> str:
-        """生成财富状况描述"""
-        if info.money >= 1000:
-            return f"有些积蓄（{info.money}文）"
-        elif info.money >= 100:
-            return f"有些银钱（{info.money}文）"
-        elif info.money > 0:
-            return f"不太宽裕（{info.money}文）"
-        else:
-            return "身无分文"
-    
-    @classmethod
-    def describe_fame(cls, info: CharacterInfo) -> str:
-        """生成名声描述"""
-        if info.fame >= 500:
-            return f"名声在外（声望{info.fame}）"
-        elif info.fame >= 100:
-            return f"略有名气（声望{info.fame}）"
-        elif info.fame <= -500:
-            return f"臭名昭著（声望{info.fame}）"
-        elif info.fame <= -100:
-            return f"名声不好（声望{info.fame}）"
-        else:
-            return ""
-    
-    @classmethod
-    def compare_power(cls, self_info: CharacterInfo, target_info: CharacterInfo) -> tuple:
-        """
-        比较两个角色的战力
-        
-        Args:
-            self_info: 自己的信息
-            target_info: 对方的信息
-            
-        Returns:
-            (power_ratio: float, assessment: str)
-            - power_ratio: 对方战力/我的战力
-            - assessment: 人类可读的战力评估
-        """
-        self_power = self_info.attack + self_info.defense + (self_info.hp / 10)
-        target_power = target_info.attack + target_info.defense + (target_info.hp / 10)
-        
-        power_ratio = target_power / max(self_power, 1)
-        
-        if power_ratio >= 2.0:
-            assessment = f"此人实力远在我之上！（攻击{target_info.attack}，防御{target_info.defense}）我最好谨慎行事。"
-        elif power_ratio >= 1.3:
-            assessment = f"此人实力比我强一些（攻击{target_info.attack}，防御{target_info.defense}）打起来我可能吃亏。"
-        elif power_ratio >= 0.7:
-            assessment = f"我们实力相当（他的攻击{target_info.attack}，我的攻击{self_info.attack}）真打起来胜负难料。"
-        elif power_ratio >= 0.5:
-            assessment = f"此人实力不如我（攻击{target_info.attack}，防御{target_info.defense}）若有冲突，我占上风。"
-        else:
-            assessment = f"此人实力远不如我！（攻击{target_info.attack}，防御{target_info.defense}）不过是个弱者。"
-        
-        return (power_ratio, assessment)
-    
-    @classmethod
-    def build_full_assessment(cls, observer_info: CharacterInfo, target_info: CharacterInfo, 
-                               power_type_desc: dict = None, org_desc: dict = None) -> str:
-        """
-        构建完整的角色评估文本（观察者视角）
-        
-        这是一个通用方法：
-        - NPC观察玩家：observer=NPC, target=玩家
-        - 玩家观察NPC：observer=玩家, target=NPC
-        - NPC观察NPC：observer=NPC_A, target=NPC_B
-        
-        Args:
-            observer_info: 观察者的信息
-            target_info: 被观察者的信息
-            power_type_desc: 势力类型描述字典（可选）
-            org_desc: 组织描述字典（可选）
-            
-        Returns:
-            str: 完整的评估文本
-        """
-        lines = []
-        
-        # 基本身份
-        lines.append(f"【眼前这个人】名叫：{target_info.name}")
-        
-        # 势力类型
-        if power_type_desc:
-            desc = power_type_desc.get(target_info.power_type, "看不出什么来历")
-            lines.append(f"- 看起来是：{desc[:20]}...")
-        
-        # 组织背景
-        if target_info.org_id and target_info.org_id != 'NONE' and org_desc:
-            org_name = org_desc.get(target_info.org_id, target_info.org_id)
-            lines.append(f"- 所属势力：{org_name[:15]}")
-        else:
-            lines.append("- 似乎是个江湖散人，没有明显的组织背景")
-        
-        # 战力对比
-        lines.append("")
-        lines.append("【我对此人实力的判断】")
-        _, power_assessment = cls.compare_power(observer_info, target_info)
-        lines.append(f"- {power_assessment}")
-        
-        # 身体状况
-        lines.append(f"- 此人{cls.describe_health(target_info).replace('身体很好', '精神饱满')}")
-        
-        # 财富
-        wealth_desc = cls.describe_wealth(target_info)
-        if "积蓄" in wealth_desc:
-            lines.append(f"- 看起来是个有钱人（{target_info.money}文）")
-        elif "银钱" in wealth_desc:
-            lines.append(f"- 身上有些银钱（{target_info.money}文）")
-        elif target_info.money > 0:
-            lines.append(f"- 看起来不太宽裕（{target_info.money}文）")
-        else:
-            lines.append("- 看起来很穷，身无分文")
-        
-        # 名声
-        fame_desc = cls.describe_fame(target_info)
-        if fame_desc:
-            lines.append(f"- {fame_desc}")
-        
-        # 追随者
-        if target_info.followers_count >= 5:
-            lines.append(f"- 此人手下有{target_info.followers_count}人，势力不小")
-        elif target_info.followers_count >= 1:
-            lines.append(f"- 此人有{target_info.followers_count}个跟班")
-        
-        # 装备
-        if target_info.equip_weapon:
-            lines.append(f"- 此人手持{target_info.equip_weapon}")
-        if target_info.equip_armor:
-            lines.append(f"- 此人身着{target_info.equip_armor}")
-        
-        return "\n".join(lines)
 
 
 class PromptBuilder:
@@ -485,15 +73,16 @@ class PromptBuilder:
     # ═══════════════════════════════════════════════════════════════
     
     @classmethod
-    def build_system_prompt(cls, ctx: NPCContext, scenario: str = "chat", 
-                            memory_system=None) -> str:
+    def build_system_prompt(cls, npc, scenario: str = "chat", 
+                            memory_system=None, **context) -> str:
         """
         构建完整的系统提示词
         
         Args:
-            ctx: NPC上下文
+            npc: NPC对象
             scenario: 场景类型 - chat/negotiate/skill_check/event
             memory_system: NPCMemorySystem实例（用于双轨制判断）
+            **context: 额外的上下文信息（current_state, current_activity等）
             
         Returns:
             str: 系统提示词
@@ -504,24 +93,27 @@ class PromptBuilder:
         sections.append(cls.WORLD_SETTING)
         
         # 2. 角色身份
-        sections.append(cls._build_identity_section(ctx))
+        sections.append(cls._build_identity_section(npc, context))
         
         # 3. 性格特质
-        sections.append(cls._build_personality_section(ctx))
+        sections.append(cls._build_personality_section(npc))
         
         # 4. 与玩家关系（传入memory_system用于双轨制判断）
-        sections.append(cls._build_relationship_section(ctx, memory_system))
+        sections.append(cls._build_relationship_section(npc, memory_system, context.get('player_assessment')))
         
         # 5. 记忆
-        if ctx.memory_summary:
-            sections.append(f"\n【我的记忆】\n{ctx.memory_summary}")
+        memory_summary = context.get('memory_summary', '')
+        if memory_summary:
+            sections.append(f"\n【我的记忆】\n{memory_summary}")
         
         # 5.5 任务上下文（如果有的话）
-        if ctx.active_quest_info and ctx.quest_role:
-            sections.append(cls._build_quest_context_section(ctx))
+        quest_info = context.get('active_quest_info', '')
+        quest_role = context.get('quest_role', '')
+        if quest_info and quest_role:
+            sections.append(cls._build_quest_context_section(quest_info, quest_role))
         
         # 6. 对话规则
-        sections.append(cls._build_rules_section(ctx, scenario))
+        sections.append(cls._build_rules_section(npc, scenario))
         
         # 7. 输出格式
         sections.append(cls._build_output_format())
@@ -529,120 +121,119 @@ class PromptBuilder:
         return "\n".join(sections)
     
     @classmethod
-    def _build_identity_section(cls, ctx: NPCContext) -> str:
+    def _build_identity_section(cls, npc, context: dict) -> str:
         """构建身份设定部分"""
         lines = ["\n【我的身份】"]
-        lines.append(f"我叫{ctx.name}，")
+        lines.append(f"我叫{npc.name}，")
         
         # 势力类型描述
-        power_desc = cls.POWER_TYPE_DESC.get(ctx.power_type, "普通人")
+        power_type = getattr(npc, 'power_type', '民')
+        power_desc = cls.POWER_TYPE_DESC.get(power_type, "普通人")
         lines.append(f"我是{power_desc}。")
         
         # 组织背景
-        if ctx.org_id and ctx.org_id != 'NONE':
-            org_desc = cls.ORG_DESC.get(ctx.org_id, "")
+        org_id = getattr(npc, 'org_id', 'NONE')
+        if org_id and org_id != 'NONE':
+            org_desc = cls.ORG_DESC.get(org_id, "")
             if org_desc:
-                rank_title = cls._get_rank_title(ctx.org_rank)
+                org_rank = getattr(npc, 'org_rank', 0)
+                rank_title = cls._get_rank_title(org_rank)
                 lines.append(f"我在组织中是{rank_title}。{org_desc}")
         
         # 描述
-        if ctx.desc:
-            lines.append(f"关于我：{ctx.desc}")
+        desc = getattr(npc, 'desc', '')
+        if desc:
+            lines.append(f"关于我：{desc}")
         
         # 职业话术
-        job_style = cls.JOB_SPEECH_STYLE.get(ctx.job, "")
+        job = getattr(npc, 'job', 'NONE')
+        job_style = cls.JOB_SPEECH_STYLE.get(job, "")
         if job_style:
             lines.append(f"我说话的风格：{job_style}")
         
-        # 【新增】当前状态 - 让NPC知道自己正在做什么
+        # 当前状态 - 让NPC知道自己正在做什么
         lines.append("")
         lines.append("【我现在的状态】")
-        if ctx.current_state:
-            lines.append(f"- 我正在：{ctx.current_state}")
-        if ctx.current_activity:
-            lines.append(f"- 具体来说：{ctx.current_activity}")
-        if ctx.current_location:
-            lines.append(f"- 位置：{ctx.current_location}")
+        current_state = context.get('current_state', '')
+        current_activity = context.get('current_activity', '')
+        current_location = context.get('current_location', '')
+        distance_to_player = context.get('distance_to_player', '')
         
-        # 【新增】与玩家的距离
-        if ctx.distance_to_player:
-            lines.append(f"- 与玩家的距离：{ctx.distance_to_player}")
+        if current_state:
+            lines.append(f"- 我正在：{current_state}")
+        if current_activity:
+            lines.append(f"- 具体来说：{current_activity}")
+        if current_location:
+            lines.append(f"- 位置：{current_location}")
+        if distance_to_player:
+            lines.append(f"- 与玩家的距离：{distance_to_player}")
         
         # 如果什么都没有，给个默认
-        if not ctx.current_state and not ctx.current_activity and not ctx.current_location:
+        if not current_state and not current_activity and not current_location:
             lines.append("- 我在闲逛，没什么特别的事")
         
-        # 【新增】我的身体状况
-        if hasattr(ctx, 'health_status') and ctx.health_status:
+        # 身体状况
+        health_status = context.get('health_status', '')
+        if health_status:
             lines.append("")
             lines.append("【我的身体状况】")
-            lines.append(ctx.health_status)
+            lines.append(health_status)
         
-        # 【新增】我的能力
-        if hasattr(ctx, 'combat_status') and ctx.combat_status:
+        # 战斗能力
+        combat_status = context.get('combat_status', '')
+        if combat_status:
             lines.append("")
             lines.append("【我的战斗能力】")
-            lines.append(ctx.combat_status)
+            lines.append(combat_status)
         
-        # 【新增】我身上携带的东西
-        if hasattr(ctx, 'inventory_status') and ctx.inventory_status:
+        # 背包物品
+        inventory_status = context.get('inventory_status', '')
+        if inventory_status:
             lines.append("")
             lines.append("【我身上的东西】")
-            lines.append(ctx.inventory_status)
+            lines.append(inventory_status)
         
-        # 【新增】我认识的人
-        if hasattr(ctx, 'relations_status') and ctx.relations_status:
+        # 人际关系
+        relations_status = context.get('relations_status', '')
+        if relations_status:
             lines.append("")
             lines.append("【我认识的人】")
-            lines.append(ctx.relations_status)
+            lines.append(relations_status)
         
         return "\n".join(lines)
     
     @classmethod
-    def _build_personality_section(cls, ctx: NPCContext) -> str:
+    def _build_personality_section(cls, npc) -> str:
         """构建性格特质部分"""
         lines = ["\n【我的性格】"]
         
-        # 根据道德值
-        if ctx.morality > 70:
-            lines.append("- 我是个正直善良的人，痛恨恶行，乐于助人")
-        elif ctx.morality > 40:
-            lines.append("- 我是个普通人，有自己的底线，但也会权衡利弊")
-        elif ctx.morality > 20:
-            lines.append("- 我不是什么好人，利益面前道德算什么")
-        else:
-            lines.append("- 我是个心狠手辣的人，只要对我有利，什么都干得出来")
+        wit = getattr(npc, 'wit', 5)
+        tags = getattr(npc, 'tags', []) or []
         
         # 根据智力
-        if ctx.wit > 7:
+        if wit > 7:
             lines.append("- 我心思缜密，说话滴水不漏，善于察言观色")
-        elif ctx.wit < 4:
+        elif wit < 4:
             lines.append("- 我头脑简单，不爱动脑子，说话直来直去")
         
-        # 根据勇气
-        if ctx.bravery > 60:
-            lines.append("- 我胆子大，不怕事，敢作敢当")
-        elif ctx.bravery < 30:
-            lines.append("- 我胆子小，怕惹麻烦，遇事先想自保")
-        
         # 根据标签
-        if 'VILLAIN' in ctx.tags:
+        if 'VILLAIN' in tags:
             lines.append("- 我是个反派，阴险狡诈是我的本色")
-        if 'HERO' in ctx.tags:
+        if 'HERO' in tags:
             lines.append("- 我是个英雄人物，行事光明磊落")
-        if 'GREEDY' in ctx.tags:
+        if 'GREEDY' in tags:
             lines.append("- 我贪财，见钱眼开")
-        if 'RIGHTEOUS' in ctx.tags:
+        if 'RIGHTEOUS' in tags:
             lines.append("- 我讲义气，重情重义")
-        if 'COWARD' in ctx.tags:
+        if 'COWARD' in tags:
             lines.append("- 我胆小如鼠，见势不妙就想跑")
-        if 'BRAVE' in ctx.tags:
+        if 'BRAVE' in tags:
             lines.append("- 我勇猛无畏，越是危险越兴奋")
         
         return "\n".join(lines)
     
     @classmethod
-    def _build_relationship_section(cls, ctx: NPCContext, memory_system=None) -> str:
+    def _build_relationship_section(cls, npc, memory_system=None, player_assessment: str = "") -> str:
         """
         构建与玩家关系部分
         
@@ -651,6 +242,10 @@ class PromptBuilder:
         - 如果没有记忆但好感度高/低：描述为"模糊的直觉"
         """
         lines = ["\n【我与玩家的关系】"]
+        
+        affinity_to_player = getattr(npc, 'affinity_to_player', 0)
+        knows_player = getattr(npc, 'knows_player', False)
+        social_level = getattr(npc, 'social_level', 1)
         
         # 检查是否有关于玩家的记忆
         has_player_memory = False
@@ -662,11 +257,11 @@ class PromptBuilder:
                 memory_reason = player_memories[0].content[:30]  # 取第一条记忆的摘要
         
         # 是否认识
-        if not ctx.knows_player:
+        if not knows_player:
             lines.append("我不认识眼前这个人，要根据他的言行举止判断。")
         else:
             # 根据好感度和记忆综合判断
-            aff = ctx.affinity_to_player
+            aff = affinity_to_player
             
             if aff > 60:
                 if has_player_memory:
@@ -699,20 +294,20 @@ class PromptBuilder:
                     lines.append(f"我恨透了这个人，具体原因已经模糊了，但每次见到他心里就有股无名火（好感度:{aff}）")
         
         # 社会地位差异提示
-        if ctx.social_level >= 4:
+        if social_level >= 4:
             lines.append("我身份尊贵，和普通人说话要端着架子。")
-        elif ctx.social_level <= 1:
+        elif social_level <= 1:
             lines.append("我地位卑微，说话要小心谨慎。")
         
-        # 【新增】玩家评估信息 - 让NPC知道玩家是什么样的人
-        if hasattr(ctx, 'player_assessment') and ctx.player_assessment:
+        # 玩家评估信息 - 让NPC知道玩家是什么样的人
+        if player_assessment:
             lines.append("")
-            lines.append(ctx.player_assessment)
+            lines.append(player_assessment)
         
         return "\n".join(lines)
     
     @classmethod
-    def _build_rules_section(cls, ctx: NPCContext, scenario: str) -> str:
+    def _build_rules_section(cls, npc, scenario: str) -> str:
         """构建对话规则部分"""
         lines = ["\n【对话规则】"]
         
@@ -809,7 +404,7 @@ action说明:
         return rank_titles.get(rank, "成员")
     
     @classmethod
-    def _build_quest_context_section(cls, ctx: NPCContext) -> str:
+    def _build_quest_context_section(cls, quest_info: str, quest_role: str) -> str:
         """
         构建任务上下文部分
         
@@ -817,10 +412,10 @@ action说明:
         """
         lines = ["\n【重要：当前任务情况】"]
         
-        if ctx.quest_role == "giver":
+        if quest_role == "giver":
             # 我是任务发布者
             lines.append(f"【我刚刚给玩家发布了一个任务！】")
-            lines.append(f"任务详情：{ctx.active_quest_info}")
+            lines.append(f"任务详情：{quest_info}")
             lines.append("")
             lines.append("对话注意事项：")
             lines.append("- 我应该记得这个任务，并主动询问玩家的进展")
@@ -828,19 +423,19 @@ action说明:
             lines.append("- 根据任务完成情况调整我的态度（鼓励/催促/感谢等）")
             lines.append("- 不要假装不知道这个任务的存在！")
         
-        elif ctx.quest_role == "target":
+        elif quest_role == "target":
             # 我是任务目标
             lines.append(f"【玩家正在执行一个与我相关的任务】")
-            lines.append(f"任务详情：{ctx.active_quest_info}")
+            lines.append(f"任务详情：{quest_info}")
             lines.append("")
             lines.append("对话注意事项：")
             lines.append("- 玩家可能是来完成任务的，我应该有所回应")
             lines.append("- 根据我的性格决定是配合还是阻挠")
         
-        elif ctx.quest_role == "related":
+        elif quest_role == "related":
             # 我与任务有关联
             lines.append(f"【有一个进行中的任务与我有关】")
-            lines.append(f"任务详情：{ctx.active_quest_info}")
+            lines.append(f"任务详情：{quest_info}")
             lines.append("")
             lines.append("对话注意事项：")
             lines.append("- 如果玩家问起相关的事，我可能知道一些信息")
@@ -881,7 +476,7 @@ action说明:
         print(f"[PromptBuilder] 当前活动: {current_activity}")
         print(f"[PromptBuilder] 位置: {current_location}")
         
-        # 【新增】获取任务上下文
+        # 获取任务上下文
         quest_info, quest_role = cls._get_quest_context_for_npc(npc)
         
         print(f"[PromptBuilder] 任务角色: {quest_role if quest_role else '(无)'}")
@@ -890,7 +485,7 @@ action说明:
         else:
             print(f"[PromptBuilder] 任务信息: (无)")
         
-        # 【新增】获取详细状态信息
+        # 获取详细状态信息
         health_status = cls._get_health_status(npc)
         combat_status = cls._get_combat_status(npc)
         inventory_status = cls._get_inventory_status(npc)
@@ -901,62 +496,38 @@ action说明:
         print(f"[PromptBuilder] 背包物品: {inventory_status[:50] if inventory_status else '(无)'}...")
         print(f"[PromptBuilder] 人际关系: {relations_status[:50] if relations_status else '(无)'}...")
         
-        # 【新增】获取玩家评估（让NPC知道玩家的实力和状况）
+        # 获取玩家评估（让NPC知道玩家的实力和状况）
         player_assessment = cls._get_player_assessment(npc, game_ctx)
         print(f"[PromptBuilder] 玩家评估: {player_assessment[:80] if player_assessment else '(无)'}...")
         
-        # 构建上下文
-        ctx = NPCContext(
-            npc_id=npc.id,
-            name=npc.name,
-            job=getattr(npc, 'job', 'NONE'),
-            power_type=getattr(npc, 'power_type', '民'),
-            org_id=getattr(npc, 'org_id', 'NONE'),
-            org_rank=getattr(npc, 'org_rank', 0),
-            desc=getattr(npc, 'desc', ''),
-            tags=getattr(npc, 'tags', []),
-            morality=getattr(npc, 'morality', 50),
-            wit=getattr(npc, 'wit', 5),
-            charm=getattr(npc, 'charm', 5),
-            strength=getattr(npc, 'strength', 5),
-            bravery=getattr(npc, 'bravery', 50),
-            affinity_to_player=getattr(npc, 'affinity_to_player', 0),
-            knows_player=getattr(npc, 'knows_player', False),
-            emotion=getattr(npc, 'emotion', 'NORMAL'),
-            social_level=getattr(npc, 'social_level', 1),
-            wealth_level=getattr(npc, 'wealth_level', 1),
-            eco_status=getattr(npc, 'eco_status', 'POOR'),
-            # 【新增】当前状态
-            current_state=current_state,
-            current_activity=current_activity,
-            current_location=current_location,
-            # 【新增】任务上下文
-            active_quest_info=quest_info,
-            quest_role=quest_role,
-            # 【新增】与玩家的距离
-            distance_to_player=distance_to_player,
-            # 【新增】详细状态信息
-            health_status=health_status,
-            combat_status=combat_status,
-            inventory_status=inventory_status,
-            relations_status=relations_status,
-            # 【新增】玩家评估
-            player_assessment=player_assessment,
-        )
+        # 构建上下文字典
+        context = {
+            'current_state': current_state,
+            'current_activity': current_activity,
+            'current_location': current_location,
+            'distance_to_player': distance_to_player,
+            'active_quest_info': quest_info,
+            'quest_role': quest_role,
+            'health_status': health_status,
+            'combat_status': combat_status,
+            'inventory_status': inventory_status,
+            'relations_status': relations_status,
+            'player_assessment': player_assessment,
+        }
         
         # 添加记忆
         if memory_system:
-            ctx.memory_summary = memory_system.format_memories_for_prompt()
-            print(f"[PromptBuilder] 记忆摘要长度: {len(ctx.memory_summary)} 字符")
-            if ctx.memory_summary:
-                print(f"[PromptBuilder] 记忆摘要内容:\n{ctx.memory_summary[:500]}...")
+            context['memory_summary'] = memory_system.format_memories_for_prompt()
+            print(f"[PromptBuilder] 记忆摘要长度: {len(context['memory_summary'])} 字符")
+            if context['memory_summary']:
+                print(f"[PromptBuilder] 记忆摘要内容:\n{context['memory_summary'][:500]}...")
             else:
                 print(f"[PromptBuilder] 记忆摘要为空！")
         else:
             print(f"[PromptBuilder] 未提供 memory_system")
         
-        # 传递memory_system用于双轨制判断
-        return cls.build_system_prompt(ctx, scenario, memory_system)
+        # 直接传递参数构建提示词
+        return cls.build_system_prompt(npc, scenario, memory_system, **context)
     
     @classmethod
     def _get_quest_context_for_npc(cls, npc) -> tuple:
@@ -1426,7 +997,7 @@ action说明:
             return f"某人"
     
     # ═══════════════════════════════════════════════════════════════
-    # 【重构】玩家评估 - 使用通用的 CharacterInfoExtractor
+    # 玩家评估 - 直接比较NPC和玩家的属性
     # ═══════════════════════════════════════════════════════════════
     
     @classmethod
@@ -1434,24 +1005,115 @@ action说明:
         """
         获取NPC对玩家的评估（包括玩家的实力、装备、身份等）
         
-        【重构】现在使用通用的 CharacterInfoExtractor 来提取信息，
-        实现玩家和NPC的平权设计。
+        直接比较NPC和玩家的属性，生成评估文本。
         """
         if not game_ctx or not hasattr(game_ctx, 'player') or not game_ctx.player:
             return ""
         
         try:
-            # 使用通用提取器获取双方信息
-            npc_info = CharacterInfoExtractor.extract(npc, game_ctx)
-            player_info = CharacterInfoExtractor.extract(game_ctx.player, game_ctx)
+            player = game_ctx.player
+            lines = []
             
-            # 使用通用方法构建完整评估
-            return CharacterInfoExtractor.build_full_assessment(
-                observer_info=npc_info,
-                target_info=player_info,
-                power_type_desc=cls.POWER_TYPE_DESC,
-                org_desc=cls.ORG_DESC
-            )
+            # 基本身份
+            player_name = getattr(player, 'name', '玩家')
+            lines.append(f"【眼前这个人】名叫：{player_name}")
+            
+            # 势力类型
+            player_power_type = getattr(player, 'power_type', '民')
+            power_desc = cls.POWER_TYPE_DESC.get(player_power_type, "看不出什么来历")
+            lines.append(f"- 看起来是：{power_desc[:20]}...")
+            
+            # 组织背景
+            player_org_id = getattr(player, 'player_org_id', None) or getattr(player, 'org_id', 'NONE')
+            if player_org_id and player_org_id != 'NONE':
+                org_name = cls.ORG_DESC.get(player_org_id, player_org_id)
+                lines.append(f"- 所属势力：{org_name[:15]}")
+            else:
+                lines.append("- 似乎是个江湖散人，没有明显的组织背景")
+            
+            # 战力对比
+            lines.append("")
+            lines.append("【我对此人实力的判断】")
+            
+            # 计算战力
+            npc_atk = getattr(npc, 'attack', 10)
+            npc_def = getattr(npc, 'defense', 5)
+            npc_hp = getattr(npc, 'hp', 100)
+            npc_power = npc_atk + npc_def + (npc_hp / 10)
+            
+            player_atk = getattr(player, 'attack', 10)
+            player_def = getattr(player, 'defense', 5)
+            player_hp = getattr(player, 'hp', 100)
+            player_power = player_atk + player_def + (player_hp / 10)
+            
+            power_ratio = player_power / max(npc_power, 1)
+            
+            if power_ratio >= 2.0:
+                assessment = f"此人实力远在我之上！（攻击{player_atk}，防御{player_def}）我最好谨慎行事。"
+            elif power_ratio >= 1.3:
+                assessment = f"此人实力比我强一些（攻击{player_atk}，防御{player_def}）打起来我可能吃亏。"
+            elif power_ratio >= 0.7:
+                assessment = f"我们实力相当（他的攻击{player_atk}，我的攻击{npc_atk}）真打起来胜负难料。"
+            elif power_ratio >= 0.5:
+                assessment = f"此人实力不如我（攻击{player_atk}，防御{player_def}）若有冲突，我占上风。"
+            else:
+                assessment = f"此人实力远不如我！（攻击{player_atk}，防御{player_def}）不过是个弱者。"
+            lines.append(f"- {assessment}")
+            
+            # 身体状况
+            player_max_hp = getattr(player, 'max_hp', 100)
+            hp_percent = (player_hp / max(player_max_hp, 1)) * 100
+            if hp_percent >= 90:
+                health_desc = f"精神饱满（{player_hp}/{player_max_hp}）"
+            elif hp_percent >= 60:
+                health_desc = f"有些小伤（{player_hp}/{player_max_hp}）"
+            elif hp_percent >= 30:
+                health_desc = f"受了伤（{player_hp}/{player_max_hp}）"
+            else:
+                health_desc = f"伤势很重（{player_hp}/{player_max_hp}）"
+            lines.append(f"- 此人{health_desc}")
+            
+            # 财富
+            player_money = getattr(player, 'money', 0)
+            if player_money >= 1000:
+                lines.append(f"- 看起来是个有钱人（{player_money}文）")
+            elif player_money >= 100:
+                lines.append(f"- 身上有些银钱（{player_money}文）")
+            elif player_money > 0:
+                lines.append(f"- 看起来不太宽裕（{player_money}文）")
+            else:
+                lines.append("- 看起来很穷，身无分文")
+            
+            # 名声
+            player_fame = getattr(player, 'fame', 0)
+            if player_fame >= 500:
+                lines.append(f"- 名声在外（声望{player_fame}）")
+            elif player_fame >= 100:
+                lines.append(f"- 略有名气（声望{player_fame}）")
+            elif player_fame <= -500:
+                lines.append(f"- 臭名昭著（声望{player_fame}）")
+            elif player_fame <= -100:
+                lines.append(f"- 名声不好（声望{player_fame}）")
+            
+            # 追随者
+            player_followers = getattr(player, 'followers_count', 0)
+            if player_followers >= 5:
+                lines.append(f"- 此人手下有{player_followers}人，势力不小")
+            elif player_followers >= 1:
+                lines.append(f"- 此人有{player_followers}个跟班")
+            
+            # 装备
+            player_weapon = getattr(player, 'equip_weapon', None)
+            if player_weapon:
+                weapon_name = player_weapon if isinstance(player_weapon, str) else getattr(player_weapon, 'name', str(player_weapon))
+                lines.append(f"- 此人手持{weapon_name}")
+            
+            player_armor = getattr(player, 'equip_armor', None)
+            if player_armor:
+                armor_name = player_armor if isinstance(player_armor, str) else getattr(player_armor, 'name', str(player_armor))
+                lines.append(f"- 此人身着{armor_name}")
+            
+            return "\n".join(lines)
             
         except Exception as e:
             print(f"[PromptBuilder] 获取玩家评估失败: {e}")

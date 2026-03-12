@@ -19,8 +19,9 @@ from .dilemma_seed import (
     TensionType
 )
 
-# NPC数据模型
-from .dilemma_deriver import NPCData
+# NPC数据模型 - 现在NPCData是类型别名，直接使用NPC对象
+from typing import Any
+NPCData = Any
 
 # 核心模块
 from .dilemma_deriver import DilemmaDeriver

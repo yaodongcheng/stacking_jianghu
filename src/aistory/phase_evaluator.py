@@ -10,7 +10,9 @@ import re
 from typing import List, Dict, Optional
 
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, StoryBeat
-from .dilemma_deriver import NPCData
+# NPCData 类型别名 - 直接使用NPC对象
+from typing import Any
+NPCData = Any
 
 
 class PhaseEvaluator:

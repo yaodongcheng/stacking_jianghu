@@ -134,19 +134,5 @@ class Player(NPC):
         """
         # 继承 NPC 的绘制 (头像、边框等)
         super().draw(screen, font)
-    def get_display_info(self, ui_manager=None):
-        """玩家界面信息"""
-        role = "玩家" 
-        coins = self.inventory.get(ITEM_COIN, 0)
-        info = [
-           f"{role} {self.name} ({self.job})",
-           f"生命: {self.hp}/{self.max_hp}",
-           f"不满: {self.dissatisfaction}/{MAX_DISSATISFACTION}",
-           f"饥饿: {self.hunger}%  寒冷: {self.cold}%",
-           f"金钱: {coins}{ITEM_COIN}",
-           f"武力: {self.atk}  防御: {self.def_}",
-           f"门客: {self.followers_count}",
-           f"状态: {self.safety}"
-        ]
-        return info
+
         

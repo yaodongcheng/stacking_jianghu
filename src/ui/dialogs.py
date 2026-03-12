@@ -2172,6 +2172,30 @@ class UIDialogsMixin:
             
             screen.blit(secret_title, (secret_title_x, title_y))
             screen.blit(title_surf, (dilemma_title_x, title_y))
+            
+            # 【测试按钮】触发AI事件生成
+            test_btn_w = 50
+            test_btn_h = 22
+            test_btn_x = content_rect.right - test_btn_w - 20  # 靠右，留出滚动条空间
+            test_btn_y = title_y - 2
+            test_btn_rect = pygame.Rect(test_btn_x, test_btn_y, test_btn_w, test_btn_h)
+            
+            # 绘制测试按钮
+            is_test_hover = test_btn_rect.collidepoint(mx, my) if mx is not None and my is not None else False
+            test_bg_color = (100, 80, 120) if is_test_hover else (70, 55, 85)
+            test_border_color = (180, 150, 200) if is_test_hover else (120, 100, 140)
+            pygame.draw.rect(screen, test_bg_color, test_btn_rect, border_radius=4)
+            pygame.draw.rect(screen, test_border_color, test_btn_rect, 1, border_radius=4)
+            
+            test_text = font_text.render("测试", True, (220, 200, 240))
+            screen.blit(test_text, (test_btn_rect.centerx - test_text.get_width() // 2, 
+                                   test_btn_rect.centery - test_text.get_height() // 2))
+            
+            # 处理测试按钮点击
+            if click_event and is_test_hover:
+                # 触发AI事件生成
+                self._trigger_dilemma_test_event(npc)
+            
             y += 28
             
             # 计算内心隐秘正文区域（标题下方）
@@ -2336,6 +2360,163 @@ class UIDialogsMixin:
         }
         return mappings.get(desire_str, 50)
 
+    def _trigger_dilemma_test_event(self, npc):
+        """
+        触发困境测试事件 - 基于NPC的内心隐秘生成AI事件
+        
+        调用StoryDirector生成基于人生困境的滚动故事事件
+        """
+        print(f"[DilemmaTest] 触发NPC {npc.name} 的困境测试事件")
+        
+        try:
+            # 导入必要的模块
+            from src.aistory_integration import get_aistory_bridge
+            from src.llm.llm_service import LLMService
+            from src.utils import log_game_event
+            
+            # 获取aistory bridge（需要游戏上下文）
+            ctx = getattr(self, '_game_ctx', None)
+            if not ctx:
+                log_game_event("[DilemmaTest] 错误：无法获取游戏上下文", tag="DILEMMA")
+                return
+            
+            # 获取LLM服务
+            llm_service = LLMService.get_instance()
+            if not llm_service or not llm_service.is_available():
+                log_game_event("[DilemmaTest] 警告：LLM服务不可用，将使用备用方案", tag="DILEMMA")
+            else:
+                log_game_event("[DilemmaTest] LLM服务已就绪", tag="DILEMMA")
+            
+            # 获取或创建AistoryBridge（传递LLM服务）
+            bridge = get_aistory_bridge(ctx, llm_service)
+            if not bridge:
+                log_game_event("[DilemmaTest] 错误：无法获取AistoryBridge", tag="DILEMMA")
+                return
+            
+            # 使用异步执行器来运行异步代码
+            import asyncio
+            
+            async def _async_trigger():
+                # 确保bridge已初始化
+                if not bridge._initialized:
+                    await bridge.initialize()
+                
+                # 转换NPC为NPCData格式
+                npc_data = bridge._convert_npc(npc)
+                npc_id = npc_data.npc_id
+                
+                # 检查NPC是否已注册，如果没有则注册
+                if npc_id not in bridge.new_director.npc_data:
+                    bridge.new_director.register_npc(npc_data)
+                    print(f"[DilemmaTest] 已注册NPC {npc.name} 到StoryDirector")
+                
+                # 初始化NPC的张力（如果还没有）
+                if npc_id not in bridge.new_director.seeds or not bridge.new_director.seeds[npc_id].tensions:
+                    world_state = bridge._create_world_snapshot()
+                    await bridge.new_director.initialize_npc_tensions(npc_id, world_state)
+                
+                # 生成下一个故事节拍
+                world_state = bridge._create_world_snapshot()
+                event_card = await bridge.new_director.generate_next_beat(npc_id, world_state)
+                
+                return event_card
+            
+            # 运行异步任务
+            try:
+                # 尝试获取当前事件循环
+                loop = asyncio.get_running_loop()
+                # 如果已经在事件循环中，创建任务
+                future = asyncio.ensure_future(_async_trigger())
+                # 由于我们在Pygame的主循环中，不能阻塞等待
+                # 所以我们设置一个回调来处理结果
+                def on_event_generated(fut):
+                    try:
+                        event_card = fut.result()
+                        if event_card:
+                            self._handle_generated_event(npc, event_card, ctx)
+                        else:
+                            print(f"[DilemmaTest] 未能生成事件")
+                            if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                                ctx.ft_manager.add_text(
+                                    f"[AI] 暂时无法生成事件",
+                                    npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
+                                )
+                    except Exception as e:
+                        print(f"[DilemmaTest] 生成事件时出错: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                future.add_done_callback(on_event_generated)
+                
+                # 显示正在生成的提示
+                if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                    ctx.ft_manager.add_text(
+                        f"[AI] 正在为{npc.name}生成困境事件...",
+                        npc.rect.centerx, npc.rect.top - 50, (150, 200, 255)
+                    )
+                
+            except RuntimeError:
+                # 没有正在运行的事件循环，创建一个新的
+                event_card = asyncio.run(_async_trigger())
+                if event_card:
+                    self._handle_generated_event(npc, event_card, ctx)
+                else:
+                    print(f"[DilemmaTest] 未能生成事件")
+                    if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                        ctx.ft_manager.add_text(
+                            f"[AI] 暂时无法生成事件",
+                            npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
+                        )
+                
+        except Exception as e:
+            print(f"[DilemmaTest] 错误: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _handle_generated_event(self, npc, event_card, ctx):
+        """处理生成的事件卡片"""
+        print(f"[DilemmaTest] 成功生成事件: {event_card.title}")
+        print(f"[DilemmaTest] 事件描述: {event_card.description}")
+        print(f"[DilemmaTest] 选项数: {len(event_card.choices)}")
+        
+        # 存储待处理的事件，供后续显示
+        if not hasattr(self, '_pending_dilemma_events'):
+            self._pending_dilemma_events = {}
+        self._pending_dilemma_events[npc.id] = event_card
+        
+        # 显示浮动提示
+        if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+            ctx.ft_manager.add_text(
+                f"[AI] {npc.name}的困境事件已生成!",
+                npc.rect.centerx, npc.rect.top - 50, (100, 255, 150)
+            )
+        
+        # 显示事件对话框
+        self._show_dilemma_event_dialog(npc, event_card)
+    
+    def _show_dilemma_event_dialog(self, npc, event_card):
+        """
+        显示困境事件对话框
+        
+        Args:
+            npc: NPC对象
+            event_card: EventCard事件卡片
+        """
+        print(f"[DilemmaTest] 准备显示事件对话框: {event_card.title}")
+        
+        # 将EventCard转换为游戏内事件格式
+        # 这里可以根据需要集成到现有的事件系统中
+        # 暂时打印事件信息供调试
+        print(f"  标题: {event_card.title}")
+        print(f"  描述: {event_card.description}")
+        print(f"  情绪基调: {event_card.emotion_tone}")
+        print(f"  忽略后果: {event_card.ignore_consequence}")
+        print("  选项:")
+        for i, choice in enumerate(event_card.choices):
+            print(f"    {i+1}. {choice.text}")
+            print(f"       代价: {choice.cost}")
+            print(f"       后果: {choice.consequence}")
+    
     def _wrap_text(self, text, font, max_width):
         """将文本按最大宽度换行，返回行列表"""
         if not text:

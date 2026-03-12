@@ -1,0 +1,72 @@
+{
+  "npc_id": 1022,
+  "npc_name": "小翠",
+  "short_term": [
+    {
+      "id": "mem_1773292497583",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「在吗」",
+      "importance": 2,
+      "timestamp": 1773292497.5838242,
+      "real_timestamp": 1773292497.5838242,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1773292501292",
+      "memory_type": "conversation",
+      "content": "小翠说：「在的，官人。小女子正要去绣房学艺，不知有何吩咐？」",
+      "importance": 1,
+      "timestamp": 1773292501.2929368,
+      "real_timestamp": 1773292501.2929368,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "小翠"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773292501292",
+      "memory_type": "knowledge",
+      "content": "玩家主动打招呼，态度尚可",
+      "importance": 3,
+      "timestamp": 1773292501.2929368,
+      "real_timestamp": 1773292501.2929368,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1773292501.2929368,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1773292504.6057715
+}

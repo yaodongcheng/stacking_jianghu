@@ -13,135 +13,17 @@ from dataclasses import dataclass, field
 from .dilemma_seed import NPCDilemmaSeed, Tension, TensionType, StoryBeat, DilemmaPhase
 from .shared_types import WorldSnapshot
 
+# 导入日志函数
+try:
+    from src.utils import log_game_event
+except ImportError:
+    # 备用日志函数
+    def log_game_event(text, tag="INFO"):
+        print(f"[{tag}] {text}")
 
-@dataclass
-class NPCData:
-    """
-    NPC数据包装类
-    
-    这是aistory模块使用的完整NPC数据定义。
-    与director_system中的简单Dict不同，这是强类型的。
-    """
-    npc_id: str
-    name: str
-    gender: str = ""
-    age: int = 0
-    identity: str = ""           # 身份/职业
-    org: str = ""                # 所属组织
-    personality: str = ""        # 性格描述（自然语言，向后兼容）
-    backstory: str = ""          # 背景故事
-    
-    # 状态属性
-    wealth: int = 0              # 财富（文）
-    emotion: int = 50            # 情绪（0-100）
-    health: int = 100            # 健康（0-100）
-    
-    # 标签和描述
-    tags: List[str] = field(default_factory=list)
-    desc: str = ""               # 人设描述
-    location: str = ""           # 当前位置
-    
-    # 关系
-    spouse_id: Optional[str] = None
-    master_id: Optional[str] = None
-    grudge_target: Optional[str] = None
-    
-    # === 多维度性格系统（太阁5风格）===
-    temper: str = ""             # 脾气: 性急/温和
-    spirit: str = ""             # 胆量: 勇敢/谨慎
-    ism: str = ""                # 主义: 理想/现实
-    act_style: str = ""          # 风格: 慎重/大胆
-    friendship: str = ""         # 情义: 重视/轻视
-    ambition: int = 50           # 野心: 0-100
-    desire_type: str = ""        # 物欲类型: 金钱/权力/名声/知识/安稳
-    desire_level: str = ""       # 物欲程度: 低/普通/高/极高
-    
-    # 人情值系统
-    social_credit: int = 0       # 人情值: 正数=NPC欠玩家, 负数=玩家欠NPC
-    
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'NPCData':
-        """从字典创建（兼容director_system的NPC格式）"""
-        return cls(
-            npc_id=str(data.get('id', data.get('npc_id', ''))),
-            name=data.get('name', ''),
-            gender=data.get('gender', ''),
-            age=data.get('age', 0),
-            identity=data.get('job', data.get('identity', '')),
-            org=data.get('org', data.get('org_id', '')),
-            personality=data.get('personality', ''),
-            backstory=data.get('backstory', ''),
-            wealth=data.get('wealth', data.get('money', 0)),
-            emotion=data.get('emotion', 50),
-            health=data.get('health', 100),
-            tags=data.get('tags', []),
-            desc=data.get('desc', ''),
-            location=data.get('location', ''),
-            spouse_id=data.get('spouse_id'),
-            master_id=data.get('master_id'),
-            grudge_target=data.get('grudge_target'),
-            # 多维度性格
-            temper=data.get('temper', ''),
-            spirit=data.get('spirit', ''),
-            ism=data.get('ism', ''),
-            act_style=data.get('act_style', ''),
-            friendship=data.get('friendship', ''),
-            ambition=data.get('ambition', 50),
-            desire_type=data.get('desire_type', ''),
-            desire_level=data.get('desire_level', ''),
-            social_credit=data.get('social_credit', 0)
-        )
-    
-    def get_personality_profile(self) -> str:
-        """生成性格画像（用于LLM提示词）"""
-        lines = []
-        
-        # 基础性格
-        traits = []
-        if self.temper:
-            traits.append(f"脾气{self.temper}")
-        if self.spirit:
-            traits.append(f"胆量{self.spirit}")
-        if self.ism:
-            traits.append(f"{self.ism}主义")
-        if self.act_style:
-            traits.append(f"行事{self.act_style}")
-        if self.friendship:
-            traits.append(f"{self.friendship}")
-        
-        if traits:
-            lines.append(f"性格特质：{'，'.join(traits)}")
-        
-        # 野心和物欲
-        if self.ambition != 50:
-            ambition_desc = "野心勃勃" if self.ambition > 70 else "胸无大志" if self.ambition < 30 else f"野心{self.ambition}/100"
-            lines.append(f"野心程度：{ambition_desc}")
-        
-        if self.desire_type and self.desire_level:
-            lines.append(f"物欲倾向：{self.desire_type}（{self.desire_level}）")
-        
-        # 人情往来
-        if self.social_credit != 0:
-            if self.social_credit > 0:
-                lines.append(f"人情往来：欠玩家 {self.social_credit} 点人情")
-            else:
-                lines.append(f"人情往来：玩家欠其 {-self.social_credit} 点人情")
-        
-        # 向后兼容：如果有多维性格就用它，否则用旧的personality字符串
-        if lines:
-            return '\n'.join(lines)
-        return self.personality if self.personality else "性格信息暂无"
-    
-    def get_behavior_tendency(self) -> Dict[str, Any]:
-        """获取行为倾向（用于启发式规则）"""
-        return {
-            'risk_taking': self.spirit == '勇敢' or self.act_style == '大胆',
-            'pragmatic': self.ism == '现实',
-            'loyal': self.friendship == '重视情义',
-            'impulsive': self.temper == '性急',
-            'ambitious': self.ambition > 60,
-            'content': self.ambition < 40
-        }
+
+# 类型别名：NPC数据可以是字典或NPC对象
+NPCData = Any  # 向前兼容：NPC对象或字典
 
 
 class DilemmaDeriver:
@@ -169,10 +51,22 @@ class DilemmaDeriver:
         Returns:
             张力线列表
         """
+        log_game_event(f"[DilemmaDeriver] 开始为 {npc.name} 派生张力线", tag="DILEMMA")
+        log_game_event(f"[DilemmaDeriver] NPC状态: 财富={npc.wealth}, 情绪={npc.emotion}, 健康={npc.health}", tag="DILEMMA")
+        log_game_event(f"[DilemmaDeriver] 性格特质: 脾气={npc.temper}, 胆量={npc.spirit}, 主义={npc.ism}, 风格={npc.act_style}, 情义={npc.friendship}, 野心={npc.ambition}", tag="DILEMMA")
+        
         if self.llm:
-            return await self._derive_tensions_with_llm(npc, world_state)
+            log_game_event(f"[DilemmaDeriver] 使用LLM派生张力", tag="DILEMMA")
+            result = await self._derive_tensions_with_llm(npc, world_state)
         else:
-            return self._derive_tensions_heuristic(npc, world_state)
+            log_game_event(f"[DilemmaDeriver] 使用启发式规则派生张力", tag="DILEMMA")
+            result = self._derive_tensions_heuristic(npc, world_state)
+        
+        log_game_event(f"[DilemmaDeriver] 为 {npc.name} 派生出 {len(result)} 条张力线", tag="DILEMMA")
+        for i, t in enumerate(result, 1):
+            log_game_event(f"[DilemmaDeriver] 张力{i}: [{t.type.value}] {t.force_a} vs {t.force_b} (强度:{t.intensity})", tag="DILEMMA")
+        
+        return result
     
     async def create_seed(self, npc: NPCData, world_state: WorldSnapshot) -> NPCDilemmaSeed:
         """
@@ -218,8 +112,8 @@ class DilemmaDeriver:
             personality_impact.append("此人现实务实，困境通常是利益权衡而非道德困境")
         if behavior['loyal']:
             personality_impact.append("此人重视情义，困境常涉及对朋友/家人的忠诚考验")
-        if behavior['impulsive']:
-            personality_impact.append("此人性子急躁，容易因冲动而陷入麻烦")
+        if behavior['temper_hot']:
+            personality_impact.append("此人脾气暴躁，容易因冲动而陷入麻烦")
         if behavior['ambitious']:
             personality_impact.append("此人野心勃勃，困境常与向上爬升的欲望有关")
         if behavior['content']:
@@ -271,11 +165,19 @@ class DilemmaDeriver:
 """
         
         try:
-            response = await self.llm.generate(prompt)
-            return self._parse_tensions(response)
+            # LLMService的chat方法不是异步的，不需要await
+            response = self.llm.chat(
+                system_prompt="你是一个分析人物性格和困境的编剧专家。",
+                user_message=prompt,
+                max_tokens=2000
+            )
+            # 如果response是对象，获取content属性；如果是字符串，直接使用
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            return self._parse_tensions(response_text)
         except Exception as e:
-            print(f"[DilemmaDeriver] LLM张力派生失败: {e}")
-            return self._derive_tensions_heuristic(npc, world_state)
+            log_game_event(f"[DilemmaDeriver] LLM张力派生失败: {e}", tag="ERROR")
+            # 异常时中止，不使用兜底方案
+            raise
     
     def _derive_tensions_heuristic(self, npc: NPCData, world_state: WorldSnapshot) -> List[Tension]:
         """启发式规则派生张力（无LLM时的备选）"""
@@ -326,9 +228,10 @@ class DilemmaDeriver:
         return tensions
     
     def _derive_core_conflict(self, npc: NPCData) -> tuple:
-        """派生核心矛盾：欲望 vs 现实阻碍（集成性格维度）"""
+        """派生核心矛盾：欲望 vs 现实阻碍（集成数值型性格维度 0-100）"""
         
         behavior = npc.get_behavior_tendency()
+        desc = npc.get_personality_description()
         
         # === 基于多维度性格系统推断欲望 ===
         desire = ""
@@ -354,6 +257,8 @@ class DilemmaDeriver:
                 desire = "想要追求学问，增长见识"
             elif npc.desire_type == "安稳":
                 desire = "想要过上平静安稳的生活"
+            elif npc.desire_type == "正义":
+                desire = "想要伸张正义，惩治恶人"
         
         # 2. 基于职业推断（如果物欲类型不明确）
         if not desire:
@@ -372,32 +277,32 @@ class DilemmaDeriver:
             else:
                 desire = "想要过上更好的生活"
         
-        # 3. 基于情义调整欲望描述
-        if npc.friendship == "重视情义":
+        # 3. 基于情义调整欲望描述（数值型：越小越重情义）
+        if npc.friendship < 40:  # 重情义
             desire += "，同时守护身边重要的人"
-        elif npc.friendship == "轻视情义":
+        elif npc.friendship > 60:  # 不重情义
             desire += "，不惜为此牺牲人情往来"
         
         # === 基于性格推断阻碍 ===
         reality_block = ""
         
-        # 1. 基于主义（理想vs现实）
-        if npc.ism == "理想":
+        # 1. 基于主义（理想vs现实，数值型：越小越理想）
+        if npc.ism < 40:  # 理想主义
             if npc.wealth < 30:
                 reality_block = "理想主义在贫困现实面前的无力"
             else:
                 reality_block = "理想与世俗现实的冲突"
-        elif npc.ism == "现实":
+        elif npc.ism > 60:  # 现实主义
             if npc.wealth < 30:
                 reality_block = "贫困的经济状况限制了选择"
             else:
                 reality_block = "现实主义带来的道德困境"
         
-        # 2. 基于行事风格
+        # 2. 基于行事风格（数值型：越小越缜密）
         if not reality_block:
-            if npc.act_style == "慎重":
+            if npc.act_style < 40:  # 缜密
                 reality_block = "过于谨慎导致错失机会"
-            elif npc.act_style == "大胆":
+            elif npc.act_style > 60:  # 豪放/大胆
                 reality_block = "冒进带来的风险和后果"
         
         # 3. 基于现状（兜底逻辑）
@@ -413,8 +318,8 @@ class DilemmaDeriver:
             else:
                 reality_block = "复杂的人际关系和社会环境"
         
-        # 4. 基于脾气调整
-        if npc.temper == "性急":
+        # 4. 基于脾气调整（数值型：越大越暴躁）
+        if npc.temper > 60:  # 暴躁
             reality_block += "，加上急躁性格容易让事情变得更糟"
         
         return desire, reality_block

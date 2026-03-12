@@ -138,7 +138,6 @@ class EventProcessor:
         
         my_is_villain = self._ai._is_villain(npc)
         my_is_guard = npc.job in ('GUARD', 'OFFICIAL', 'SOLDIER')
-        my_is_heroic = npc.morality >= 70
         
         mx, my = npc.rect.centerx, npc.rect.centery
         
@@ -158,7 +157,7 @@ class EventProcessor:
             # 情况1-4 的处理逻辑
             result = self._check_see_situation(
                 npc, other, all_npcs, 
-                my_is_villain, my_is_guard, my_is_heroic
+                my_is_villain, my_is_guard
             )
             if result:
                 return True
@@ -166,7 +165,7 @@ class EventProcessor:
         return False
     
     def _check_see_situation(self, npc, other, all_npcs, 
-                              my_is_villain, my_is_guard, my_is_heroic) -> bool:
+                              my_is_villain, my_is_guard) -> bool:
         """
         检查各种视觉感知情况
         返回 True 表示发现需要立即反应的情况
@@ -191,9 +190,9 @@ class EventProcessor:
                         return True
         
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # 情况2: 善良的人 看到 恶人正在攻击平民 → 仇恨攻击者
+        # 情况2: 守卫 看到 恶人正在攻击平民 → 仇恨攻击者
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        if (my_is_heroic or my_is_guard) and not my_is_villain:
+        if my_is_guard and not my_is_villain:
             other_victim = getattr(other, 'aggro_target', None)
             if other_is_villain and other_is_fighting and other_victim:
                 victim_is_innocent = not self._ai._is_villain(other_victim)

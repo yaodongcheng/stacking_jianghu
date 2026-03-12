@@ -6,8 +6,8 @@ from src.definitions import *
 from src.utils import Appearance, log_game_event
 from .base import CardBase
 from .building import Building
-from .resource import Resource  # <--- [新增] 补上这一行导入
-import json # <--- [建议] 顺便检查一下 json 是否已导入，因为后面用到了 json.loads
+from .resource import Resource  # <---
+import json # <--- 
 from src.item_system import ItemManager 
 from src.npc_personality import NPCPersonality, generate_personality_from_job, get_social_credit_system
 
@@ -56,103 +56,45 @@ RANK_SYMBOLS = {
 
 class NPC(CardBase):
     def __init__(self, data):
+
+        #data是什么？
+
         # 初始随机位置
         start_x, start_y = random.randint(100, 600), random.randint(100, 400)
         CardBase.__init__(self, start_x, start_y, CARD_W, CARD_H, COLOR_NPC_CARD)
         
-        # --- 基础属性解析 (带容错) ---
+        #第一部分：属性界面
+        #基础属性
         self.id = int(data.get('id', 0))
         self.name = data.get('name', '无名氏')
-        self.job = data.get('job', 'NONE') 
+        self.job = data.get('job', 'NONE')         
+        self.hidden_job = data.get('hidden_job', 'NONE')
         self.card_type = CARD_TYPE_HUMAN
         
-        # 经济与社会地位
-        self.eco_status = data.get('eco_status', ECO_POOR)
-        self.soc_status = data.get('soc_status', SOC_COMMON)
-        self.freedom = data.get('freedom', FREE_FULL)
-        self.emotion = data.get('emotion', EMOTION_NORMAL)
-        self.hidden_job = data.get('hidden_job', 'NONE')
-        self.org_id = data.get('org_id', 'NONE')
-        self.rank = int(data.get('rank', 0))
-        self.desc = data.get('desc', '')
-        
-        raw_tags = data.get('tags', '')
+        # 标签（必须在 generate_personality_from_job 之前初始化）
+        raw_tags = data.get('tags', '') 
         self.tags = raw_tags.split(';') if raw_tags else []
-        self.safety = data.get('safety', SAFETY_NORMAL)
         
-        # [新增] 解析关系 JSON
-        self.relations = {}
-        raw_rels = data.get('relations_json', '{}')
-        try:
-            if raw_rels:
-                self.relations = json.loads(raw_rels)
-        except:
-            print(f"Error parsing relations for {self.name}")
-
-
-        # --- 关键数值属性 (防止 KeyErrors) ---
-        self.cold = 0 #寒冷值
-        self.hunger = 0 #饥饿值
-        self.dissatisfaction = 0 #不满值
-        self.survival_timer = 0 # 计时器
-        # 装备槽（只存物品id字符串，实际属性由 _recalc_combat_stats 动态计算）
+        # 背包和装备槽（必须在 _init_combat_stats 之前初始化）
+        self.inventory = {}
         self.equip_weapon  = None   # e.g. '铁剑' / '朴刀'
         self.equip_armor   = None   # e.g. '皮甲' / '锁子甲'
         self.equip_clothing = None  # e.g. '棉袄' / '粗布衣'
         
-        
+        # 能力属性
+        self._init_core_stats(data)
+         # 战斗属性 
+         # 计算攻击、防御、血量
+        self._init_combat_stats(data)        
+        # --- 战斗仇恨---
+        # hatred: {npc_id: hate_value}，记录对每个NPC的仇恨值
+        self.hatred = {}
 
-        # --- Stacklands 玩法相关 ---
-        self.inventory = {}
-        self.is_follower = False # 是否是门客
-        self.work_mode = "DEFAULT" 
-        self.recruit_cost = 500 
-        self.recruit_fame_req = 100 
-        self._update_recruit_cost()
-        self._give_starter_kit()
 
-        # --- 渲染与物理 ---
-        self.sprite_w = 28
-        self.sprite_h = 42
-        # 初始化私有像素坐标（在 __init__ 中直接访问是安全的）
-        self._pixel_x = float(self.rect.x)
-        self._pixel_y = float(self.rect.y)
-        
-        # AI 状态机
-        self.state = STATE_IDLE
-        self.state_timer = 0
-        self.clear_movement_target("初始化")
-        self.move_speed = 80.0        # 单位：px/s，每0.1s步长移动8px
-        self.ai_reason = "初始化..."         
-        self.ai_mode = "DEFAULT"       # DEFAULT: 自由/工作, FOLLOW: 跟随玩家, IDLE: 待机/摸鱼
-        
-        # 【新增】隐身机制
-        self.is_invisible = False     # 是否处于隐身状态（不参与AI、不渲染、不碰撞）
-        self.debug_next_waypoint = None
-        self.decision_timer = 0
-        self.decision_interval = 30 + random.randint(0, 20) # 0.5 ~ 0.8秒决策一次
-        
-        # 事件系统接口
-        self.active_event_data = None 
-        self.event_partner = None
-        self.memory = []         
-        self.event_cooldown =0
-        # [新增] NPC之间的好感度 {npc_id: score}
-        self.affinity = {}
-        # 流民标记
-        self.is_refugee = False
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】对玩家的态度系统
-        # ═══════════════════════════════════════════════════════════════
-        self.affinity_to_player = 0      # 对玩家好感度 (-100 ~ +100)
-        self.knows_player = False        # 是否认识玩家
-        self.last_interaction_day = 0    # 上次与玩家互动的天数
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】性格维度系统 (基于太阁立志传5)
-        # ═══════════════════════════════════════════════════════════════
-        # 从数据加载或根据职业生成性格
+        #第二部分：内心界面       
+       #情绪？
+        self.emotion = data.get('emotion', EMOTION_NORMAL)
+        # 性格特质        
         personality_data = data.get('personality')
         if personality_data:
             # 从存档数据加载
@@ -162,52 +104,126 @@ class NPC(CardBase):
                 self.personality = generate_personality_from_job(self.job, self.tags)
         else:
             # 根据职业和标签自动生成
-            self.personality = generate_personality_from_job(self.job, self.tags)
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】初始困境 (从种子数据加载)
-        # ═══════════════════════════════════════════════════════════════
+            self.personality = generate_personality_from_job(self.job, self.tags)    
+        # 初始困境
         self.initial_dilemma = data.get('initial_dilemma', None)
         # 当前困境状态（由StoryDirector管理）
         self.current_dilemma = None
+        # 困境阶段
         self.dilemma_phase = None  # 'latent', 'surfaced', 'escalated', 'crisis', 'aftermath'
         
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】人情值系统 (社交货币)
-        # ═══════════════════════════════════════════════════════════════
-        # 获取全局人情值系统实例
-        self._social_credit_system = get_social_credit_system()
 
-        # --- 外观加载 (仅头像) ---
-        # 头像路径：优先使用优化后的head_icon目录
-        avatar_path = Appearance.get_avatar_path(self.name)
-        if avatar_path is None:
-            # 如果找不到，使用默认路径（会显示占位图）
-            avatar_path = f"assets/head_icon/{self.name}.png"
-        self.appearance = Appearance(head_path=avatar_path, size=(64, 64))
+        #第?部分？组织
+        # 经济与社会地位
+        self.eco_status = data.get('eco_status', ECO_POOR)
+        self.soc_status = data.get('soc_status', SOC_COMMON)
+        self.freedom = data.get('freedom', FREE_FULL)
+        self.org_id = data.get('org_id', 'NONE')
+        self.rank = int(data.get('rank', 0))
         
-         # [新增] 战斗属性 - 根据势力类型和社会等级动态计算
-        self._init_combat_stats(data)
-        
-        # 攻击速度：两次攻击之间的间隔（毫秒），越小打得越快
-        self.atk_speed = int(data.get('atk_speed', 1000))
-        self.attack_cooldown = 0               # 当前冷却计时（毫秒）
-        self.knockback_timer = 0              # 被击退后的硬直计时（毫秒），>0 时不接受新的移动指令
-
-        # --- 四大核心属性 - 根据势力类型动态计算 ---
-        self._init_core_stats(data)
-
-        # --- 仇恨系统 ---
-        # hatred: {npc_id: hate_value}，记录对每个NPC的仇恨值
-        self.hatred = {}
-        
-        # --- 社会分层系统 (新增) ---
+         # 组织与社会阶级
         self.power_type = data.get('power_type', '民')      # 势力类型
         self.org_role = data.get('org_role', None)          # 组织角色: LEADER/MEMBER/BODYGUARD
         self.org_rank = int(data.get('org_rank', 0))        # 组织等级 0-5
         self.social_level = int(data.get('social_level', 1)) # 社会等级 1-5
         self.wealth_level = int(data.get('wealth_level', 1)) # 财富等级 1-5
         self.influence_level = int(data.get('influence_level', 1)) # 影响力等级 1-5
+
+        self.desc = data.get('desc', '')
+        
+        # 安全状态（影响是否参与AI和事件）
+        self.safety = data.get('safety', SAFETY_NORMAL)
+        
+        #第三部分。关系界面
+        # 人际关系，也存在冗余定义
+        # 人际关系
+        self.relations = {}
+        raw_rels = data.get('relations_json', '{}')
+        #NPC之间的好感度 {npc_id: score}
+        self.affinity = {}
+        #对玩家的态度，不应该额外存储，而是需要从affinity里面get
+        self.affinity_to_player = 0      # 对玩家好感度 (-100 ~ +100)
+        self.knows_player = False        # 是否认识玩家
+        self.last_interaction_day = 0    # 上次与玩家互动的天数
+        #人情值也没必要单独开一个系统，感觉直接用relationDebt就可以了，毕竟它也是NPC之间的关系属性
+        self._social_credit_system = get_social_credit_system()
+        try:
+            if raw_rels:
+                self.relations = json.loads(raw_rels)
+        except:
+            print(f"Error parsing relations for {self.name}")
+
+
+
+        # 生存属性
+        self.cold = 0 #寒冷值
+        self.hunger = 0 #饥饿值
+        self.dissatisfaction = 0 #不满值
+        self.survival_timer = 0 # 计时器
+
+        
+        # 其他玩法功能属性
+        # 招募相关
+        self.is_follower = False # 是否是门客
+        self.recruit_cost = 500 
+        self.recruit_fame_req = 100         
+        # 流民标记
+        self.is_refugee = False
+        # 初始装备和资源        
+        self._update_recruit_cost()
+        self._give_starter_kit()
+
+
+
+
+        # --- 渲染与物理 ---
+        self.sprite_w = 28
+        self.sprite_h = 42
+        # 初始化私有像素坐标（在 __init__ 中直接访问是安全的）
+        self._pixel_x = float(self.rect.x)
+        self._pixel_y = float(self.rect.y)
+        
+
+        # 寻路与防卡死
+        self.debug_next_waypoint = None
+        self.stuck_timer = 0         # 记录卡住的帧数
+        self.last_frame_pos = (self.pixel_x, self.pixel_y) # 上一帧的坐
+        self.stuck_check_timer = 0      # 计时器，每隔 N 帧检查一次
+        self.stuck_check_pos = (self.pixel_x, self.pixel_y) # 上一次检查时的坐标
+        self.stuck_accumulated = 0      # 连续判定为卡死的次数
+
+        # AI 状态机
+        #这两个属性是用来干什么的？感觉有点重复了
+        self.work_mode = "DEFAULT" 
+        self.ai_mode = "DEFAULT"       # DEFAULT: 自由/工作, FOLLOW: 跟随玩家, IDLE: 待机/摸鱼
+
+        self.state = STATE_IDLE
+        self.state_timer = 0
+        self.clear_movement_target("初始化")
+        self.move_speed = 80.0        # 单位：px/s，每0.1s步长移动8px
+        self.ai_reason = "初始化..."         
+        #AI决策
+        self.decision_timer = 0
+        self.decision_interval = 30 + random.randint(0, 20) # 0.5 ~ 0.8秒决策一次
+        #记忆
+        self.memory = [] # 记忆列表，存储最近的事件和互动（用于AI决策）
+        
+        # 事件系统接口
+        self.active_event_data = None 
+        self.event_partner = None
+        self.event_cooldown =0        
+        # 事件导致的隐身
+        self.is_invisible = False     # 是否处于隐身状态（不参与AI、不渲染、不碰撞）
+
+       
+        
+       
+        # --- 外观加载 (仅头像) ---
+        # 头像路径：head_icon目录
+        avatar_path = Appearance.get_avatar_path(self.name)
+        self.appearance = Appearance(head_path=avatar_path, size=(64, 64))
+        
+
         
         # 解析关系数据用于护卫系统
         self.relations_data = {}
@@ -222,6 +238,8 @@ class NPC(CardBase):
         self.action_queue = ActionQueue(self)
         # aggro_target: 当前锁定的战斗目标 (npc对象引用)，None=未锁定
         self.aggro_target = None
+
+
         # 仇恨阈值：超过此值才进入战斗
         # 【修改】降低阈值，让NPC更快响应同伴被攻击
         _is_villain = (self.job in ['BANDIT', 'THUG'] or 'VILLAIN' in self.tags)
@@ -236,12 +254,7 @@ class NPC(CardBase):
         
         # 任务属性        
         self.quest_icon_active = False # 是否头顶有任务
-        # --- 防卡死变量 ---
-        self.stuck_timer = 0         # 记录卡住的帧数
-        self.last_frame_pos = (self.pixel_x, self.pixel_y) # 上一帧的坐
-        self.stuck_check_timer = 0      # 计时器，每隔 N 帧检查一次
-        self.stuck_check_pos = (self.pixel_x, self.pixel_y) # 上一次检查时的坐标
-        self.stuck_accumulated = 0      # 连续判定为卡死的次数
+       
     
     @property
     def money(self):
@@ -363,6 +376,11 @@ class NPC(CardBase):
         self.max_hp = self.hp
         self.atk = int((base_atk + role_bonus_atk) * level_multiplier * rank_multiplier)
         self.def_ = int((base_def + role_bonus_def) * level_multiplier * rank_multiplier)
+
+         # 攻击速度：两次攻击之间的间隔（毫秒），越小打得越快
+        self.atk_speed = int(data.get('atk_speed', 1000))
+        self.attack_cooldown = 0               # 当前冷却计时（毫秒）
+        self.knockback_timer = 0              # 被击退后的硬直计时（毫秒），>0 时不接受新的移动指令
         
         # ─── 分配初始装备 ───
         self._assign_starting_equipment(power_type, social_level, org_role, tags)
@@ -454,41 +472,6 @@ class NPC(CardBase):
         self.agility = base_agi + level_bonus
         self.wit = base_wit + level_bonus + tag_bonus_wit
         self.charm = base_charm + level_bonus + tag_bonus_charm
-        
-        # 【新增】勇气属性 - 用于威胁检定
-        # 基于势力类型和力量决定勇气
-        bravery_base = {
-            '士': 40,    # 官员：中等勇气
-            '农': 35,    # 农民：较低勇气
-            '工': 45,    # 工匠：中等勇气
-            '商': 30,    # 商人：较低勇气（怕死）
-            '学': 25,    # 学者：勇气较低
-            '兵': 70,    # 军人：高勇气
-            '游': 60,    # 江湖：较高勇气
-            '匪': 55,    # 盗匪：中高勇气
-            '民': 40,    # 平民：中等
-        }
-        tag_bonus_brave = 20 if 'BRAVE' in tags else (-15 if 'COWARD' in tags else 0)
-        self.bravery = bravery_base.get(power_type, 40) + level_bonus * 3 + tag_bonus_brave
-        self.bravery = max(10, min(100, self.bravery))  # 限制在10-100
-        
-        # 【新增】道德值 - 用于AI判断和说服检定
-        # 基于势力类型决定道德基准
-        morality_base = {
-            '士': 60,    # 官员：中偏高道德（虽然可能有贪官）
-            '农': 55,    # 农民：中等道德
-            '工': 55,    # 工匠：中等道德
-            '商': 45,    # 商人：略低（利益导向）
-            '学': 70,    # 学者：高道德
-            '兵': 50,    # 军人：中等（服从命令）
-            '游': 50,    # 江湖：中等（亦正亦邪）
-            '匪': 20,    # 盗匪：低道德
-            '民': 50,    # 平民：中等
-        }
-        tag_bonus_moral = 30 if 'HERO' in tags else (-40 if 'VILLAIN' in tags else 0)
-        tag_bonus_moral += 10 if 'RIGHTEOUS' in tags else (-10 if 'GREEDY' in tags else 0)
-        self.morality = morality_base.get(power_type, 50) + level_bonus * 2 + tag_bonus_moral
-        self.morality = max(0, min(100, self.morality))  # 限制在0-100
         
     def reveal_job(self):
         """流民加入城镇，觉醒真实职业"""
@@ -1340,149 +1323,7 @@ class NPC(CardBase):
             
         return False
 
-    def get_display_info(self, ui_manager=None):
-        """返回给Npc详细信息"""
-        role = "【门客】" if self.is_follower else "民众"
-        coins = self.inventory.get(ITEM_COIN, 0)
-        
-        # 构建组织信息
-        org_name = ORG_SHORT_NAMES.get(self.org_id, '')
-        rank_symbol = RANK_SYMBOLS.get(self.org_rank, '')
-        if org_name:
-            org_info = f"  [{org_name}{rank_symbol}]"
-        else:
-            org_info = ""
-        
-        # 势力类型显示
-        power_name = {
-            '士': '朝廷', '农': '地主', '工': '工匠', '商': '商贾',
-            '学': '学术', '兵': '军事', '游': '江湖', '匪': '盗匪', '民': '平民'
-        }.get(self.power_type, '平民')
-        
-        # 当前行为（完整显示，不截断）
-        current_action = getattr(self, 'ai_reason', '') or '发呆'
-        
-        info = [
-           f"{role} {self.name} ({self.job}){org_info}",
-           f"势力: {power_name}  社会等级: {self.social_level}",
-           f"当前: {current_action}",
-           f"生命: {self.hp}/{self.max_hp}",
-           f"不满: {self.dissatisfaction}/{MAX_DISSATISFACTION}",
-           f"饥饿: {self.hunger}%  寒冷: {self.cold}%",
-           f"金钱: {coins}{ITEM_COIN}",
-           f"武力: {self.atk}  防御: {self.def_}",
-           f"状态: {self.safety}  阈值: {self.aggro_threshold}",
-           f"力量:{self.strength} 敏捷:{self.agility} 智力:{self.wit} 魅力:{self.charm}",
-        ]
-
-        # --- 仇恨列表 ---
-        info.append("─" * 16)
-        if self.aggro_target is not None:
-            info.append(f"[战] 锁定: {self.aggro_target.name}")
-        else:
-            info.append("[战] 锁定: 无")
-
-        # 仇恨列表：只显示仇恨>0的，最多3条，无bar
-        active_hatred = [(nid, hv) for nid, hv in self.hatred.items() if hv > 0]
-        if active_hatred:
-            active_hatred.sort(key=lambda x: x[1], reverse=True)
-            hate_strs = []
-            for npc_id, hate_val in active_hatred[:3]:
-                name_str = f"#{npc_id}"
-                if ui_manager and hasattr(ui_manager, 'all_cards'):
-                    t = next((c for c in ui_manager.all_cards if getattr(c, 'id', None) == npc_id), None)
-                    if t:
-                        name_str = t.name[:4]
-                hate_strs.append(f"{name_str}:{hate_val}")
-            info.append("仇恨: " + "  ".join(hate_strs))
-        else:
-            info.append("仇恨: 无")
-        
-        # --- 关系网络 ---
-        if self.relations_data:
-            info.append("─" * 16)
-            info.append("人际关系:")
-            rel_type_map = {
-                'LEADER': '上司', 'SUBORDINATE': '下属', 'BODYGUARD': '护卫',
-                'FRIEND': '好友', 'WIFE': '妻子', 'HUSBAND': '丈夫',
-                'CHILD': '子女', 'MOTHER': '母亲', 'FATHER': '父亲',
-                'COLLEAGUE': '同僚', 'SUPERIOR': '上级'
-            }
-            for rel_type, rel_id in self.relations_data.items():
-                rel_name = rel_type_map.get(rel_type, rel_type)
-                # 尝试获取关系对象的名字
-                target_name = f"#{rel_id}"
-                if ui_manager and hasattr(ui_manager, 'all_cards'):
-                    t = next((c for c in ui_manager.all_cards if getattr(c, 'id', None) == rel_id), None)
-                    if t:
-                        target_name = t.name
-                info.append(f"  {rel_name}: {target_name}")
-        
-        # --- 【阶段3】组织经济信息 ---
-        org_id = getattr(self, 'org_id', None)
-        org_role = getattr(self, 'org_role', None)
-        if org_id and org_id != 'NONE':
-            info.append("─" * 16)
-            try:
-                from src.organization_system import get_org_economy
-                org_econ = get_org_economy()
-                summary = org_econ.get_org_summary(org_id)
-                info.append(f"组织: {summary['name']}")
-                info.append(f"  金库: {summary['treasury']}铜")
-                info.append(f"  成员: {summary['members']}人")
-                if org_role == 'LEADER':
-                    info.append(f"  今日收入: +{summary['daily_income']}铜")
-                    info.append(f"  今日支出: -{summary['daily_expense']}铜")
-                else:
-                    # 普通成员显示自己的薪俸
-                    salary = org_econ.calculate_salary(self)
-                    rate = org_econ.get_contribution_rate(self)
-                    info.append(f"  日薪: {salary}铜")
-                    info.append(f"  上缴比例: {int(rate*100)}%")
-            except Exception as e:
-                info.append(f"  (组织数据加载失败)")
-        
-        # --- 装备信息 ---
-        if self.equip_weapon or self.equip_armor or self.equip_clothing:
-            info.append("─" * 16)
-            info.append("装备:")
-            if self.equip_weapon:
-                info.append(f"  武器: {self.equip_weapon}")
-            if self.equip_armor:
-                info.append(f"  护甲: {self.equip_armor}")
-            if self.equip_clothing:
-                info.append(f"  服装: {self.equip_clothing}")
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】性格维度信息
-        # ═══════════════════════════════════════════════════════════════
-        if hasattr(self, 'personality') and self.personality:
-            info.append("─" * 16)
-            info.append("性格维度:")
-            p = self.personality
-            info.append(f"  脾气: {p.temper_str} | 胆量: {p.spirit_str}")
-            info.append(f"  主义: {p.ism_str} | 风格: {p.act_style_str}")
-            info.append(f"  情义: {p.friendship_str} | 野心: {p.ambition}")
-            if p.desire_type_str:
-                info.append(f"  物欲: {p.desire_type_str} ({p.desire_str})")
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】人情值信息
-        # ═══════════════════════════════════════════════════════════════
-        if hasattr(self, '_social_credit_system') and self._social_credit_system:
-            info.append("─" * 16)
-            info.append("人情往来:")
-            # 获取与玩家的关系
-            player_id = 0  # 假设玩家ID为0
-            credit = self._social_credit_system.get_credit(player_id, self.id)
-            if credit > 0:
-                info.append(f"  欠我人情: {credit}")
-            elif credit < 0:
-                info.append(f"  我欠人情: {-credit}")
-            else:
-                info.append(f"  人情值: 0")
-
-        return info
+   
     
     # ═══════════════════════════════════════════════════════════════
     # 【新增】人情值系统相关方法
@@ -1582,10 +1423,10 @@ class NPC(CardBase):
     
     def to_aistory_format(self) -> dict:
         """
-        转换为aistory模块使用的NPCData格式
+        转换为aistory模块使用的格式
         
         Returns:
-            符合dilemma_deriver.NPCData.from_dict()要求的字典
+            符合dilemma_deriver要求的字典
         """
         data = {
             'npc_id': str(self.id),
@@ -1604,19 +1445,19 @@ class NPC(CardBase):
             'location': getattr(self, 'location', ''),
         }
         
-        # 添加多维度性格数据
+        # 添加多维度性格数据 - 直接传递数值
         if hasattr(self, 'personality') and self.personality:
             p = self.personality
-            data.update({
-                'temper': p.temper_str,
-                'spirit': p.spirit_str,
-                'ism': p.ism_str,
-                'act_style': p.act_style_str,
-                'friendship': p.friendship_str,
+            data['personality'] = {
+                'temper': p.temper,
+                'spirit': p.spirit,
+                'ism': p.ism,
+                'act_style': p.act_style,
+                'friendship': p.friendship,
                 'ambition': p.ambition,
-                'desire_type': p.desire_type_str,
-                'desire_level': p.desire_str,
-            })
+                'desire_type': p.desire_type,
+                'desire_level': p.ambition,  # 使用野心值作为物欲程度
+            }
         
         # 添加人情值
         if hasattr(self, '_social_credit_system') and self._social_credit_system:
@@ -1629,4 +1470,86 @@ class NPC(CardBase):
             data['initial_dilemma'] = self.initial_dilemma
         
         return data
+    
+    def get_personality_profile(self) -> str:
+        """生成性格画像（用于LLM提示词）"""
+        if not hasattr(self, 'personality') or not self.personality:
+            return getattr(self, 'desc', '') or "性格信息暂无"
+        
+        p = self.personality
+        lines = []
+        
+        # 基础性格
+        traits = []
+        if p.temper != 50:
+            traits.append(f"脾气{'温和' if p.temper < 50 else '暴躁'}({p.temper})")
+        if p.spirit != 50:
+            traits.append(f"胆量{'胆小' if p.spirit < 50 else '勇敢'}({p.spirit})")
+        if p.ism != 50:
+            traits.append(f"{'理想' if p.ism < 50 else '现实'}主义({p.ism})")
+        if p.act_style != 50:
+            traits.append(f"行事{'缜密' if p.act_style < 50 else '豪放'}({p.act_style})")
+        if p.friendship != 50:
+            traits.append(f"{'重情义' if p.friendship < 50 else '不重情义'}({p.friendship})")
+        
+        if traits:
+            lines.append(f"性格特质：{'，'.join(traits)}")
+        
+        # 野心和物欲
+        if p.ambition != 50:
+            ambition_desc = "野心勃勃" if p.ambition > 70 else "胸无大志" if p.ambition < 30 else f"野心{p.ambition}/100"
+            lines.append(f"野心程度：{ambition_desc}")
+        
+        if p.desire_type and p.ambition != 50:
+            lines.append(f"物欲倾向：{p.desire_type}（{p.ambition}）")
+        
+        # 人情往来
+        if hasattr(self, '_social_credit_system') and self._social_credit_system:
+            player_id = 0
+            credit = self._social_credit_system.get_credit(player_id, self.id)
+            if credit != 0:
+                if credit > 0:
+                    lines.append(f"人情往来：欠玩家 {credit} 点人情")
+                else:
+                    lines.append(f"人情往来：玩家欠其 {-credit} 点人情")
+        
+        return '\n'.join(lines) if lines else (getattr(self, 'desc', '') or "性格信息暂无")
+    
+    def get_behavior_tendency(self) -> dict:
+        """获取行为倾向（用于启发式规则）"""
+        if not hasattr(self, 'personality') or not self.personality:
+            return {
+                'risk_taking': False,
+                'pragmatic': False,
+                'loyal': False,
+                'temper_hot': False,
+                'temper_calm': False,
+                'ambitious': False,
+                'content': False
+            }
+        
+        p = self.personality
+        return {
+            'risk_taking': p.spirit > 60 or p.act_style > 60,
+            'pragmatic': p.ism > 60,
+            'loyal': p.friendship < 40,
+            'temper_hot': p.temper > 60,
+            'temper_calm': p.temper < 40,
+            'ambitious': p.ambition > 60,
+            'content': p.ambition < 40
+        }
+    
+    def get_personality_description_dict(self) -> dict:
+        """获取性格描述字典（数值转文本）"""
+        if not hasattr(self, 'personality') or not self.personality:
+            return {}
+        
+        p = self.personality
+        return {
+            'temper': '暴躁' if p.temper > 60 else '温和' if p.temper < 40 else '平和',
+            'spirit': '勇敢' if p.spirit > 60 else '胆小' if p.spirit < 40 else '一般',
+            'ism': '现实' if p.ism > 60 else '理想' if p.ism < 40 else '平衡',
+            'act_style': '豪放' if p.act_style > 60 else '缜密' if p.act_style < 40 else '适中',
+            'friendship': '不重情义' if p.friendship > 60 else '重情义' if p.friendship < 40 else '一般'
+        }
        

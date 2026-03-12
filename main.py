@@ -104,7 +104,7 @@ def init_game_systems(screen_w, screen_h, scenario_type='village'):
     ctx.screen_w, ctx.screen_h = screen_w, screen_h
     ctx.scenario_type = scenario_type
 
-    ctx.ui_manager = UIManager(screen_w, screen_h)
+    ctx.ui_manager = UIManager(screen_w, screen_h, ctx)
     ctx.ft_manager = FloatingTextManager()
     ctx.interaction_mgr = InteractionManager()
 

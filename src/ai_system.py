@@ -183,7 +183,6 @@ class AISystem:
         
         my_is_villain = self._is_villain(npc)
         my_is_guard = npc.job in ('GUARD', 'OFFICIAL', 'SOLDIER')
-        my_is_heroic = npc.morality >= 70  # 正义感强的人
         
         mx, my = npc.rect.centerx, npc.rect.centery
         
@@ -244,7 +243,7 @@ class AISystem:
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             # 情况2: 善良的人 看到 恶人正在攻击平民 → 仇恨攻击者
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            if (my_is_heroic or my_is_guard) and not my_is_villain:
+            if ( my_is_guard) and not my_is_villain:
                 if other_is_villain and other_is_fighting and other_victim:
                     # 检查受害者是不是无辜的人
                     victim_is_innocent = not self._is_villain(other_victim)

@@ -11,8 +11,17 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, StoryBeat
-from .dilemma_deriver import NPCData
+# NPCData 类型别名 - 直接使用NPC对象
+from typing import Any
+NPCData = Any
 from .shared_types import WorldSnapshot
+
+# 导入日志函数
+try:
+    from src.utils import log_game_event
+except ImportError:
+    def log_game_event(text, tag="INFO"):
+        print(f"[{tag}] {text}")
 
 
 @dataclass
@@ -104,6 +113,9 @@ class RollingStoryGenerator:
         - 当前困境阶段
         - 玩家资源状况
         """
+        log_game_event(f"[RollingStoryGenerator] 开始为 {npc.name} 生成故事节拍", tag="DILEMMA")
+        log_game_event(f"[RollingStoryGenerator] 困境阶段: {seed.phase.value}, 张力数: {len(seed.tensions)}", tag="DILEMMA")
+        log_game_event(f"[RollingStoryGenerator] 核心矛盾: {seed.desire[:30]}... vs {seed.reality_block[:30]}...", tag="DILEMMA")
         
         # 构建已有故事的摘要
         story_so_far = self._summarize_story_beats(seed.story_beats)
@@ -198,11 +210,19 @@ class RollingStoryGenerator:
 """
         
         try:
-            response = await self.llm.generate(prompt)
-            return self._parse_event_card(response, npc.npc_id, seed.phase)
+            # LLMService的chat方法不是异步的，不需要await
+            response = self.llm.chat(
+                system_prompt="你是一个宋代市井剧的编剧专家。",
+                user_message=prompt,
+                max_tokens=2500
+            )
+            # 如果response是对象，获取content属性；如果是字符串，直接使用
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            return self._parse_event_card(response_text, npc.npc_id, seed.phase)
         except Exception as e:
-            print(f"[RollingStoryGenerator] 生成失败: {e}")
-            return self._create_fallback_card(npc, seed)
+            log_game_event(f"[RollingStoryGenerator] 生成失败: {e}", tag="ERROR")
+            # 异常时中止，不使用兜底方案
+            raise
     
     def _get_phase_instruction(self, phase: DilemmaPhase) -> str:
         """根据困境阶段给LLM不同的编剧指导"""
@@ -272,54 +292,116 @@ class RollingStoryGenerator:
         """
         根据NPC性格生成叙事指导
         
-        这告诉LLM如何根据性格特点来设计事件和选项
+        直接使用原始性格数值（0-100），提供更精细的叙事指导
         """
         guidance_lines = []
-        behavior = npc.get_behavior_tendency()
         
-        # 基于性格维度的叙事指导
-        if behavior.get('impulsive'):
-            guidance_lines.append("- 此人行事冲动，事件中可能做出仓促决定，导致事态恶化")
+        # ═══════════════════════════════════════════════════════════════
+        # 1. 脾气 (temper: 0温和 ←→ 100暴躁)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.temper >= 80:
+            guidance_lines.append("- 【极度暴躁】此人脾气极其火爆，极易被激怒，常因冲动酿成大祸")
+        elif npc.temper >= 60:
+            guidance_lines.append("- 【脾气暴躁】此人易怒冲动，事件中可能因一时气愤做出鲁莽决定")
+        elif npc.temper <= 20:
+            guidance_lines.append("- 【极度温和】此人脾性极好，极少动怒，即使受辱也能保持冷静")
+        elif npc.temper <= 40:
+            guidance_lines.append("- 【脾气温和】此人性格平和，不易被激怒，会理性思考后再行动")
         else:
-            guidance_lines.append("- 此人行事谨慎，会深思熟虑后再行动")
+            guidance_lines.append("- 【脾气一般】此人情绪稳定，既不易暴怒也不过分隐忍")
         
-        if behavior.get('risk_taking'):
-            guidance_lines.append("- 敢于冒险，选项中可以包含高风险高回报的选择")
+        # ═══════════════════════════════════════════════════════════════
+        # 2. 胆量 (spirit: 0胆小 ←→ 100勇敢)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.spirit >= 80:
+            guidance_lines.append("- 【极度勇敢】此人胆大包天，面对强敌也毫不退缩，甚至敢于挑战权威")
+        elif npc.spirit >= 60:
+            guidance_lines.append("- 【胆识过人】此人勇敢无畏，敢于冒险，选项可包含高风险高回报的选择")
+        elif npc.spirit <= 20:
+            guidance_lines.append("- 【极度胆小】此人胆小如鼠，稍有危险就退缩，需要被保护或推动")
+        elif npc.spirit <= 40:
+            guidance_lines.append("- 【较为胆小】此人谨慎保守，厌恶风险，更倾向于稳妥的解决方案")
         else:
-            guidance_lines.append("- 厌恶风险，更倾向于稳妥的解决方案")
+            guidance_lines.append("- 【胆识一般】此人既不过于鲁莽也不过分怯懦，会权衡利弊后行动")
         
-        if behavior.get('pragmatic'):
-            guidance_lines.append("- 现实主义者，会优先考虑实际利益而非道德原则")
+        # ═══════════════════════════════════════════════════════════════
+        # 3. 主义 (ism: 0理想 ←→ 100现实)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.ism <= 20:
+            guidance_lines.append("- 【极度理想】此人是坚定的理想主义者，愿为信念牺牲一切，包括生命")
+        elif npc.ism <= 40:
+            guidance_lines.append("- 【偏向理想】此人重视原则与正义，可能为了道德底线放弃实际利益")
+        elif npc.ism >= 80:
+            guidance_lines.append("- 【极度现实】此人是彻底的现实主义者，只认利益不认情义，为达目的不择手段")
+        elif npc.ism >= 60:
+            guidance_lines.append("- 【偏向现实】此人务实理性，会优先考虑实际利益而非道德原则")
         else:
-            guidance_lines.append("- 理想主义者，可能为了原则放弃实际利益")
+            guidance_lines.append("- 【理想现实平衡】此人能在原则与利益之间找到平衡点")
         
-        if behavior.get('loyal'):
-            guidance_lines.append("- 重视情义，在涉及朋友/家人的抉择时会特别纠结")
+        # ═══════════════════════════════════════════════════════════════
+        # 4. 风格 (act_style: 0缜密 ←→ 100豪放)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.act_style >= 80:
+            guidance_lines.append("- 【极度豪放】此人行事大开大合，不拘小节，说话做事直来直去")
+        elif npc.act_style >= 60:
+            guidance_lines.append("- 【风格豪放】此人爽朗直率，不喜欢拐弯抹角，可能因口无遮拦得罪人")
+        elif npc.act_style <= 20:
+            guidance_lines.append("- 【极度缜密】此人思虑极深，每一步都精心计算，从不做无把握之事")
+        elif npc.act_style <= 40:
+            guidance_lines.append("- 【风格缜密】此人谨慎细致，谋定而后动，但可能因过于谨慎错失良机")
         else:
-            guidance_lines.append("- 轻视情义，可能为了利益牺牲人际关系")
+            guidance_lines.append("- 【张弛有度】此人该谨慎时谨慎，该果断时果断")
         
-        if behavior.get('ambitious'):
-            guidance_lines.append("- 野心勃勃，渴望出人头地，可能为此不择手段")
+        # ═══════════════════════════════════════════════════════════════
+        # 5. 情义 (friendship: 0重情义 ←→ 100不重情义)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.friendship <= 20:
+            guidance_lines.append("- 【极度重情义】此人把兄弟情义看得比命还重，为朋友两肋插刀，背叛朋友比死还难受")
+        elif npc.friendship <= 40:
+            guidance_lines.append("- 【重视情义】此人讲义气重感情，在涉及朋友/家人的抉择时会特别纠结")
+        elif npc.friendship >= 80:
+            guidance_lines.append("- 【极度薄情】此人冷酷无情，视感情为累赘，可以毫不犹豫出卖任何人")
+        elif npc.friendship >= 60:
+            guidance_lines.append("- 【不重情义】此人利益至上，可能为了利益牺牲人际关系")
         else:
-            guidance_lines.append("- 安于现状，更重视当下的平静生活")
+            guidance_lines.append("- 【情义无特别倾向】此人对待感情比较理性，不会过分执着")
         
-        # 根据欲望类型添加特定指导
+        # ═══════════════════════════════════════════════════════════════
+        # 6. 野心 (ambition: 0-100)
+        # ═══════════════════════════════════════════════════════════════
+        if npc.ambition >= 80:
+            guidance_lines.append("- 【野心极大】此人志向远大，渴望功成名就，为此可以忍受常人不能忍之事")
+        elif npc.ambition >= 60:
+            guidance_lines.append("- 【野心勃勃】此人渴望出人头地，有强烈的进取心，可能为此不择手段")
+        elif npc.ambition <= 20:
+            guidance_lines.append("- 【毫无野心】此人淡泊名利，只想安稳度日，对权力地位毫无兴趣")
+        elif npc.ambition <= 40:
+            guidance_lines.append("- 【较为淡泊】此人安于现状，更重视当下的平静生活")
+        else:
+            guidance_lines.append("- 【野心适中】此人会争取机会但不会过分强求")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 7. 欲望类型
+        # ═══════════════════════════════════════════════════════════════
         desire_guidance = {
             "金钱": "对财富有强烈渴望，涉及金钱的诱惑会特别有效",
             "名声": "渴望被认可，名誉受损是致命的打击",
             "权力": "追求掌控感，失去自主权是最大恐惧",
             "知识": "求知欲强，可能为了求知忽视其他",
             "爱情": "情感丰富，感情问题是核心矛盾",
-            "安全": "极度需要安全感，威胁安全的事会引发强烈反应"
+            "安全": "极度需要安全感，威胁安全的事会引发强烈反应",
+            "正义": "嫉恶如仇，无法容忍不公，会主动挺身而出对抗邪恶"
         }
         if npc.desire_type in desire_guidance:
-            guidance_lines.append(f"- {desire_guidance[npc.desire_type]}")
+            guidance_lines.append(f"- 【欲望：{npc.desire_type}】{desire_guidance[npc.desire_type]}")
         
-        # 人情值影响
+        # ═══════════════════════════════════════════════════════════════
+        # 8. 人情值影响
+        # ═══════════════════════════════════════════════════════════════
         if npc.social_credit > 0:
-            guidance_lines.append(f"- 欠玩家人情({npc.social_credit}点)，可能因此感到有义务回报")
+            guidance_lines.append(f"- 【人情债】欠玩家人情({npc.social_credit}点)，可能因此感到有义务回报")
         elif npc.social_credit < 0:
-            guidance_lines.append(f"- 玩家欠其人情({-npc.social_credit}点)，可能借此机会要求回报")
+            guidance_lines.append(f"- 【人情债】玩家欠其人情({-npc.social_credit}点)，可能借此机会要求回报")
         
         return "\n".join(guidance_lines) if guidance_lines else "（暂无特殊性格影响）"
     

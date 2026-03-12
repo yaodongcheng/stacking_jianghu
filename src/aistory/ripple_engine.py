@@ -12,7 +12,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, Tension
-from .dilemma_deriver import NPCData
+# NPCData 类型别名 - 直接使用NPC对象
+from typing import Any
+NPCData = Any
 
 
 class RippleType(Enum):

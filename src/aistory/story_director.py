@@ -10,11 +10,22 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, StoryBeat, Tension
-from .dilemma_deriver import DilemmaDeriver, NPCData
+from .dilemma_deriver import DilemmaDeriver
 from .shared_types import WorldSnapshot
+
+# 类型别名
+from typing import Any
+NPCData = Any  # NPC对象或字典
 from .rolling_story_generator import RollingStoryGenerator, EventCard, EventChoice
 from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink
+
+# 导入日志函数
+try:
+    from src.utils import log_game_event
+except ImportError:
+    def log_game_event(text, tag="INFO"):
+        print(f"[{tag}] {text}")
 
 
 @dataclass
@@ -84,21 +95,31 @@ class StoryDirector:
     async def initialize_npc_tensions(self, npc_id: str, 
                                       world_state: WorldSnapshot) -> bool:
         """初始化NPC的张力"""
+        log_game_event(f"[StoryDirector] 开始初始化NPC张力: {npc_id}", tag="DIRECTOR")
+        
         if npc_id not in self.npc_data:
+            log_game_event(f"[StoryDirector] 错误: NPC {npc_id} 未注册", tag="DIRECTOR")
             return False
         
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
-        # 推导张力
+        log_game_event(f"[StoryDirector] NPC信息: {npc.name}, 职业={npc.identity}, 组织={npc.org}", tag="DIRECTOR")
+        
+        # 1. 派生核心矛盾（欲望 vs 阻碍）
+        log_game_event(f"[StoryDirector] 开始派生核心矛盾...", tag="DIRECTOR")
+        seed.desire, seed.reality_block = self.deriver._derive_core_conflict(npc)
+        log_game_event(f"[StoryDirector] 核心矛盾: 欲望={seed.desire[:30]}..., 阻碍={seed.reality_block[:30]}...", tag="DIRECTOR")
+        
+        # 2. 推导张力
+        log_game_event(f"[StoryDirector] 开始推导张力...", tag="DIRECTOR")
         tensions = await self.deriver.derive_tensions(npc, world_state)
         seed.tensions = tensions
         
-        # 计算初始热度
+        # 3. 计算初始热度
         seed.heat = self.deriver.calculate_heat(seed, world_state)
         
-        print(f"[StoryDirector] {npc.name} 初始化完成，"
-              f"张力数: {len(tensions)}, 热度: {seed.heat}")
+        log_game_event(f"[StoryDirector] {npc.name} 张力初始化完成: 张力数={len(tensions)}, 热度={seed.heat:.1f}", tag="DIRECTOR")
         
         return True
     
@@ -171,20 +192,27 @@ class StoryDirector:
         2. 生成事件卡片
         3. 更新种子状态
         """
+        log_game_event(f"[StoryDirector] 开始为 {npc_id} 生成故事节拍", tag="DIRECTOR")
+        
         if npc_id not in self.npc_data or npc_id not in self.seeds:
+            log_game_event(f"[StoryDirector] 错误: NPC {npc_id} 未找到", tag="DIRECTOR")
             return None
         
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
+        log_game_event(f"[StoryDirector] 当前状态: {npc.name}, 阶段={seed.phase.value}, 热度={seed.heat:.1f}", tag="DIRECTOR")
+        log_game_event(f"[StoryDirector] 困境: {seed.desire} vs {seed.reality_block}", tag="DIRECTOR")
+        
         # 1. 评估阶段
+        log_game_event(f"[StoryDirector] 评估困境阶段...", tag="DIRECTOR")
         new_phase = await self.evaluator.evaluate_phase(seed, npc)
         if new_phase != seed.phase:
-            print(f"[StoryDirector] {npc.name} 阶段变化: "
-                  f"{seed.phase.value} -> {new_phase.value}")
+            log_game_event(f"[StoryDirector] {npc.name} 阶段变化: {seed.phase.value} -> {new_phase.value}", tag="DIRECTOR")
             seed.phase = new_phase
         
         # 2. 生成事件
+        log_game_event(f"[StoryDirector] 调用滚动故事生成器...", tag="DIRECTOR")
         from .rolling_story_generator import PlayerData
         player = PlayerData()  # 可以从world_state或ctx获取玩家数据
         event_card = await self.generator.generate_next_beat(
@@ -194,7 +222,11 @@ class StoryDirector:
         if event_card:
             # 记录待处理的选择
             seed.pending_event = event_card
-            print(f"[StoryDirector] 为 {npc.name} 生成事件: {event_card.title}")
+            log_game_event(f"[StoryDirector] 成功生成事件: {event_card.title}", tag="DIRECTOR")
+            log_game_event(f"[StoryDirector] 事件描述: {event_card.description[:50]}...", tag="DIRECTOR")
+            log_game_event(f"[StoryDirector] 选项数: {len(event_card.choices)}", tag="DIRECTOR")
+        else:
+            log_game_event(f"[StoryDirector] 生成事件失败", tag="DIRECTOR")
         
         return event_card
     
