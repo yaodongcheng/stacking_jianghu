@@ -10,6 +10,8 @@ import re
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
+from matplotlib.pylab import seed
+
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, StoryBeat
 # NPCData 类型别名 - 直接使用NPC对象
 from typing import Any
@@ -82,24 +84,9 @@ class RollingStoryGenerator:
     
     def __init__(self, llm_service=None):
         self.llm = llm_service
-    
-    async def generate_next_beat(self,
-                                  npc: NPCData,
-                                  seed: NPCDilemmaSeed,
-                                  world_state: WorldSnapshot,
-                                  player: NPCData) -> EventCard:
-        """
-        生成下一个故事节拍
-        
-        基于：
-        - NPC当前状态
-        - 已发生的故事
-        - 当前困境阶段
-        - 玩家资源状况（玩家对象，继承自NPC）
-        """
-        log_game_event(f"[RollingStoryGenerator] 开始为 {npc.name} 生成故事节拍", tag="DILEMMA")
-        log_game_event(f"[RollingStoryGenerator] 困境阶段: {seed.phase.value}, 张力数: {len(seed.tensions)}", tag="DILEMMA")
-        log_game_event(f"[RollingStoryGenerator] 核心矛盾: {seed.desire[:30]}... vs {seed.reality_block[:30]}...", tag="DILEMMA")
+
+    def _build_rolling_story_prompt(self, npc: NPCData, seed: NPCDilemmaSeed, player: NPCData,snapshot: WorldSnapshot) -> str:
+        """构建滚动prompt"""
         
         # 构建已有故事的摘要
         story_so_far = self._summarize_story_beats(seed.story_beats)
@@ -110,30 +97,101 @@ class RollingStoryGenerator:
         # 构建玩家信息字符串
         player_info = self._format_player_info(player)
         
-        # 获取NPC属性（处理可能不存在的属性）
+        # 获取主角属性（处理可能不存在的属性）
         name = getattr(npc, 'name', '未知')
         gender = getattr(npc, 'gender', '未知')
         age = getattr(npc, 'age', 30)
         job = getattr(npc, 'job', '平民')
+        power_type = getattr(npc, 'power_type', '无')
         org_id = getattr(npc, 'org_id', '')
         money = getattr(npc, 'money', 0)
         emotion = getattr(npc, 'emotion', 50)
-        health = getattr(npc, 'hp', getattr(npc, 'health', 100))
-        backstory = getattr(npc, 'backstory', '')
+        health = int(npc.hp_percent * 100) 
+        desc = getattr(npc, 'desc', '')
+
+        world_state = []
+        # ====== 完整演员池（所有可用NPC） ======
+        if snapshot.all_available_npcs:
+            world_state.append("【可用演员池】（请从这些人物中挑选演员）")
+            # 按组织分组显示
+            npcs_by_org = {}
+            for npc in snapshot.all_available_npcs:
+                org = npc.get('org_id', '无组织') or '无组织'
+                if org not in npcs_by_org:
+                    npcs_by_org[org] = []
+                npcs_by_org[org].append(npc)
+            
+            for org, npcs in npcs_by_org.items():
+                world_state.append(f"\n  [{org}]")
+                for npc in npcs[:15]:  # 每个组织最多显示15人
+                    # 格式：ID=123 姓名(职业/身份) 状态
+                    status_tags = []
+                    if npc.get('hunger', 0) > 60:
+                        status_tags.append("饥饿")
+                    if npc.get('wealth', 100) > 200:
+                        status_tags.append("富有")
+                    elif npc.get('wealth', 100) < 30:
+                        status_tags.append("贫穷")
+                    if npc.get('status') == '重伤':
+                        status_tags.append("重伤")
+                    
+                    # 【优化】添加NPC标签
+                    npc_tags = npc.get('tags', [])
+                    if npc_tags:
+                        status_tags.extend(npc_tags[:3])  # 最多3个标签
+                    
+                    status_str = f" [{','.join(status_tags)}]" if status_tags else ""
+                    
+                    # 基本信息行
+                    npc_line = f"    ID={npc['id']} {npc['name']}({npc.get('power_type','民')}/{npc.get('job','')}){status_str}"
+                    world_state.append(npc_line)
+                    
+                    # 【优化】显示NPC人设描述（desc）
+                    desc = npc.get('desc', '')
+                    if desc:
+                        # 截取前30字，避免过长
+                        desc_short = desc[:35] + '...' if len(desc) > 35 else desc
+                        world_state.append(f"        人设: {desc_short}")
+                    
+                    # 【优化】如果NPC有重要关系，显示在下一行
+                    relations = npc.get('relations', [])
+                    if relations:
+                        rel_str = ", ".join(relations[:3])  # 最多3个关系
+                        world_state.append(f"        关系: {rel_str}")
+                    
+                    # 【优化】如果NPC有重要记忆，显示最关键的一条
+                    memories = npc.get('recent_memories', [])
+                    if memories:
+                        # 只显示第一条最重要的记忆
+                        world_state.append(f"        近期: {memories[0]}")
+            
+            world_state.append(f"\n  （共{len(snapshot.all_available_npcs)}名可用演员）")
         
-        prompt = f"""你是宋代市井剧的编剧。现在需要为一个人物生成【下一个故事节拍】。\n
-===== 人物档案 =====
+        world_state_text = "\n".join(world_state)
+
+
+
+
+        
+        prompt = f"""
+        你是《大宋实况》的导演AI，负责编排真人秀风格的社会事件。
+你的目标是基于一个人物的人生困境，与目前困境阶段，创造事件。
+
+===== 世界状态 =====
+{world_state_text}
+
+===== 事件中心角色档案 =====
 姓名：{name}
 性别：{gender}  年龄：{age}
-职业：{job}
-所属组织：{org_id}
-{npc.get_personality_profile()}
-背景故事：{backstory if backstory else '暂无'}
+职业：[{power_type}]{job}
+所属组织：{npc.get_org_name()}
+性格特质：{npc.get_personality_profile()}
+背景故事：{desc}
 当前经济状况：{money} 文
-当前情绪：{emotion}/100
-当前健康：{health}/100
+当前情绪：{emotion}
+当前健康：{health}%
 
-===== 此人当前的困境 =====
+===== 事件中心角色当前的困境 =====
 核心矛盾：{seed.desire} vs {seed.reality_block}
 当前张力：
 {self._format_tensions(seed)}
@@ -144,12 +202,10 @@ class RollingStoryGenerator:
 ===== 至今为止发生的故事 =====
 {story_so_far if story_so_far else "（这是此人的第一个故事节拍）"}
 
-===== 当前阶段 =====
+===== 当前困境阶段 =====
 困境阶段：{seed.phase.value}
 {phase_instruction}
 
-===== 世界近况 =====
-{self._format_relevant_world_events(npc, world_state)}
 
 ===== 玩家信息 =====
 {player_info}
@@ -170,40 +226,99 @@ class RollingStoryGenerator:
 
 4. 此节拍的情绪基调（用于生成配图）
 
-请以JSON格式输出：
-{{
-    "title": "事件标题（简洁有力）",
-    "description": "事件描述（2-3句话）",
-    "choices": [
-        {{
-            "text": "选项A描述",
-            "cost": "代价说明（消耗什么/得罪谁/花多少时间）",
-            "consequence": "可能后果",
-            "effect": "程序效果字符串"
-        }},
-        {{
-            "text": "选项B描述",
-            "cost": "代价说明",
-            "consequence": "可能后果",
-            "effect": "程序效果字符串"
-        }}
-    ],
-    "hidden_choice": {{
-        "text": "隐藏选项（如果有）",
-        "unlock_condition": "解锁条件",
-        "cost": "代价",
-        "consequence": "后果",
-        "effect": "效果"
-    }},
-    "ignore_consequence": "如果玩家忽略，NPC自己会怎么做",
-    "emotion_tone": "情绪基调（如：压抑、紧张、温情、绝望等）"
-}}
 
-注意：
-- 选项必须是合理的，基于情境的
-- 不可以设计明显更好的选项但是不提供
-- 代价必须是真实的，玩家能感受到的
+
+请以JSON格式返回决策：
+```json
+{{
+    "event_type": "选择的事件模板ID",
+    "actors": [
+        {{"role": "角色名", "npc_name": "NPC名字", "npc_id": "NPC的ID"}}
+    ],
+    "tension_level": "LOW/MEDIUM/HIGH/CRITICAL",
+    
+    "title": "例：无更市惊现天价救命药！",
+    "description": "事件劲爆描述，30字左右，讲清楚前因后果和人物困境",
+    "image_prompt": "给AI生图的中文描述，必须严格按以下四层结构编写：
+
+        【第一层·风格锁定】
+        《雾山五行》风格，手绘2D国漫，硬朗线条，平涂阴影，
+        高对比度色彩，宋代市井场景。手绘笔触，电影级构图。
+
+        【第二层·背景与氛围】
+        交代具体地点，描写光线天气，路人反应。
+        用光影暗示情绪：冲突用侧逆光强阴影，温情用暖色散射光。
+
+        【第三层·角色交互（核心，必须详写200字以上）】
+        规则：
+        1. 用物理接触建立关系（揪衣领/递东西/推搡/牵手），
+           禁止只写'A看着B'这种抽象描述。
+        2. 设定一个「视觉焦点道具」（钱袋/武器/信件/食物等），
+           让核心角色的视线通过该道具产生交汇。
+        3. 明确每个角色的画面位置（左/中/右）、身体朝向、
+           姿态（前倾/后仰/侧身）。
+        4. 禁止任何角色看向镜头/画面外。
+        5. 禁止角色之间无动作连接。
+
+        【第四层·情绪微细节】
+        至少2个微表情/微动作（攥拳、咬唇、冒汗、衣角飘动等）。",
+    "tags": ["市井纠纷", "见义勇为", "宋代风情"],
+    "comments": [
+        {{"user": "路人甲", "text": "评论内容", "type": "支持/反对/中立/搞笑"}},
+        {{"user": "吃瓜群众", "text": "这也太离谱了吧", "type": "中立"}}
+    ],
+    "choices": [
+        {{"text": "选项1文本", "effect": "A:affinity:-30;B:affinity:+40"}},
+        {{"text": "选项2文本", "effect": ""}},
+        {{"text": "选项3文本", "effect": "PLAYER:fame:+10"}}
+    ]
+    
+}}
+```
+
+【选项要求】
+- 必须提供 2-3 个选项，不要更多
+- 每个选项要有明确的效果和代价（effect 字段）
+- 选项要体现不同的处理思路（激进/保守/中立）
+
+【格式要求】[!] 严格遵守
+1. 必须返回合法的JSON格式，所有字符串必须用双引号包裹
+2. 不要在JSON中使用单引号
+3. 不要在数组或对象末尾添加多余逗号
+4. 不需要返回heat_score，由系统根据tension_level自动计算
+
+【内容要求】
+1. 标题要有爆点，像小红书热门标题
+2. 评论要模拟真实网友风格（支持、反对、调侃都要有），网友不能是虚构，必须来自于完整演员池（所有可用NPC，但是剔除当事人）
+3. effect格式：角色:属性:增减值，多个用分号隔开
+4. 角色可以是 A/B/C（对应actors顺序）或 PLAYER5、
+5. tags数组中的标签只写纯文字，如 ["职场霸凌", "废柴集合"]等吸引人注目的标签
+6. event_type目前可以填EMPTY
+7. actors第一个必然是事件中心角色，后续可以有其他相关角色（比如对手、路人等）必须来自于完整演员池（所有可用NPC，但是剔除当事人）
+
 """
+        return prompt
+    
+
+
+
+    
+    
+    async def generate_next_beat(self,
+                                  npc: NPCData,
+                                  seed: NPCDilemmaSeed,
+                                  worldsnapshot: WorldSnapshot,
+                                  player: NPCData) -> EventCard:
+        """
+        生成下一个故事节拍
+        
+        基于：
+        - NPC当前状态
+        - 已发生的故事
+        - 当前困境阶段
+        - 玩家资源状况
+        """
+        prompt = self._build_rolling_story_prompt(npc, seed, player, worldsnapshot)
         
         try:
             # LLMService的chat方法不是异步的，不需要await
@@ -212,9 +327,8 @@ class RollingStoryGenerator:
                 user_message=prompt,
                 max_tokens=2500
             )
-            # 如果response是对象，获取content属性；如果是字符串，直接使用
-            response_text = response.content if hasattr(response, 'content') else str(response)
-            return self._parse_event_card(response_text, npc.id, seed.phase)
+            log_game_event(f"[RollingStoryGenerator] LLM响应: {response.raw_response}", tag="LLM_RESPONSE")
+
         except Exception as e:
             log_game_event(f"[RollingStoryGenerator] 生成失败: {e}", tag="ERROR")
             # 异常时中止，不使用兜底方案
@@ -277,7 +391,7 @@ class RollingStoryGenerator:
         lines = []
         for i, t in enumerate(seed.tensions, 1):
             lines.append(f"{i}. [{t.type.value}] {t.force_a} vs {t.force_b} (强度:{t.intensity})")
-        return "\n".join(lines)
+        return "\n".join(lines[1])
     
     def _format_relevant_world_events(self, npc: NPCData, world_state: WorldSnapshot) -> str:
         """格式化相关的世界事件"""
@@ -295,8 +409,7 @@ class RollingStoryGenerator:
         
         # 基础信息（从NPC继承）
         money = getattr(player, 'money', 0)
-        health = getattr(player, 'health', 100)
-        emotion = getattr(player, 'emotion', 50)
+        health = int(player.hp_percent * 100)
         
         # 玩家特有属性
         fame = getattr(player, 'fame', 0)  # 江湖善名
@@ -322,8 +435,7 @@ class RollingStoryGenerator:
         
         return f"""玩家当前状况：
 - 银钱：{money} 文
-- 健康：{health}/100
-- 情绪：{emotion}/100
+- 健康：{health}%
 - 江湖善名：{fame}（-100 ~ +100）
 - 追随者：{followers} 人
 - 势力声望：{rep_str}
@@ -512,46 +624,6 @@ class RollingStoryGenerator:
             
         except Exception as e:
             print(f"[RollingStoryGenerator] 解析事件卡失败: {e}")
-            return self._create_fallback_card_from_data(npc_id, phase)
+            return None
     
-    def _create_fallback_card(self, npc: NPCData, seed: NPCDilemmaSeed) -> EventCard:
-        """创建备用事件卡（当LLM失败时）"""
-        return EventCard(
-            id=f"fallback_{npc.id}",
-            title=f"{npc.name}的困境",
-            description=f"{npc.name}似乎遇到了一些麻烦，需要有人帮助...",
-            npc_id=npc.id,
-            choices=[
-                EventChoice(
-                    text="伸出援手",
-                    cost="消耗时间和金钱",
-                    consequence="可能改善此人的处境",
-                    effect="affinity:+20"
-                ),
-                EventChoice(
-                    text="袖手旁观",
-                    cost="无",
-                    consequence="此人可能陷入更深的困境",
-                    effect=""
-                )
-            ],
-            ignore_consequence=f"{npc.name}只能独自面对困境",
-            emotion_tone="沉重",
-            phase=seed.phase
-        )
-    
-    def _create_fallback_card_from_data(self, npc_id: str, phase: DilemmaPhase) -> EventCard:
-        """从最少数据创建备用事件卡"""
-        return EventCard(
-            id=f"fallback_{npc_id}",
-            title="突发事件",
-            description="一件意外的事情发生了...",
-            npc_id=npc_id,
-            choices=[
-                EventChoice(text="介入处理", cost="消耗时间", consequence="事态可能好转", effect=""),
-                EventChoice(text="静观其变", cost="无", consequence="事态自行发展", effect="")
-            ],
-            ignore_consequence="事情按照它自己的轨迹发展",
-            emotion_tone="紧张",
-            phase=phase
-        )
+   

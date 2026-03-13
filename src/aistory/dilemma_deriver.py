@@ -54,8 +54,8 @@ class DilemmaDeriver:
         # 获取NPC属性（处理属性名差异）
         name = getattr(npc, 'name', '未知')
         money = getattr(npc, 'money', 0)
-        emotion = getattr(npc, 'emotion', 50)
-        health = getattr(npc, 'hp', getattr(npc, 'health', 100))  # NPC使用hp而不是health
+        emotion = getattr(npc, 'emotion', 'NORMAL')
+        health = int(npc.hp_percent * 100)
         
         # 从personality获取性格属性
         personality = getattr(npc, 'personality', None)
@@ -78,12 +78,8 @@ class DilemmaDeriver:
             result = await self._derive_tensions_with_llm(npc, world_state)
         else:
             log_game_event(f"[DilemmaDeriver] 使用启发式规则派生张力", tag="DILEMMA")
-            result = self._derive_tensions_heuristic(npc, world_state)
-        
-        log_game_event(f"[DilemmaDeriver] 为 {npc.name} 派生出 {len(result)} 条张力线", tag="DILEMMA")
-        for i, t in enumerate(result, 1):
-            log_game_event(f"[DilemmaDeriver] 张力{i}: [{t.type.value}] {t.force_a} vs {t.force_b} (强度:{t.intensity})", tag="DILEMMA")
-        
+            result = self._derive_tensions_heuristic(npc, world_state)        
+ 
         return result
     
     async def create_seed(self, npc: NPCData, world_state: WorldSnapshot) -> NPCDilemmaSeed:
@@ -147,10 +143,23 @@ class DilemmaDeriver:
         org_id = getattr(npc, 'org_id', '')
         money = getattr(npc, 'money', 0)
         emotion = getattr(npc, 'emotion', 50)
-        health = getattr(npc, 'hp', getattr(npc, 'health', 100))
+        health = int(npc.hp_percent * 100)
         desc = getattr(npc, 'desc', '')
         backstory = getattr(npc, 'backstory', '')
         
+
+        # JSON结构示例（单独定义，避免f-string解析问题）
+        json_structure_example = '''[
+  {
+    "type": "RELATIONSHIP",
+    "force_a": "...",
+    "force_b": "...",
+    "intensity": 数值,
+    "related_npcs": ["NPC名"],
+    "potential_crisis": "..."
+  }
+]'''
+
         prompt = f"""你是一个宋代市井故事的编剧。
 分析以下人物的数据，识别出他/她人生中潜在的"张力"——
 即两股对立的力量在拉扯这个人，让他/她迟早会面临两难困境。
@@ -163,8 +172,8 @@ class DilemmaDeriver:
 {personality_profile}
 背景故事：{backstory if backstory else '暂无'}
 当前经济状况：{money} 文（{self._wealth_level(money)}）
-当前情绪：{emotion}/100
-当前健康：{health}/100
+当前情绪：{emotion}
+当前健康：{health}%
 人设描述：{desc if desc else '暂无'}
 
 【此人的关系网】
@@ -176,22 +185,25 @@ class DilemmaDeriver:
 【性格对困境类型的影响】
 {impact_text}
 
-请识别出1-3条张力线，每条格式必须是有效的JSON：
-{{
-    "type": "RELATIONSHIP/ECONOMIC/MORAL/IDENTITY/SURVIVAL/LOYALTY 之一",
-    "force_a": "拉向一边的力量（用一句话描述）",
-    "force_b": "拉向另一边的力量（用一句话描述）", 
-    "intensity": 张力强度0-100,
-    "related_npcs": ["涉及的其他NPC的ID或名字"],
-    "potential_crisis": "如果这个张力爆发，最可能的危机场景是什么（一句话）"
-}}
+请以纯JSON数组格式返回（不要```json标记，不要任何额外文字），严格遵循以下结构：
+{json_structure_example}
+
+
+字段说明：
+- type: 必须是 RELATIONSHIP/ECONOMIC/MORAL/IDENTITY/SURVIVAL/LOYALTY 之一（必填，不能省略）
+- force_a: 拉向一边的力量（用一句话描述，必填）
+- force_b: 拉向另一边的力量（用一句话描述，必填）
+- intensity: 张力强度，数字0-100（必填）
+- related_npcs: 涉及的其他NPC的ID或名字，数组格式（没有就填[]，必填）
+- potential_crisis: 如果这个张力爆发，最可能的危机场景（一句话描述，必填）
 
 注意：
+- 必须返回JSON数组格式，最外层是方括号[]
+- 每个对象必须包含所有6个字段，缺一不可，尤其是type字段 每个对象必须包含所有6个字段，缺一不可，尤其是type字段
 - 张力必须从数据中自然推导，不要凭空编造
 - 必须充分考虑人物的性格维度（脾气、胆量、主义、情义等）
 - 优先识别与其他NPC有关的张力（这样更有戏剧性）
 - 强度要基于当前状况的紧迫程度（欠债快还不上了=高强度，暗恋还没表白=低强度）
-- 必须返回JSON数组格式，如：[{{...}}, {{...}}]
 """
         
         try:
@@ -201,9 +213,9 @@ class DilemmaDeriver:
                 user_message=prompt,
                 max_tokens=2000
             )
-            # 如果response是对象，获取content属性；如果是字符串，直接使用
-            response_text = response.content if hasattr(response, 'content') else str(response)
-            return self._parse_tensions(response_text)
+            # 使用_parse_tensions解析响应为Tension对象列表
+            tensions = self._parse_tensions(response.raw_response)
+            return tensions
         except Exception as e:
             log_game_event(f"[DilemmaDeriver] LLM张力派生失败: {e}", tag="ERROR")
             # 异常时中止，不使用兜底方案
@@ -428,21 +440,24 @@ class DilemmaDeriver:
     def _parse_tensions(self, response: str) -> List[Tension]:
         """解析LLM返回的张力JSON"""
         tensions = []
+        cleaned_data = None
         
         try:
-            # 尝试提取JSON
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-            else:
-                data = json.loads(response)
+            # 使用LLMService的clean_llm_response清洗响应
+            cleaned_data = self.llm.clean_llm_response(response)
             
-            if not isinstance(data, list):
-                data = [data]
+            # 校验必须是数组格式
+            if not isinstance(cleaned_data, list):
+                raise ValueError(f"期望返回JSON数组，但实际返回了: {type(cleaned_data).__name__}")
             
-            for item in data:
+            for item in cleaned_data:
+                # 检查必填字段，缺少type字段则丢弃
+                if 'type' not in item:
+                    log_game_event(f"[DilemmaDeriver] 丢弃缺少type字段的张力项: {item}", "WARNING")
+                    continue
+                
                 tension = Tension(
-                    type=TensionType(item.get('type', 'RELATIONSHIP')),
+                    type=TensionType(item['type']),
                     force_a=item.get('force_a', ''),
                     force_b=item.get('force_b', ''),
                     intensity=float(item.get('intensity', 50)),
@@ -452,7 +467,10 @@ class DilemmaDeriver:
                 tensions.append(tension)
                 
         except Exception as e:
-            print(f"[DilemmaDeriver] 解析张力失败: {e}")
+            # 解析失败时打印详细日志
+            log_game_event(f"[DilemmaDeriver] 解析张力失败: {e}", "ERROR")
+            log_game_event(f"[DilemmaDeriver] 解析前的原始内容: {response}", "DEBUG")
+            log_game_event(f"[DilemmaDeriver] 清洗后的内容: {cleaned_data if cleaned_data is not None else 'N/A'}", "DEBUG")
         
         return tensions
     
@@ -470,21 +488,52 @@ class DilemmaDeriver:
             return "富裕"
     
     def _format_relationships(self, npc: NPCData) -> str:
-        """格式化关系网信息"""
-        # 这里可以从social_system获取真实关系
-        # 简化版本返回占位
-        return "（待从社交系统获取）"
+        """格式化关系网信息为LLM友好的文本格式"""
+        # 获取好感度字典
+        affinity_dict = getattr(npc, 'affinity', {})
+        
+        if not affinity_dict:
+            return "暂无已知的人际关系。"
+        
+        # 按好感度排序（从高到低）
+        sorted_relations = sorted(affinity_dict.items(), key=lambda x: x[1], reverse=True)
+        
+        # 构建关系描述列表
+        lines = [f"【人际关系】(共{len(affinity_dict)}人)"]
+        
+        for target_id, affinity in sorted_relations:
+            # 使用target_id作为名称（或从其他系统获取）
+            target_name = str(target_id)
+            
+            # 根据好感度确定态度
+            if affinity >= 80:
+                attitude = "亲密[爱]"
+            elif affinity >= 50:
+                attitude = "友好"
+            elif affinity >= 20:
+                attitude = "好感"
+            elif affinity >= -20:
+                attitude = "中立"
+            elif affinity >= -50:
+                attitude = "冷淡"
+            else:
+                attitude = "敌视"
+            
+            # 格式: 名称 好感度数值 态度
+            lines.append(f"  • {target_name}: {affinity:+d} ({attitude})")
+        
+        return "\n".join(lines)
     
     def _format_org_status(self, npc: NPCData, world_state: WorldSnapshot) -> str:
         """格式化组织处境"""
         if not npc.org_id:
             return "无组织"
-        
+        org_name = npc.get_org_name() 
         org_data = world_state.faction_tensions.get(npc.org_id, {})
         if org_data:
             hostility = org_data.get('hostility', 0)
-            return f"{npc.org_id} - 敌对度: {hostility}"
-        return f"{npc.org_id} - 状态平稳"
+            return f"{org_name} - 敌对度: {hostility}"
+        return f"{org_name} - 风平浪静"
     
     def _days_since(self, timestamp: str) -> int:
         """计算距离某个时间戳的天数"""

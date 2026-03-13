@@ -214,7 +214,7 @@ class LLMService:
         request_log = f"[LLMService] ===== 发送LLM请求 =====\n" \
                       f"[LLMService] 模型: {self.config.model}\n" \
                       f"[LLMService] max_tokens: {actual_max_tokens}\n" \
-                      f"[LLMService] System Prompt: {system_prompt}...\n" \
+                      f"[LLMService] System Prompt: {system_prompt}\n" \
                       f"[LLMService] User Message: {user_message}\n"
 
         if conversation_history:
@@ -407,90 +407,120 @@ class LLMService:
         
         return content
     
-    def _clean_json_response(self, raw_text: str) -> str:
+    def clean_llm_response(self, content: str) -> Dict:
         """
-        清理AI响应中的JSON，移除markdown代码块标记等
-        如果无法提取JSON，则尝试将纯文本包装为有效的JSON响应
+        解析LLM返回的JSON内容
         
-        Args:
-            raw_text: 原始响应文本
-            
-        Returns:
-            str: 清理后的JSON字符串
+        增强健壮性：
+        - 处理 ```json ... ``` 代码块
+        - 修复尾部逗号问题
+        - 处理截断的JSON（尝试补全）
+        - 移除非法控制字符
         """
-        text = raw_text.strip()
         
-        # 移除markdown代码块标记
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        
-        if text.endswith("```"):
-            text = text[:-3]
-        
-        text = text.strip()
-        
-        # 尝试找到JSON对象
-        start = text.find('{')
-        end = text.rfind('}')
-        
-        if start != -1 and end != -1 and end > start:
-            json_text = text[start:end + 1]
+        try:
+            # 清理内容
+            json_str = content.strip()
             
-            # 修复常见的JSON问题
-            # 1. 移除注释
-            json_text = re.sub(r'//.*?(?=\n|$)', '', json_text)
-            json_text = re.sub(r'/\*.*?\*/', '', json_text, flags=re.DOTALL)
+            # 尝试提取JSON块（处理 ```json ... ``` 格式）
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', json_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
             
-            # 2. 修复尾随逗号
-            json_text = re.sub(r',\s*([}\]])', r'\1', json_text)
+            # 如果还是以 ``` 开头，继续清理
+            if json_str.startswith('```'):
+                json_str = json_str[3:]
+            if json_str.endswith('```'):
+                json_str = json_str[:-3]
             
-            return json_text
-        
-        # 【新增】无法找到JSON时，将纯文本包装为有效的JSON响应
-        # 这样即使LLM返回纯文本，也能正常显示
-        print(f"[LLMService] 未找到JSON结构，尝试将纯文本包装为响应")
-        
-        # 清理文本：移除可能的表情前缀，如"（皱眉）"
-        reply_text = text
-        emotion = "neutral"
-        action = ""
-        
-        # 尝试从文本中提取表情/动作（如"（皱眉）"、"（微笑）"等）
-        emotion_match = re.match(r'^[（\(]([^）\)]+)[）\)](.*)$', text, re.DOTALL)
-        if emotion_match:
-            action = emotion_match.group(1).strip()
-            reply_text = emotion_match.group(2).strip()
+            # 移除可能的 json 标记
+            if json_str.lower().startswith('json'):
+                json_str = json_str[4:].strip()
             
-            # 尝试将动作映射为情绪
-            action_to_emotion = {
-                '皱眉': 'angry', '怒': 'angry', '生气': 'angry', '不悦': 'angry',
-                '笑': 'happy', '微笑': 'happy', '高兴': 'happy', '开心': 'happy',
-                '哭': 'sad', '悲伤': 'sad', '难过': 'sad', '叹气': 'sad',
-                '惊': 'surprised', '惊讶': 'surprised', '吃惊': 'surprised',
-                '怕': 'fearful', '害怕': 'fearful', '担忧': 'fearful',
-                '冷笑': 'contempt', '不屑': 'contempt', '轻蔑': 'contempt',
-            }
-            for key, emo in action_to_emotion.items():
-                if key in action:
-                    emotion = emo
-                    break
-        
-        # 如果回复为空，使用原文
-        if not reply_text:
-            reply_text = text
-        
-        # 构建有效的JSON响应
-        wrapped_response = {
-            "reply": reply_text,
-            "emotion": emotion,
-            "action": action,
-            "affinity_change": 0,
-            "memory_update": ""
-        }
-        
-        return json.dumps(wrapped_response, ensure_ascii=False)
+            # 确保以 { 开头
+          #  brace_start = json_str.find('{')
+          #  if brace_start > 0:
+           #     json_str = json_str[brace_start:]
+            
+            # 确保以 } 结尾（找最后一个 }）
+           # brace_end = json_str.rfind('}')
+           # if brace_end >= 0 and brace_end < len(json_str) - 1:
+           #     json_str = json_str[:brace_end + 1]
+            
+            # ═══════════════════════════════════════════════════════════════
+            # 【健壮性增强】修复常见的LLM JSON格式问题
+            # ═══════════════════════════════════════════════════════════════
+            
+            # 1. 移除非法控制字符（ASCII 0-31，除了换行和制表符）
+            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_str)
+            
+            # 2. 修复尾部逗号问题（在 ] 或 } 前的逗号）
+            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+            
+            # 3. 【新增】修复中文引号问题（LLM经常使用中文引号）
+            # 将中文引号 " 和 " 替换为英文引号 "
+            json_str = json_str.replace('"', '"').replace('"', '"')
+            
+            # 4. 修复单引号问题（某些LLM会用单引号）
+            # 只处理键名的单引号，避免误改字符串内容
+            json_str = re.sub(r"'(\w+)'(\s*:)", r'"\1"\2', json_str)
+            
+            # 4. 修复裸露的#标签问题（如 #鱼西施 → "鱼西施"）
+            # LLM有时会用小红书风格的标签，但JSON不支持
+            json_str = re.sub(r',\s*#([^\s,\]]+)', r', "\1"', json_str)
+            json_str = re.sub(r'\[\s*#([^\s,\]]+)', r'["\1"', json_str)
+            
+            # 5. 修复 #"xxx" 写法（#号在引号外面），如 #"汴京实况" → "汴京实况"
+            json_str = re.sub(r'#"', '"', json_str)
+            
+            # 尝试解析
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError as first_error:
+                # ═══════════════════════════════════════════════════════════════
+                # 【进一步修复】尝试修补截断的JSON
+                # ═══════════════════════════════════════════════════════════════
+                log_game_event(f"[Director] 首次解析失败，尝试修复截断问题: {first_error}", tag="DIRECTOR")
+                
+                # 统计括号数量
+                open_braces = json_str.count('{')
+                close_braces = json_str.count('}')
+                open_brackets = json_str.count('[')
+                close_brackets = json_str.count(']')
+                
+                # 补全缺失的闭合符号
+                repair_str = json_str
+                
+                # 如果缺少闭合括号，尝试补全
+                if close_brackets < open_brackets:
+                    repair_str += ']' * (open_brackets - close_brackets)
+                if close_braces < open_braces:
+                    repair_str += '}' * (open_braces - close_braces)
+                
+                # 再次清理尾部逗号（补全后可能产生新的问题）
+                repair_str = re.sub(r',\s*([}\]])', r'\1', repair_str)
+                
+                try:
+                    result = json.loads(repair_str)
+                    log_game_event(f"[Director] JSON修复成功！补全了 {open_braces - close_braces} 个 '}}' 和 {open_brackets - close_brackets} 个 ']'", tag="DIRECTOR")
+                    return result
+                except json.JSONDecodeError:
+                    # 修复失败，记录详情
+                    pass
+                
+                # 所有修复尝试失败
+                raise first_error
+                
+        except json.JSONDecodeError as e:
+            log_game_event(f"[Director] JSON解析最终失败: {e}, 原始文本: {content}", tag="DIRECTOR")
+
+            return None
+        except Exception as e:
+            log_game_event(f"[Director] 解析过程异常: {e}, 原始文本: {content}", tag="DIRECTOR")
+            return None   
+    
+    
+      
     
     # ═══════════════════════════════════════════════════════════════
     # 异步请求方法

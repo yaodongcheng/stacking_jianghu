@@ -21,7 +21,7 @@ from .rolling_story_generator import RollingStoryGenerator, EventCard, EventChoi
 from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink
 from src.utils import log_game_event
-
+from src.context import ctx
 
 @dataclass
 class DirectorConfig:
@@ -91,25 +91,10 @@ class StoryDirector:
     
     @classmethod
     def get_instance(cls, llm_service=None, config: DirectorConfig = None) -> 'StoryDirector':
-        """
-        获取StoryDirector单例实例
-        
-        Args:
-            llm_service: LLM服务（仅在首次创建时使用）
-            config: 导演配置（仅在首次创建时使用）
-            
-        Returns:
-            StoryDirector实例
-        """
         if cls._instance is None:
             cls._instance = cls(llm_service, config)
         return cls._instance
     
-    @classmethod
-    def reset_instance(cls):
-        """重置单例（主要用于测试）"""
-        cls._instance = None
-        cls._initialized = False
     
     def register_npc(self, npc: NPCData) -> NPCDilemmaSeed:
         """注册NPC到导演系统"""
@@ -127,33 +112,41 @@ class StoryDirector:
     async def initialize_npc_tensions(self, npc_id: str, 
                                       world_state: WorldSnapshot) -> bool:
         """初始化NPC的张力"""
-        log_game_event(f"[StoryDirector] 开始初始化NPC张力: {npc_id}", tag="DIRECTOR")
-        
-        if npc_id not in self.npc_data:
-            log_game_event(f"[StoryDirector] 错误: NPC {npc_id} 未注册", tag="DIRECTOR")
-            return False
+
         
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
-        log_game_event(f"[StoryDirector] NPC信息: {npc.name}, 职业={npc.job}, 组织={npc.org_id}", tag="DIRECTOR")
+        if npc_id not in self.npc_data:
+            log_game_event(f"[StoryDirector] 错误: NPC {npc.name} 未注册", tag="DIRECTOR")
+            return False
+        
+        npc = self.npc_data[npc_id]
+        seed = self.seeds[npc_id]
+
+        log_game_event(f"[StoryDirector] NPC信息: {npc.name}, 类别={npc.power_type}, 职业={npc.job}, 组织={npc.org_id}", tag="DIRECTOR")
         
         # 1. 派生核心矛盾（欲望 vs 阻碍）
-        log_game_event(f"[StoryDirector] 开始派生核心矛盾...", tag="DIRECTOR")
+        #其实就是基于Npc的性格，计算出Npc的欲望和阻碍是什么，欲望可能是“渴望被认可”，阻碍可能是“社交恐惧”之类的东西
         seed.desire, seed.reality_block = self.deriver._derive_core_conflict(npc)
         log_game_event(f"[StoryDirector] 核心矛盾: 欲望={seed.desire}..., 阻碍={seed.reality_block}...", tag="DIRECTOR")
         
         # 2. 推导张力
-        log_game_event(f"[StoryDirector] 开始推导张力...", tag="DIRECTOR")
         tensions = await self.deriver.derive_tensions(npc, world_state)
-        seed.tensions = tensions
+        if len(tensions) > 0:
+            log_game_event(f"[StoryDirector] 派生张力: {len(tensions)} 个", tag="DIRECTOR")
+            for t in tensions:
+                log_game_event(f"  -类别 {t.type} 张力: {t.force_a} vs {t.force_b}, 强度={t.intensity}", tag="DIRECTOR")
+            seed.tensions = tensions
+            seed.heat = self.deriver.calculate_heat(seed, world_state)
+            return True
+        else:
+            log_game_event(f"[StoryDirector] 警告: 未能为 {npc.name} 派生任何张力", tag="DIRECTOR")
+            seed.tensions = []
+            seed.heat = 0
+            return False
         
-        # 3. 计算初始热度
-        seed.heat = self.deriver.calculate_heat(seed, world_state)
-        
-        log_game_event(f"[StoryDirector] {npc.name} 张力初始化完成: 张力数={len(tensions)}, 热度={seed.heat:.1f}", tag="DIRECTOR")
-        
-        return True
+  
     
     async def select_next_arc(self, 
                               world_state: WorldSnapshot) -> Optional[ActiveArc]:
@@ -228,38 +221,21 @@ class StoryDirector:
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
-        log_game_event(f"[StoryDirector] 当前状态: {npc.name}, 阶段={seed.phase.value}, 热度={seed.heat:.1f}", tag="DIRECTOR")
-        log_game_event(f"[StoryDirector] 困境: {seed.desire} vs {seed.reality_block}", tag="DIRECTOR")
-        
         # 1. 评估阶段
-        log_game_event(f"[StoryDirector] 评估困境阶段...", tag="DIRECTOR")
         new_phase = await self.evaluator.evaluate_phase(seed, npc)
         if new_phase != seed.phase:
             log_game_event(f"[StoryDirector] {npc.name} 阶段变化: {seed.phase.value} -> {new_phase.value}", tag="DIRECTOR")
             seed.phase = new_phase
+
+        log_game_event(f"[StoryDirector] 基于困境和张力生成故事：角色: {npc.name},困境: {seed.desire}，阻碍 {seed.reality_block}, 阶段={seed.phase}, 热度={seed.heat:.1f}", tag="DIRECTOR")
         
-        # 2. 生成事件
-        log_game_event(f"[StoryDirector] 调用滚动故事生成器...", tag="DIRECTOR")
-        # 从全局 ctx 获取玩家对象
-        try:
-            from src.context import ctx
-            player = ctx.player if ctx and hasattr(ctx, 'player') else None
-        except ImportError:
-            player = None
+        # 从全局 ctx 获取玩家对象       
+        player = ctx.player 
         event_card = await self.generator.generate_next_beat(
             npc, seed, world_state, player
         )
-        
-        if event_card:
-            # 记录待处理的选择
-            seed.pending_event = event_card
-            log_game_event(f"[StoryDirector] 成功生成事件: {event_card.title}", tag="DIRECTOR")
-            log_game_event(f"[StoryDirector] 事件描述: {event_card.description[:50]}...", tag="DIRECTOR")
-            log_game_event(f"[StoryDirector] 选项数: {len(event_card.choices)}", tag="DIRECTOR")
-        else:
-            log_game_event(f"[StoryDirector] 生成事件失败", tag="DIRECTOR")
-        
         return event_card
+       
     
     async def process_player_choice(self,
                                     npc_id: str,
@@ -496,6 +472,10 @@ class StoryDirector:
                 # 初始化NPC的张力（如果还没有）
                 if npc_id not in director.seeds or not director.seeds[npc_id].tensions:
                     await director.initialize_npc_tensions(npc_id, world_state)
+                #检查张力是否成功派生
+                if not director.seeds[npc_id].tensions or len(director.seeds[npc_id].tensions) == 0:
+                    print(f"[DilemmaTest] 警告: 无法为 {npc.name} 派生张力，无法生成事件")                    
+                    return None
                 
                 # 生成下一个故事节拍
                 event_card = await director.try_to_generate_beat(npc_id, world_state)

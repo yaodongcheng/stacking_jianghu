@@ -24,12 +24,12 @@ class DilemmaPhase(Enum):
 
 class TensionType(Enum):
     """张力类型"""
-    RELATIONSHIP = "relationship"   # 人际关系张力
-    ECONOMIC = "economic"           # 经济/生存张力
-    MORAL = "moral"                 # 道德/伦理张力
-    IDENTITY = "identity"           # 身份/认同张力
-    SURVIVAL = "survival"           # 生死存亡张力
-    LOYALTY = "loyalty"             # 忠诚冲突张力
+    RELATIONSHIP = "RELATIONSHIP"   # 人际关系张力
+    ECONOMIC = "ECONOMIC"           # 经济/生存张力
+    MORAL = "MORAL"                 # 道德/伦理张力
+    IDENTITY = "IDENTITY"           # 身份/认同张力
+    SURVIVAL = "SURVIVAL"           # 生死存亡张力
+    LOYALTY = "LOYALTY"             # 忠诚冲突张力
 
 
 @dataclass

@@ -40,8 +40,8 @@ ORG_SHORT_NAMES = {
     'heifeng_zhai': '黑风寨',
     'qinglang_bang': '青狼帮',
     'luopo_gang': '骆驼帮',
-    'NONE': '',
-    None: '',
+    'NONE': '无组织',
+    None: '无组织',
 }
 
 # 等级标识符号
@@ -255,7 +255,10 @@ class NPC(CardBase):
         
         # 任务属性        
         self.quest_icon_active = False # 是否头顶有任务
-       
+
+    @property
+    def hp_percent(self):
+        return self.hp / self.max_hp if self.max_hp > 0 else 1.0
     
     @property
     def money(self):
@@ -916,7 +919,7 @@ class NPC(CardBase):
                 hp_color = (220, 60, 60) # 敌方红
             else:
                 hp_color = (60, 200, 60) # 友方绿
-            hp_pct = max(0, self.hp / self.max_hp)
+            hp_pct = self.hp_percent
             pygame.draw.rect(screen, (80, 30, 30), (bar_x, bar_y, bar_w, bar_h)) # 血槽底色
             pygame.draw.rect(screen, hp_color, (bar_x, bar_y, bar_w * hp_pct, bar_h)) # 血条
             font_small = pygame.font.Font(None, 16) 
@@ -1011,7 +1014,7 @@ class NPC(CardBase):
         name_str = self.name
         # 重伤时显示血量百分比
         if self.safety == SAFETY_DOWNED and self.max_hp > 0:
-            hp_pct = int((self.hp / self.max_hp) * 100)
+            hp_pct = int(self.hp_percent * 100)
             name_str = f"{name_str} {hp_pct}%"
         if len(name_str) > 6: name_str = name_str[:5] + ".."
         
@@ -1195,6 +1198,11 @@ class NPC(CardBase):
     # ──────────────────────────────────────────────────────────────
     # 装备系统：穿戴武器/护甲/服装 → 动态影响战斗属性和保暖
     # ──────────────────────────────────────────────────────────────
+
+    def get_org_name(self):
+        """获取所属组织名称"""
+        return ORG_SHORT_NAMES.get(self.org_id, "无组织")
+
     def equip_item(self, item_id):
         """
         从背包穿戴物品到对应装备槽。
@@ -1425,48 +1433,10 @@ class NPC(CardBase):
    
     
     def get_personality_profile(self) -> str:
-        """生成性格画像（用于LLM提示词）"""
-        if not hasattr(self, 'personality') or not self.personality:
-            return getattr(self, 'desc', '') or "性格信息暂无"
-        
+        """生成性格画像（用于LLM提示词）"""   
         p = self.personality
-        lines = []
+        return p.get_description()
         
-        # 基础性格
-        traits = []
-        if p.temper != 50:
-            traits.append(f"脾气{'温和' if p.temper < 50 else '暴躁'}({p.temper})")
-        if p.spirit != 50:
-            traits.append(f"胆量{'胆小' if p.spirit < 50 else '勇敢'}({p.spirit})")
-        if p.ism != 50:
-            traits.append(f"{'理想' if p.ism < 50 else '现实'}主义({p.ism})")
-        if p.act_style != 50:
-            traits.append(f"行事{'缜密' if p.act_style < 50 else '豪放'}({p.act_style})")
-        if p.friendship != 50:
-            traits.append(f"{'重情义' if p.friendship < 50 else '不重情义'}({p.friendship})")
-        
-        if traits:
-            lines.append(f"性格特质：{'，'.join(traits)}")
-        
-        # 野心和物欲
-        if p.ambition != 50:
-            ambition_desc = "野心勃勃" if p.ambition > 70 else "胸无大志" if p.ambition < 30 else f"野心{p.ambition}/100"
-            lines.append(f"野心程度：{ambition_desc}")
-        
-        if p.desire_type and p.ambition != 50:
-            lines.append(f"物欲倾向：{p.desire_type}（{p.ambition}）")
-        
-        # 人情往来
-        if hasattr(self, '_social_credit_system') and self._social_credit_system:
-            player_id = 0
-            credit = self._social_credit_system.get_credit(player_id, self.id)
-            if credit != 0:
-                if credit > 0:
-                    lines.append(f"人情往来：欠玩家 {credit} 点人情")
-                else:
-                    lines.append(f"人情往来：玩家欠其 {-credit} 点人情")
-        
-        return '\n'.join(lines) if lines else (getattr(self, 'desc', '') or "性格信息暂无")
     
     def get_behavior_tendency(self) -> dict:
         """获取行为倾向（用于启发式规则）"""

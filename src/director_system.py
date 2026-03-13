@@ -903,6 +903,11 @@ class AIDirector:
         self.last_decision_time += dt_ms
         return self.last_decision_time >= self.min_decision_interval
     
+    
+    
+
+
+    
     async def direct_event(self, ctx) -> Optional[LiveNewsItem]:
         """导演一个事件（异步，调用LLM）"""
         self.last_decision_time = 0
@@ -1126,12 +1131,15 @@ class AIDirector:
         {{"text": "选项3文本", "effect": "PLAYER:fame:+10"}}
     ]
     
+}}
+```
+
+
+
 【选项要求】
 - 必须提供 2-3 个选项，不要更多
 - 每个选项要有明确的效果（effect 字段）
 - 选项要体现不同的处理思路（激进/保守/中立）
-}}
-```
 
 【格式要求】[!] 严格遵守
 1. 必须返回合法的JSON格式，所有字符串必须用双引号包裹
@@ -1182,125 +1190,14 @@ class AIDirector:
             log_game_event(f"[Director] 收到LLM响应,耗时 {elapsed:.2f}s,内容 {response.raw_response}...", tag="DIRECTOR")
             
             # 导演系统自己解析JSON响应
-            result = self._parse_llm_response(response.raw_response)
-            if result is not None:
-                log_game_event(f"[Director] JSON解析成功", tag="DIRECTOR")
+            result = llm_service.clean_llm_response(response.raw_response)
             return result
                     
         except Exception as e:
             log_game_event(f"[Director] LLM API调用异常: {e}", tag="DIRECTOR")
             return None
     
-    def _parse_llm_response(self, content: str) -> Dict:
-        """
-        解析LLM返回的JSON内容
-        
-        增强健壮性：
-        - 处理 ```json ... ``` 代码块
-        - 修复尾部逗号问题
-        - 处理截断的JSON（尝试补全）
-        - 移除非法控制字符
-        """
-        
-        try:
-            # 清理内容
-            json_str = content.strip()
-            
-            # 尝试提取JSON块（处理 ```json ... ``` 格式）
-            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', json_str, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1).strip()
-            
-            # 如果还是以 ``` 开头，继续清理
-            if json_str.startswith('```'):
-                json_str = json_str[3:]
-            if json_str.endswith('```'):
-                json_str = json_str[:-3]
-            
-            # 移除可能的 json 标记
-            if json_str.lower().startswith('json'):
-                json_str = json_str[4:].strip()
-            
-            # 确保以 { 开头
-            brace_start = json_str.find('{')
-            if brace_start > 0:
-                json_str = json_str[brace_start:]
-            
-            # 确保以 } 结尾（找最后一个 }）
-            brace_end = json_str.rfind('}')
-            if brace_end >= 0 and brace_end < len(json_str) - 1:
-                json_str = json_str[:brace_end + 1]
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 【健壮性增强】修复常见的LLM JSON格式问题
-            # ═══════════════════════════════════════════════════════════════
-            
-            # 1. 移除非法控制字符（ASCII 0-31，除了换行和制表符）
-            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_str)
-            
-            # 2. 修复尾部逗号问题（在 ] 或 } 前的逗号）
-            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
-            
-            # 3. 【新增】修复中文引号问题（LLM经常使用中文引号）
-            # 将中文引号 " 和 " 替换为英文引号 "
-            json_str = json_str.replace('"', '"').replace('"', '"')
-            
-            # 4. 修复单引号问题（某些LLM会用单引号）
-            # 只处理键名的单引号，避免误改字符串内容
-            json_str = re.sub(r"'(\w+)'(\s*:)", r'"\1"\2', json_str)
-            
-            # 4. 修复裸露的#标签问题（如 #鱼西施 → "鱼西施"）
-            # LLM有时会用小红书风格的标签，但JSON不支持
-            json_str = re.sub(r',\s*#([^\s,\]]+)', r', "\1"', json_str)
-            json_str = re.sub(r'\[\s*#([^\s,\]]+)', r'["\1"', json_str)
-            
-            # 5. 修复 #"xxx" 写法（#号在引号外面），如 #"汴京实况" → "汴京实况"
-            json_str = re.sub(r'#"', '"', json_str)
-            
-            # 尝试解析
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as first_error:
-                # ═══════════════════════════════════════════════════════════════
-                # 【进一步修复】尝试修补截断的JSON
-                # ═══════════════════════════════════════════════════════════════
-                log_game_event(f"[Director] 首次解析失败，尝试修复截断问题: {first_error}", tag="DIRECTOR")
-                
-                # 统计括号数量
-                open_braces = json_str.count('{')
-                close_braces = json_str.count('}')
-                open_brackets = json_str.count('[')
-                close_brackets = json_str.count(']')
-                
-                # 补全缺失的闭合符号
-                repair_str = json_str
-                
-                # 如果缺少闭合括号，尝试补全
-                if close_brackets < open_brackets:
-                    repair_str += ']' * (open_brackets - close_brackets)
-                if close_braces < open_braces:
-                    repair_str += '}' * (open_braces - close_braces)
-                
-                # 再次清理尾部逗号（补全后可能产生新的问题）
-                repair_str = re.sub(r',\s*([}\]])', r'\1', repair_str)
-                
-                try:
-                    result = json.loads(repair_str)
-                    log_game_event(f"[Director] JSON修复成功！补全了 {open_braces - close_braces} 个 '}}' 和 {open_brackets - close_brackets} 个 ']'", tag="DIRECTOR")
-                    return result
-                except json.JSONDecodeError:
-                    # 修复失败，记录详情
-                    pass
-                
-                # 所有修复尝试失败
-                raise first_error
-                
-        except json.JSONDecodeError as e:
-            log_game_event(f"[Director] JSON解析最终失败: {e}", tag="DIRECTOR")
-            return None
-        except Exception as e:
-            log_game_event(f"[Director] 解析过程异常: {e}", tag="DIRECTOR")
-            return None   
+    
     
     
     def _parse_llm_decision(self, decision: Dict, snapshot: WorldSnapshot, ctx) -> Optional[LiveNewsItem]:
