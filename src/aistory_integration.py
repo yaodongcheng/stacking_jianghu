@@ -80,39 +80,12 @@ class AistoryBridge:
             
             # 注册到新导演
             self.new_director.register_npc(npc_data)
-            self._npc_id_map[card.id] = npc_data.npc_id
+            self._npc_id_map[card.id] = npc_data.id
         
         print(f"[AistoryBridge] 已注册 {len(self._npc_id_map)} 个NPC到新导演系统")
         self._initialized = True
     
-    def _convert_npc(self, card):
-        """将游戏NPC对象转换为aistory可用的格式
-        
-        现在直接使用NPC对象的to_aistory_format()方法
-        """
-        # 确保NPC对象有必要的属性映射（用于兼容aistory模块的访问方式）
-        if not hasattr(card, 'npc_id'):
-            card.npc_id = str(card.id)
-        if not hasattr(card, 'identity'):
-            card.identity = card.job
-        if not hasattr(card, 'org'):
-            card.org = card.org_id if card.org_id != 'NONE' else ''
-        if not hasattr(card, 'wealth'):
-            card.wealth = card.money
-        
-        # 确保有性格相关的方法
-        if not hasattr(card, 'get_personality_profile'):
-            # 使用默认实现（如果NPC类没有这些方法）
-            card.get_personality_profile = lambda: getattr(card, 'desc', '') or "性格信息暂无"
-        if not hasattr(card, 'get_behavior_tendency'):
-            card.get_behavior_tendency = lambda: {
-                'risk_taking': False, 'pragmatic': False, 'loyal': False,
-                'temper_hot': False, 'temper_calm': False, 'ambitious': False, 'content': False
-            }
-        if not hasattr(card, 'get_personality_description'):
-            card.get_personality_description = lambda: {}
-        
-        return card
+   
     
     def _create_world_snapshot(self) -> WorldSnapshot:
         """从游戏上下文创建世界快照"""
@@ -204,31 +177,3 @@ def get_aistory_bridge(ctx=None, llm_service=None) -> AistoryBridge:
     return _bridge_instance
 
 
-# ============ 使用示例 ============
-
-async def example_usage():
-    """使用示例"""
-    
-    # 假设在游戏主循环中
-    # from src.game_context import get_context
-    # ctx = get_context()
-    # bridge = get_aistory_bridge(ctx, llm_service)
-    
-    # 每日tick
-    # events = await bridge.tick()
-    # for event in events:
-    #     print(f"新事件: {event['npc_name']} - {event['event'].title}")
-    #     # 显示给玩家...
-    
-    # 玩家做出选择后
-    # result = await bridge.process_player_choice(npc_id, choice_index)
-    # if result['recruitment_offered']:
-    #     print("NPC申请加入！")
-    
-    pass
-
-
-if __name__ == "__main__":
-    # 测试代码
-    print("AI叙事导演系统集成模块")
-    print("运行示例: python -m src.aistory_integration")

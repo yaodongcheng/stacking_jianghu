@@ -17,21 +17,16 @@ from .shared_types import WorldSnapshot
 from typing import Any
 NPCData = Any  # NPC对象或字典
 from .rolling_story_generator import RollingStoryGenerator, EventCard, EventChoice
+# PlayerData 已移除，直接使用 Player NPC 对象
 from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink
-
-# 导入日志函数
-try:
-    from src.utils import log_game_event
-except ImportError:
-    def log_game_event(text, tag="INFO"):
-        print(f"[{tag}] {text}")
+from src.utils import log_game_event
 
 
 @dataclass
 class DirectorConfig:
     """导演系统配置"""
-    max_concurrent_arcs: int = 5          # 最大同时进行的故事弧
+    max_concurrent_arcs: int = 2          # 最大同时进行的故事弧
     heat_threshold: int = 30               # 热度阈值（超过才考虑推进）
     min_beat_interval: int = 3             # 最小节拍间隔（游戏内天数）
     enable_ripple: bool = True             # 是否启用涟漪效果
@@ -60,7 +55,20 @@ class StoryDirector:
     5. 管理招募逻辑
     """
     
+    # 单例实例
+    _instance: Optional['StoryDirector'] = None
+    _initialized: bool = False
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
     def __init__(self, llm_service=None, config: DirectorConfig = None):
+        # 防止重复初始化
+        if StoryDirector._initialized:
+            return
+            
         self.config = config or DirectorConfig()
         self.llm = llm_service
         
@@ -78,17 +86,41 @@ class StoryDirector:
         
         # 历史记录
         self.choice_history: List[Dict] = []            # 玩家选择历史
+        
+        StoryDirector._initialized = True
+    
+    @classmethod
+    def get_instance(cls, llm_service=None, config: DirectorConfig = None) -> 'StoryDirector':
+        """
+        获取StoryDirector单例实例
+        
+        Args:
+            llm_service: LLM服务（仅在首次创建时使用）
+            config: 导演配置（仅在首次创建时使用）
+            
+        Returns:
+            StoryDirector实例
+        """
+        if cls._instance is None:
+            cls._instance = cls(llm_service, config)
+        return cls._instance
+    
+    @classmethod
+    def reset_instance(cls):
+        """重置单例（主要用于测试）"""
+        cls._instance = None
+        cls._initialized = False
     
     def register_npc(self, npc: NPCData) -> NPCDilemmaSeed:
         """注册NPC到导演系统"""
-        self.npc_data[npc.npc_id] = npc
+        self.npc_data[npc.id] = npc
         
         # 创建困境种子
         seed = NPCDilemmaSeed(
-            npc_id=npc.npc_id,
+            id=npc.id,
             phase=DilemmaPhase.LATENT
         )
-        self.seeds[npc.npc_id] = seed
+        self.seeds[npc.id] = seed
         
         return seed
     
@@ -104,12 +136,12 @@ class StoryDirector:
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
-        log_game_event(f"[StoryDirector] NPC信息: {npc.name}, 职业={npc.identity}, 组织={npc.org}", tag="DIRECTOR")
+        log_game_event(f"[StoryDirector] NPC信息: {npc.name}, 职业={npc.job}, 组织={npc.org_id}", tag="DIRECTOR")
         
         # 1. 派生核心矛盾（欲望 vs 阻碍）
         log_game_event(f"[StoryDirector] 开始派生核心矛盾...", tag="DIRECTOR")
         seed.desire, seed.reality_block = self.deriver._derive_core_conflict(npc)
-        log_game_event(f"[StoryDirector] 核心矛盾: 欲望={seed.desire[:30]}..., 阻碍={seed.reality_block[:30]}...", tag="DIRECTOR")
+        log_game_event(f"[StoryDirector] 核心矛盾: 欲望={seed.desire}..., 阻碍={seed.reality_block}...", tag="DIRECTOR")
         
         # 2. 推导张力
         log_game_event(f"[StoryDirector] 开始推导张力...", tag="DIRECTOR")
@@ -181,7 +213,7 @@ class StoryDirector:
         
         return arc
     
-    async def generate_next_beat(self, 
+    async def try_to_generate_beat(self, 
                                   npc_id: str,
                                   world_state: WorldSnapshot) -> Optional[EventCard]:
         """
@@ -192,11 +224,6 @@ class StoryDirector:
         2. 生成事件卡片
         3. 更新种子状态
         """
-        log_game_event(f"[StoryDirector] 开始为 {npc_id} 生成故事节拍", tag="DIRECTOR")
-        
-        if npc_id not in self.npc_data or npc_id not in self.seeds:
-            log_game_event(f"[StoryDirector] 错误: NPC {npc_id} 未找到", tag="DIRECTOR")
-            return None
         
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
@@ -213,8 +240,12 @@ class StoryDirector:
         
         # 2. 生成事件
         log_game_event(f"[StoryDirector] 调用滚动故事生成器...", tag="DIRECTOR")
-        from .rolling_story_generator import PlayerData
-        player = PlayerData()  # 可以从world_state或ctx获取玩家数据
+        # 从全局 ctx 获取玩家对象
+        try:
+            from src.context import ctx
+            player = ctx.player if ctx and hasattr(ctx, 'player') else None
+        except ImportError:
+            player = None
         event_card = await self.generator.generate_next_beat(
             npc, seed, world_state, player
         )
@@ -402,19 +433,208 @@ class StoryDirector:
         """
         self.world_state = world_state
         events = []
-        
-        # 1. 选择下一个故事弧
-        arc = await self.select_next_arc(world_state)
-        if not arc:
-            return events
-        
-        # 2. 生成事件
-        event = await self.generate_next_beat(arc.npc_id, world_state)
-        if event:
-            events.append({
-                "npc_id": arc.npc_id,
-                "npc_name": arc.npc_data.name,
-                "event": event
-            })
-        
+       
         return events
+    @staticmethod
+    def trigger_dilemma_test_event(npc, ctx):
+        """
+        触发困境测试事件 - 基于NPC的内心隐秘生成AI事件
+        
+        调用StoryDirector生成基于人生困境的滚动故事事件
+        
+        Args:
+            npc: NPC对象
+            ctx: 游戏上下文（必须提供）
+        """
+        print(f"[DilemmaTest] 触发NPC {npc.name} 的困境测试事件")
+        
+        if not ctx:
+            print("[DilemmaTest] 错误：ctx不能为空")
+            return
+        
+        try:
+            # 导入必要的模块
+            from src.llm.llm_service import LLMService
+            from src.utils import log_game_event
+            from .shared_types import WorldSnapshot
+            from datetime import datetime
+            
+            # 获取LLM服务
+            llm_service = LLMService.get_instance()
+            if not llm_service or not llm_service.is_available():
+                log_game_event("[DilemmaTest] 警告：LLM服务不可用，将使用备用方案", tag="DILEMMA")
+            else:
+                log_game_event("[DilemmaTest] LLM服务已就绪", tag="DILEMMA")
+            
+            # 获取或创建StoryDirector实例（单例模式）
+            director = StoryDirector.get_instance(llm_service)
+            if not director:
+                log_game_event("[DilemmaTest] 错误：无法获取StoryDirector", tag="DILEMMA")
+                return
+            
+            # 使用异步执行器来运行异步代码
+            
+            async def _async_trigger():
+                npc_data = npc
+                npc_id = npc_data.id
+                
+                # 检查NPC是否已注册，如果没有则注册
+                if npc_id not in director.npc_data:
+                    director.register_npc(npc_data)
+                    print(f"[DilemmaTest] 已注册NPC {npc.name} 到StoryDirector")
+                
+                # 创建世界快照
+                world_state = WorldSnapshot(timestamp=datetime.now().timestamp())
+                # 可以从ctx获取更多世界状态信息
+                if hasattr(ctx, 'all_cards'):
+                    world_state.active_npcs = len([c for c in ctx.all_cards 
+                                                   if hasattr(c, 'is_player') and not c.is_player])
+                # 将玩家对象附加到 world_state
+                if hasattr(ctx, 'player'):
+                    world_state.player = ctx.player
+                
+                # 初始化NPC的张力（如果还没有）
+                if npc_id not in director.seeds or not director.seeds[npc_id].tensions:
+                    await director.initialize_npc_tensions(npc_id, world_state)
+                
+                # 生成下一个故事节拍
+                event_card = await director.try_to_generate_beat(npc_id, world_state)
+                
+                return event_card
+            
+            # 运行异步任务
+            try:
+                # 尝试获取当前事件循环
+                loop = asyncio.get_running_loop()
+                # 如果已经在事件循环中，创建任务
+                future = asyncio.ensure_future(_async_trigger())
+                # 由于我们在Pygame的主循环中，不能阻塞等待
+                # 所以我们设置一个回调来处理结果
+                def on_event_generated(fut):
+                    try:
+                        event_card = fut.result()
+                        if event_card:
+                            StoryDirector._handle_generated_event_static(npc, event_card, ctx)
+                        else:
+                            print(f"[DilemmaTest] 未能生成事件")
+                            if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                                ctx.ft_manager.add_text(
+                                    f"[AI] 暂时无法生成事件",
+                                    npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
+                                )
+                    except Exception as e:
+                        print(f"[DilemmaTest] 生成事件时出错: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                future.add_done_callback(on_event_generated)
+                
+                # 显示正在生成的提示
+                if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                    ctx.ft_manager.add_text(
+                        f"[AI] 正在为{npc.name}生成困境事件...",
+                        npc.rect.centerx, npc.rect.top - 50, (150, 200, 255)
+                    )
+                
+            except RuntimeError:
+                # 没有正在运行的事件循环，创建一个新的
+                event_card = asyncio.run(_async_trigger())
+                if event_card:
+                    StoryDirector._handle_generated_event_static(npc, event_card, ctx)
+                else:
+                    print(f"[DilemmaTest] 未能生成事件")
+                    if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                        ctx.ft_manager.add_text(
+                            f"[AI] 暂时无法生成事件",
+                            npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
+                        )
+                
+        except Exception as e:
+            print(f"[DilemmaTest] 错误: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    @staticmethod
+    def _handle_generated_event_static(npc, event_card, ctx):
+        """处理生成的事件卡片（静态版本）"""
+        print(f"[DilemmaTest] 成功生成事件: {event_card.title}")
+        print(f"[DilemmaTest] 事件描述: {event_card.description}")
+        print(f"[DilemmaTest] 选项数: {len(event_card.choices)}")
+        
+        # 显示浮动提示
+        if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+            ctx.ft_manager.add_text(
+                f"[AI] {npc.name}的困境事件已生成!",
+                npc.rect.centerx, npc.rect.top - 50, (100, 255, 150)
+            )
+        
+        # 显示事件对话框
+        StoryDirector._show_dilemma_event_dialog_static(npc, event_card)
+    
+    def _handle_generated_event(self, npc, event_card, ctx):
+        """处理生成的事件卡片（实例版本，供内部使用）"""
+        print(f"[DilemmaTest] 成功生成事件: {event_card.title}")
+        print(f"[DilemmaTest] 事件描述: {event_card.description}")
+        print(f"[DilemmaTest] 选项数: {len(event_card.choices)}")
+        
+        # 存储待处理的事件，供后续显示
+        if not hasattr(self, '_pending_dilemma_events'):
+            self._pending_dilemma_events = {}
+        self._pending_dilemma_events[npc.id] = event_card
+        
+        # 显示浮动提示
+        if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+            ctx.ft_manager.add_text(
+                f"[AI] {npc.name}的困境事件已生成!",
+                npc.rect.centerx, npc.rect.top - 50, (100, 255, 150)
+            )
+        
+        # 显示事件对话框
+        self._show_dilemma_event_dialog(npc, event_card)
+    
+    @staticmethod
+    def _show_dilemma_event_dialog_static(npc, event_card):
+        """
+        显示困境事件对话框（静态版本）
+        
+        Args:
+            npc: NPC对象
+            event_card: EventCard事件卡片
+        """
+        print(f"[DilemmaTest] 准备显示事件对话框: {event_card.title}")
+        
+        # 将EventCard转换为游戏内事件格式
+        # 这里可以根据需要集成到现有的事件系统中
+        # 暂时打印事件信息供调试
+        print(f"  标题: {event_card.title}")
+        print(f"  描述: {event_card.description}")
+        print(f"  情绪基调: {event_card.emotion_tone}")
+        print(f"  忽略后果: {event_card.ignore_consequence}")
+        print("  选项:")
+        for i, choice in enumerate(event_card.choices):
+            print(f"    {i+1}. {choice.text}")
+            print(f"       代价: {choice.cost}")
+            print(f"       后果: {choice.consequence}")
+    
+    def _show_dilemma_event_dialog(self, npc, event_card):
+        """
+        显示困境事件对话框（实例版本）
+        
+        Args:
+            npc: NPC对象
+            event_card: EventCard事件卡片
+        """
+        print(f"[DilemmaTest] 准备显示事件对话框: {event_card.title}")
+        
+        # 将EventCard转换为游戏内事件格式
+        # 这里可以根据需要集成到现有的事件系统中
+        # 暂时打印事件信息供调试
+        print(f"  标题: {event_card.title}")
+        print(f"  描述: {event_card.description}")
+        print(f"  情绪基调: {event_card.emotion_tone}")
+        print(f"  忽略后果: {event_card.ignore_consequence}")
+        print("  选项:")
+        for i, choice in enumerate(event_card.choices):
+            print(f"    {i+1}. {choice.text}")
+            print(f"       代价: {choice.cost}")
+            print(f"       后果: {choice.consequence}")

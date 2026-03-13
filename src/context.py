@@ -49,3 +49,8 @@ class GameContext:
         #     'stack_target': 原堆叠目标(用于确认后继续堆叠),
         #     'dragged_card': 被拖拽的卡牌,
         # }
+
+
+# 全局上下文实例
+# 在 main.py 中初始化，其他模块可以导入使用
+ctx = GameContext()

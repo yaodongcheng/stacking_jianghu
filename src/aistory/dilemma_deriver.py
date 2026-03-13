@@ -51,9 +51,27 @@ class DilemmaDeriver:
         Returns:
             张力线列表
         """
-        log_game_event(f"[DilemmaDeriver] 开始为 {npc.name} 派生张力线", tag="DILEMMA")
-        log_game_event(f"[DilemmaDeriver] NPC状态: 财富={npc.wealth}, 情绪={npc.emotion}, 健康={npc.health}", tag="DILEMMA")
-        log_game_event(f"[DilemmaDeriver] 性格特质: 脾气={npc.temper}, 胆量={npc.spirit}, 主义={npc.ism}, 风格={npc.act_style}, 情义={npc.friendship}, 野心={npc.ambition}", tag="DILEMMA")
+        # 获取NPC属性（处理属性名差异）
+        name = getattr(npc, 'name', '未知')
+        money = getattr(npc, 'money', 0)
+        emotion = getattr(npc, 'emotion', 50)
+        health = getattr(npc, 'hp', getattr(npc, 'health', 100))  # NPC使用hp而不是health
+        
+        # 从personality获取性格属性
+        personality = getattr(npc, 'personality', None)
+        if personality:
+            temper = getattr(personality, 'temper', 50)
+            spirit = getattr(personality, 'spirit', 50)
+            ism = getattr(personality, 'ism', 50)
+            act_style = getattr(personality, 'act_style', 50)
+            friendship = getattr(personality, 'friendship', 50)
+            ambition = getattr(personality, 'ambition', 50)
+        else:
+            temper = spirit = ism = act_style = friendship = ambition = 50
+        
+        log_game_event(f"[DilemmaDeriver] 开始为 {name} 派生张力线", tag="DILEMMA")
+        log_game_event(f"[DilemmaDeriver] NPC状态: 财富={money}, 情绪={emotion}, 健康={health}", tag="DILEMMA")
+        log_game_event(f"[DilemmaDeriver] 性格特质: 脾气={temper}, 胆量={spirit}, 主义={ism}, 风格={act_style}, 情义={friendship}, 野心={ambition}", tag="DILEMMA")
         
         if self.llm:
             log_game_event(f"[DilemmaDeriver] 使用LLM派生张力", tag="DILEMMA")
@@ -77,7 +95,7 @@ class DilemmaDeriver:
         2. 计算热度
         3. 组装成种子
         """
-        seed = NPCDilemmaSeed(npc_id=npc.npc_id)
+        seed = NPCDilemmaSeed(npc_id=npc.id)
         
         # 1. 派生核心矛盾
         seed.desire, seed.reality_block = self._derive_core_conflict(npc)
@@ -93,7 +111,7 @@ class DilemmaDeriver:
         seed.heat = self.calculate_heat(seed, world_state)
         
         # 缓存
-        self._cache[npc.npc_id] = seed
+        self._cache[npc.id] = seed
         
         return seed
     
@@ -121,21 +139,33 @@ class DilemmaDeriver:
         
         impact_text = '\n'.join(f"- {p}" for p in personality_impact) if personality_impact else "（请根据性格自行推断）"
         
+        # 获取NPC属性（处理可能不存在的属性）
+        name = getattr(npc, 'name', '未知')
+        gender = getattr(npc, 'gender', '未知')
+        age = getattr(npc, 'age', 30)
+        job = getattr(npc, 'job', '平民')
+        org_id = getattr(npc, 'org_id', '')
+        money = getattr(npc, 'money', 0)
+        emotion = getattr(npc, 'emotion', 50)
+        health = getattr(npc, 'hp', getattr(npc, 'health', 100))
+        desc = getattr(npc, 'desc', '')
+        backstory = getattr(npc, 'backstory', '')
+        
         prompt = f"""你是一个宋代市井故事的编剧。
 分析以下人物的数据，识别出他/她人生中潜在的"张力"——
 即两股对立的力量在拉扯这个人，让他/她迟早会面临两难困境。
 
 【人物信息】
-姓名：{npc.name}
-性别：{npc.gender}  年龄：{npc.age}
-职业：{npc.identity}
-所属组织：{npc.org}
+姓名：{name}
+性别：{gender}  年龄：{age}
+职业：{job}
+所属组织：{org_id}
 {personality_profile}
-背景故事：{npc.backstory if npc.backstory else '暂无'}
-当前经济状况：{npc.wealth} 文（{self._wealth_level(npc.wealth)}）
-当前情绪：{npc.emotion}/100
-当前健康：{npc.health}/100
-人设描述：{npc.desc if npc.desc else '暂无'}
+背景故事：{backstory if backstory else '暂无'}
+当前经济状况：{money} 文（{self._wealth_level(money)}）
+当前情绪：{emotion}/100
+当前健康：{health}/100
+人设描述：{desc if desc else '暂无'}
 
 【此人的关系网】
 {self._format_relationships(npc)}
@@ -183,43 +213,49 @@ class DilemmaDeriver:
         """启发式规则派生张力（无LLM时的备选）"""
         tensions = []
         
+        # 获取NPC属性（处理属性名差异）
+        money = getattr(npc, 'money', 0)
+        emotion = getattr(npc, 'emotion', 50)
+        health = getattr(npc, 'hp', getattr(npc, 'health', 100))  # NPC使用hp而不是health
+        org_id = getattr(npc, 'org_id', None)
+        
         # 经济张力
-        if npc.wealth < 30:
+        if money < 30:
             tensions.append(Tension(
                 type=TensionType.ECONOMIC,
                 force_a="想要维持生计、改善生活",
                 force_b="现实的经济困境和债务压力",
-                intensity=min(100, (30 - npc.wealth) * 3 + 30),
+                intensity=min(100, (30 - money) * 3 + 30),
                 potential_crisis="因无力还债而陷入困境，或被迫做出违背本心的事"
             ))
         
         # 生存张力
-        if npc.health < 40:
+        if health < 40:
             tensions.append(Tension(
                 type=TensionType.SURVIVAL,
                 force_a="想要活下去、恢复健康",
                 force_b="缺乏医疗资源和经济能力",
-                intensity=min(100, (40 - npc.health) * 2 + 50),
+                intensity=min(100, (40 - health) * 2 + 50),
                 potential_crisis="病重无力医治，可能寻求极端手段"
             ))
         
         # 情绪张力
-        if npc.emotion < 30:
+        if emotion < 30:
             tensions.append(Tension(
                 type=TensionType.IDENTITY,
                 force_a="想要摆脱负面情绪、重新振作",
                 force_b="内心的绝望和外部环境的压迫",
-                intensity=min(100, (30 - npc.emotion) * 2 + 40),
+                intensity=min(100, (30 - emotion) * 2 + 40),
                 potential_crisis="情绪崩溃，可能做出冲动或极端行为"
             ))
         
         # 组织忠诚张力
-        if npc.org:
-            org_tension = world_state.faction_tensions.get(npc.org, {})
+        if npc.org_id:
+            org_tension = world_state.faction_tensions.get(npc.org_id, {})
             if org_tension.get('hostility', 0) > 50:
                 tensions.append(Tension(
                     type=TensionType.LOYALTY,
-                    force_a=f"对{npc.org}的忠诚",
+                    force_a=f"对{npc.org_id}的忠诚",
                     force_b="组织内部斗争带来的生存压力",
                     intensity=org_tension.get('hostility', 50),
                     potential_crisis="被迫在忠诚和自保之间做出选择"
@@ -233,42 +269,59 @@ class DilemmaDeriver:
         behavior = npc.get_behavior_tendency()
         desc = npc.get_personality_description()
         
+        # 从personality对象获取性格属性
+        personality = getattr(npc, 'personality', None)
+        if personality:
+            desire_type = getattr(personality, 'desire_type', None)
+            ambition = getattr(personality, 'ambition', 50)
+            friendship = getattr(personality, 'friendship', 50)
+            ism = getattr(personality, 'ism', 50)
+            act_style = getattr(personality, 'act_style', 50)
+            temper = getattr(personality, 'temper', 50)
+        else:
+            desire_type = None
+            ambition = 50
+            friendship = 50
+            ism = 50
+            act_style = 50
+            temper = 50
+        
         # === 基于多维度性格系统推断欲望 ===
         desire = ""
         
         # 1. 基于物欲类型和野心
-        if npc.desire_type and npc.ambition != 50:
-            if npc.desire_type == "金钱":
-                if npc.ambition > 60:
+        if desire_type and ambition != 50:
+            if desire_type == "金钱":
+                if ambition > 60:
                     desire = "想要积累大量财富，成为富甲一方的豪商"
                 else:
                     desire = "想要衣食无忧，不为钱财发愁"
-            elif npc.desire_type == "权力":
-                if npc.ambition > 60:
+            elif desire_type == "权力":
+                if ambition > 60:
                     desire = "想要掌握更大的权力，影响更多人"
                 else:
                     desire = "想要获得一定的地位和话语权"
-            elif npc.desire_type == "名声":
-                if npc.ambition > 60:
+            elif desire_type == "名声":
+                if ambition > 60:
                     desire = "想要名垂青史，成为人人敬仰的人物"
                 else:
                     desire = "想要获得他人的尊重和认可"
-            elif npc.desire_type == "知识":
+            elif desire_type == "知识":
                 desire = "想要追求学问，增长见识"
-            elif npc.desire_type == "安稳":
+            elif desire_type == "安稳":
                 desire = "想要过上平静安稳的生活"
-            elif npc.desire_type == "正义":
+            elif desire_type == "正义":
                 desire = "想要伸张正义，惩治恶人"
         
         # 2. 基于职业推断（如果物欲类型不明确）
         if not desire:
-            if "商" in npc.identity or npc.tags and "MERCHANT" in npc.tags:
+            if "商" in npc.job or npc.tags and "MERCHANT" in npc.tags:
                 desire = "想要经商致富，改善生活"
-            elif "官" in npc.identity or npc.tags and "OFFICIAL" in npc.tags:
+            elif "官" in npc.job or npc.tags and "OFFICIAL" in npc.tags:
                 desire = "想要在仕途上有所成就"
-            elif "武" in npc.identity or npc.tags and "WARRIOR" in npc.tags:
+            elif "武" in npc.job or npc.tags and "WARRIOR" in npc.tags:
                 desire = "想要在江湖上闯出名声"
-            elif "农" in npc.identity:
+            elif "农" in npc.job:
                 desire = "想要风调雨顺，安稳度日"
             elif behavior['ambitious']:
                 desire = "想要出人头地，不再被人轻视"
@@ -278,48 +331,50 @@ class DilemmaDeriver:
                 desire = "想要过上更好的生活"
         
         # 3. 基于情义调整欲望描述（数值型：越小越重情义）
-        if npc.friendship < 40:  # 重情义
+        if friendship < 40:  # 重情义
             desire += "，同时守护身边重要的人"
-        elif npc.friendship > 60:  # 不重情义
+        elif friendship > 60:  # 不重情义
             desire += "，不惜为此牺牲人情往来"
         
         # === 基于性格推断阻碍 ===
         reality_block = ""
         
         # 1. 基于主义（理想vs现实，数值型：越小越理想）
-        if npc.ism < 40:  # 理想主义
-            if npc.wealth < 30:
+        if ism < 40:  # 理想主义
+            if npc.money < 30:
                 reality_block = "理想主义在贫困现实面前的无力"
             else:
                 reality_block = "理想与世俗现实的冲突"
-        elif npc.ism > 60:  # 现实主义
-            if npc.wealth < 30:
+        elif ism > 60:  # 现实主义
+            if npc.money < 30:
                 reality_block = "贫困的经济状况限制了选择"
             else:
                 reality_block = "现实主义带来的道德困境"
         
         # 2. 基于行事风格（数值型：越小越缜密）
         if not reality_block:
-            if npc.act_style < 40:  # 缜密
+            if act_style < 40:  # 缜密
                 reality_block = "过于谨慎导致错失机会"
-            elif npc.act_style > 60:  # 豪放/大胆
+            elif act_style > 60:  # 豪放/大胆
                 reality_block = "冒进带来的风险和后果"
         
         # 3. 基于现状（兜底逻辑）
+        # 获取健康值（NPC使用hp而不是health）
+        health = getattr(npc, 'hp', getattr(npc, 'health', 100))
         if not reality_block:
-            if npc.wealth < 20:
+            if npc.money < 20:
                 reality_block = "贫困的经济状况限制了选择"
-            elif npc.wealth > 200:
+            elif npc.money > 200:
                 reality_block = "财富带来的嫉妒和觊觎"
-            elif npc.org and "底层" in npc.org:
+            elif npc.org_id and "底层" in npc.org_id:
                 reality_block = "出身卑微，缺乏上升渠道"
-            elif npc.health < 50:
+            elif health < 50:
                 reality_block = "身体抱恙，力不从心"
             else:
                 reality_block = "复杂的人际关系和社会环境"
         
         # 4. 基于脾气调整（数值型：越大越暴躁）
-        if npc.temper > 60:  # 暴躁
+        if temper > 60:  # 暴躁
             reality_block += "，加上急躁性格容易让事情变得更糟"
         
         return desire, reality_block
@@ -360,7 +415,7 @@ class DilemmaDeriver:
                 heat += min(days_since_last * 2, 15)  # 浮出水面，慢慢升温
         
         # 玩家关系加权
-        player_relation = self._get_player_relation(seed.npc_id, world_state)
+        player_relation = self._get_player_relation(seed.id, world_state)
         if player_relation:
             heat += player_relation.get('closeness', 0) * 0.2  # 越亲近越优先
         
@@ -422,14 +477,14 @@ class DilemmaDeriver:
     
     def _format_org_status(self, npc: NPCData, world_state: WorldSnapshot) -> str:
         """格式化组织处境"""
-        if not npc.org:
+        if not npc.org_id:
             return "无组织"
         
-        org_data = world_state.faction_tensions.get(npc.org, {})
+        org_data = world_state.faction_tensions.get(npc.org_id, {})
         if org_data:
             hostility = org_data.get('hostility', 0)
-            return f"{npc.org} - 敌对度: {hostility}"
-        return f"{npc.org} - 状态平稳"
+            return f"{npc.org_id} - 敌对度: {hostility}"
+        return f"{npc.org_id} - 状态平稳"
     
     def _days_since(self, timestamp: str) -> int:
         """计算距离某个时间戳的天数"""
@@ -463,7 +518,7 @@ class DilemmaDeriver:
     
     def update_seed(self, seed: NPCDilemmaSeed):
         """更新困境种子"""
-        self._cache[seed.npc_id] = seed
+        self._cache[seed.id] = seed
     
     def get_all_active_seeds(self) -> List[NPCDilemmaSeed]:
         """获取所有活跃的困境种子（非LATENT、非AFTERMATH）"""

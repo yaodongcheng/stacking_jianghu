@@ -45,7 +45,6 @@ class WorldSnapshot:
     # 戏剧节奏
     recent_event_types: List[str] = field(default_factory=list)
     time_since_last_big_event: float = 0
-    current_dramatic_arc: str = "rising"
     
     # 扩展：新版本添加的字段
     game_time: Optional[str] = None

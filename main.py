@@ -25,7 +25,7 @@ from src.ui.story_ui import StoryUI
 from src.data_loader import load_raw_npc_data, load_npcs_from_csv
 from src.ui.creation import CharacterCreationUI
 from src.render_system import RenderSystem
-from src.context import GameContext
+from src.context import GameContext, ctx
 
 from src.movement_system import MovementSystem
 from src.world_loader import WorldLoader
@@ -100,7 +100,8 @@ def _preregister_system_menu_zones(screen_w: int, screen_h: int, menu_expanded: 
 
 def init_game_systems(screen_w, screen_h, scenario_type='village'):
     """初始化所有子系统并打包到 Context"""
-    ctx = GameContext()
+    # 重新初始化全局ctx（清除之前的状态）
+    ctx.__init__()
     ctx.screen_w, ctx.screen_h = screen_w, screen_h
     ctx.scenario_type = scenario_type
 

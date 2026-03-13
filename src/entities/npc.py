@@ -77,7 +77,7 @@ class NPC(CardBase):
         self.dissatisfaction = 0 #不满值
         self.survival_timer = 0 # 计时器
 
-        
+
 
         # 标签（必须在 generate_personality_from_job 之前初始化）
         raw_tags = data.get('tags', '') 
@@ -1422,55 +1422,7 @@ class NPC(CardBase):
         
         return "。".join(desc_parts) + "。"
     
-    def to_aistory_format(self) -> dict:
-        """
-        转换为aistory模块使用的格式
-        
-        Returns:
-            符合dilemma_deriver要求的字典
-        """
-        data = {
-            'npc_id': str(self.id),
-            'name': self.name,
-            'gender': getattr(self, 'gender', ''),
-            'age': getattr(self, 'age', 30),
-            'identity': self.job,
-            'org': self.org_id if self.org_id != 'NONE' else '',
-            'personality': getattr(self, 'desc', ''),  # 向后兼容
-            'backstory': getattr(self, 'backstory', ''),
-            'wealth': self.money,
-            'emotion': getattr(self, 'emotion', 50),
-            'health': self.hp,
-            'tags': self.tags,
-            'desc': getattr(self, 'desc', ''),
-            'location': getattr(self, 'location', ''),
-        }
-        
-        # 添加多维度性格数据 - 直接传递数值
-        if hasattr(self, 'personality') and self.personality:
-            p = self.personality
-            data['personality'] = {
-                'temper': p.temper,
-                'spirit': p.spirit,
-                'ism': p.ism,
-                'act_style': p.act_style,
-                'friendship': p.friendship,
-                'ambition': p.ambition,
-                'desire_type': p.desire_type,
-                'desire_level': p.ambition,  # 使用野心值作为物欲程度
-            }
-        
-        # 添加人情值
-        if hasattr(self, '_social_credit_system') and self._social_credit_system:
-            player_id = 0  # 假设玩家ID为0
-            credit = self._social_credit_system.get_credit(player_id, self.id)
-            data['social_credit'] = credit
-        
-        # 添加初始困境
-        if hasattr(self, 'initial_dilemma') and self.initial_dilemma:
-            data['initial_dilemma'] = self.initial_dilemma
-        
-        return data
+   
     
     def get_personality_profile(self) -> str:
         """生成性格画像（用于LLM提示词）"""

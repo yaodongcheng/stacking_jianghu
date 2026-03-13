@@ -25,22 +25,6 @@ except ImportError:
 
 
 @dataclass
-class PlayerData:
-    """玩家数据"""
-    money: int = 0
-    stamina: int = 100
-    reputation: int = 0
-    inventory: Dict[str, int] = field(default_factory=dict)
-    
-    @property
-    def inventory_summary(self) -> str:
-        if not self.inventory:
-            return "无"
-        items = [f"{k}:{v}" for k, v in list(self.inventory.items())[:5]]
-        return ", ".join(items)
-
-
-@dataclass
 class EventChoice:
     """事件选项"""
     text: str = ""                           # 选项描述
@@ -69,7 +53,7 @@ class EventCard:
             "id": self.id,
             "title": self.title,
             "description": self.description,
-            "npc_id": self.npc_id,
+            "id": self.id,
             "choices": [
                 {
                     "text": c.text,
@@ -103,7 +87,7 @@ class RollingStoryGenerator:
                                   npc: NPCData,
                                   seed: NPCDilemmaSeed,
                                   world_state: WorldSnapshot,
-                                  player: PlayerData) -> EventCard:
+                                  player: NPCData) -> EventCard:
         """
         生成下一个故事节拍
         
@@ -111,7 +95,7 @@ class RollingStoryGenerator:
         - NPC当前状态
         - 已发生的故事
         - 当前困境阶段
-        - 玩家资源状况
+        - 玩家资源状况（玩家对象，继承自NPC）
         """
         log_game_event(f"[RollingStoryGenerator] 开始为 {npc.name} 生成故事节拍", tag="DILEMMA")
         log_game_event(f"[RollingStoryGenerator] 困境阶段: {seed.phase.value}, 张力数: {len(seed.tensions)}", tag="DILEMMA")
@@ -123,18 +107,31 @@ class RollingStoryGenerator:
         # 获取阶段指导
         phase_instruction = self._get_phase_instruction(seed.phase)
         
-        prompt = f"""你是宋代市井剧的编剧。现在需要为一个人物生成【下一个故事节拍】。
-
+        # 构建玩家信息字符串
+        player_info = self._format_player_info(player)
+        
+        # 获取NPC属性（处理可能不存在的属性）
+        name = getattr(npc, 'name', '未知')
+        gender = getattr(npc, 'gender', '未知')
+        age = getattr(npc, 'age', 30)
+        job = getattr(npc, 'job', '平民')
+        org_id = getattr(npc, 'org_id', '')
+        money = getattr(npc, 'money', 0)
+        emotion = getattr(npc, 'emotion', 50)
+        health = getattr(npc, 'hp', getattr(npc, 'health', 100))
+        backstory = getattr(npc, 'backstory', '')
+        
+        prompt = f"""你是宋代市井剧的编剧。现在需要为一个人物生成【下一个故事节拍】。\n
 ===== 人物档案 =====
-姓名：{npc.name}
-性别：{npc.gender}  年龄：{npc.age}
-职业：{npc.identity}
-所属组织：{npc.org}
+姓名：{name}
+性别：{gender}  年龄：{age}
+职业：{job}
+所属组织：{org_id}
 {npc.get_personality_profile()}
-背景故事：{npc.backstory if npc.backstory else '暂无'}
-当前经济状况：{npc.wealth} 文
-当前情绪：{npc.emotion}/100
-当前健康：{npc.health}/100
+背景故事：{backstory if backstory else '暂无'}
+当前经济状况：{money} 文
+当前情绪：{emotion}/100
+当前健康：{health}/100
 
 ===== 此人当前的困境 =====
 核心矛盾：{seed.desire} vs {seed.reality_block}
@@ -155,8 +152,7 @@ class RollingStoryGenerator:
 {self._format_relevant_world_events(npc, world_state)}
 
 ===== 玩家信息 =====
-玩家当前状况：银钱 {player.money} 文，体力 {player.stamina}，声望 {player.reputation}
-玩家当前拥有的资源：{player.inventory_summary}
+{player_info}
 
 ===== 任务 =====
 生成此人的【下一个故事节拍】。要求：
@@ -218,7 +214,7 @@ class RollingStoryGenerator:
             )
             # 如果response是对象，获取content属性；如果是字符串，直接使用
             response_text = response.content if hasattr(response, 'content') else str(response)
-            return self._parse_event_card(response_text, npc.npc_id, seed.phase)
+            return self._parse_event_card(response_text, npc.id, seed.phase)
         except Exception as e:
             log_game_event(f"[RollingStoryGenerator] 生成失败: {e}", tag="ERROR")
             # 异常时中止，不使用兜底方案
@@ -288,24 +284,86 @@ class RollingStoryGenerator:
         # 简化版本，可以扩展
         return "（世界运转中...）"
     
+    def _format_player_info(self, player: NPCData) -> str:
+        """
+        格式化玩家信息
+        
+        玩家对象继承自NPC，使用NPC的属性加上玩家特有属性
+        """
+        if player is None:
+            return "玩家信息不可用"
+        
+        # 基础信息（从NPC继承）
+        money = getattr(player, 'money', 0)
+        health = getattr(player, 'health', 100)
+        emotion = getattr(player, 'emotion', 50)
+        
+        # 玩家特有属性
+        fame = getattr(player, 'fame', 0)  # 江湖善名
+        followers = getattr(player, 'followers_count', 0)
+        
+        # 背包信息
+        inventory = getattr(player, 'inventory', {})
+        if inventory:
+            items = [f"{k}:{v}" for k, v in list(inventory.items())[:5]]
+            inventory_str = ", ".join(items)
+            if len(inventory) > 5:
+                inventory_str += f" 等共{len(inventory)}种"
+        else:
+            inventory_str = "无"
+        
+        # 势力声望
+        org_rep = getattr(player, 'org_reputation', {})
+        if org_rep:
+            rep_items = [f"{org}:{val}" for org, val in list(org_rep.items())[:3]]
+            rep_str = ", ".join(rep_items)
+        else:
+            rep_str = "暂无"
+        
+        return f"""玩家当前状况：
+- 银钱：{money} 文
+- 健康：{health}/100
+- 情绪：{emotion}/100
+- 江湖善名：{fame}（-100 ~ +100）
+- 追随者：{followers} 人
+- 势力声望：{rep_str}
+- 拥有的资源：{inventory_str}"""
+    
     def _get_personality_narrative_guidance(self, npc: NPCData) -> str:
         """
         根据NPC性格生成叙事指导
         
-        直接使用原始性格数值（0-100），提供更精细的叙事指导
+        从personality对象获取性格数值（0-100），提供更精细的叙事指导
         """
         guidance_lines = []
+        
+        # 从personality对象获取性格属性
+        personality = getattr(npc, 'personality', None)
+        if personality:
+            temper = getattr(personality, 'temper', 50)
+            spirit = getattr(personality, 'spirit', 50)
+            ism = getattr(personality, 'ism', 50)
+            act_style = getattr(personality, 'act_style', 50)
+            friendship = getattr(personality, 'friendship', 50)
+            ambition = getattr(personality, 'ambition', 50)
+            desire_type = getattr(personality, 'desire_type', None)
+        else:
+            temper = spirit = ism = act_style = friendship = ambition = 50
+            desire_type = None
+        
+        # 获取人情值（直接从npc获取）
+        social_credit = getattr(npc, 'social_credit', 0)
         
         # ═══════════════════════════════════════════════════════════════
         # 1. 脾气 (temper: 0温和 ←→ 100暴躁)
         # ═══════════════════════════════════════════════════════════════
-        if npc.temper >= 80:
+        if temper >= 80:
             guidance_lines.append("- 【极度暴躁】此人脾气极其火爆，极易被激怒，常因冲动酿成大祸")
-        elif npc.temper >= 60:
+        elif temper >= 60:
             guidance_lines.append("- 【脾气暴躁】此人易怒冲动，事件中可能因一时气愤做出鲁莽决定")
-        elif npc.temper <= 20:
+        elif temper <= 20:
             guidance_lines.append("- 【极度温和】此人脾性极好，极少动怒，即使受辱也能保持冷静")
-        elif npc.temper <= 40:
+        elif temper <= 40:
             guidance_lines.append("- 【脾气温和】此人性格平和，不易被激怒，会理性思考后再行动")
         else:
             guidance_lines.append("- 【脾气一般】此人情绪稳定，既不易暴怒也不过分隐忍")
@@ -313,13 +371,13 @@ class RollingStoryGenerator:
         # ═══════════════════════════════════════════════════════════════
         # 2. 胆量 (spirit: 0胆小 ←→ 100勇敢)
         # ═══════════════════════════════════════════════════════════════
-        if npc.spirit >= 80:
+        if spirit >= 80:
             guidance_lines.append("- 【极度勇敢】此人胆大包天，面对强敌也毫不退缩，甚至敢于挑战权威")
-        elif npc.spirit >= 60:
+        elif spirit >= 60:
             guidance_lines.append("- 【胆识过人】此人勇敢无畏，敢于冒险，选项可包含高风险高回报的选择")
-        elif npc.spirit <= 20:
+        elif spirit <= 20:
             guidance_lines.append("- 【极度胆小】此人胆小如鼠，稍有危险就退缩，需要被保护或推动")
-        elif npc.spirit <= 40:
+        elif spirit <= 40:
             guidance_lines.append("- 【较为胆小】此人谨慎保守，厌恶风险，更倾向于稳妥的解决方案")
         else:
             guidance_lines.append("- 【胆识一般】此人既不过于鲁莽也不过分怯懦，会权衡利弊后行动")
@@ -327,13 +385,13 @@ class RollingStoryGenerator:
         # ═══════════════════════════════════════════════════════════════
         # 3. 主义 (ism: 0理想 ←→ 100现实)
         # ═══════════════════════════════════════════════════════════════
-        if npc.ism <= 20:
+        if ism <= 20:
             guidance_lines.append("- 【极度理想】此人是坚定的理想主义者，愿为信念牺牲一切，包括生命")
-        elif npc.ism <= 40:
+        elif ism <= 40:
             guidance_lines.append("- 【偏向理想】此人重视原则与正义，可能为了道德底线放弃实际利益")
-        elif npc.ism >= 80:
+        elif ism >= 80:
             guidance_lines.append("- 【极度现实】此人是彻底的现实主义者，只认利益不认情义，为达目的不择手段")
-        elif npc.ism >= 60:
+        elif ism >= 60:
             guidance_lines.append("- 【偏向现实】此人务实理性，会优先考虑实际利益而非道德原则")
         else:
             guidance_lines.append("- 【理想现实平衡】此人能在原则与利益之间找到平衡点")
@@ -341,13 +399,13 @@ class RollingStoryGenerator:
         # ═══════════════════════════════════════════════════════════════
         # 4. 风格 (act_style: 0缜密 ←→ 100豪放)
         # ═══════════════════════════════════════════════════════════════
-        if npc.act_style >= 80:
+        if act_style >= 80:
             guidance_lines.append("- 【极度豪放】此人行事大开大合，不拘小节，说话做事直来直去")
-        elif npc.act_style >= 60:
+        elif act_style >= 60:
             guidance_lines.append("- 【风格豪放】此人爽朗直率，不喜欢拐弯抹角，可能因口无遮拦得罪人")
-        elif npc.act_style <= 20:
+        elif act_style <= 20:
             guidance_lines.append("- 【极度缜密】此人思虑极深，每一步都精心计算，从不做无把握之事")
-        elif npc.act_style <= 40:
+        elif act_style <= 40:
             guidance_lines.append("- 【风格缜密】此人谨慎细致，谋定而后动，但可能因过于谨慎错失良机")
         else:
             guidance_lines.append("- 【张弛有度】此人该谨慎时谨慎，该果断时果断")
@@ -355,13 +413,13 @@ class RollingStoryGenerator:
         # ═══════════════════════════════════════════════════════════════
         # 5. 情义 (friendship: 0重情义 ←→ 100不重情义)
         # ═══════════════════════════════════════════════════════════════
-        if npc.friendship <= 20:
+        if friendship <= 20:
             guidance_lines.append("- 【极度重情义】此人把兄弟情义看得比命还重，为朋友两肋插刀，背叛朋友比死还难受")
-        elif npc.friendship <= 40:
+        elif friendship <= 40:
             guidance_lines.append("- 【重视情义】此人讲义气重感情，在涉及朋友/家人的抉择时会特别纠结")
-        elif npc.friendship >= 80:
+        elif friendship >= 80:
             guidance_lines.append("- 【极度薄情】此人冷酷无情，视感情为累赘，可以毫不犹豫出卖任何人")
-        elif npc.friendship >= 60:
+        elif friendship >= 60:
             guidance_lines.append("- 【不重情义】此人利益至上，可能为了利益牺牲人际关系")
         else:
             guidance_lines.append("- 【情义无特别倾向】此人对待感情比较理性，不会过分执着")
@@ -369,13 +427,13 @@ class RollingStoryGenerator:
         # ═══════════════════════════════════════════════════════════════
         # 6. 野心 (ambition: 0-100)
         # ═══════════════════════════════════════════════════════════════
-        if npc.ambition >= 80:
+        if ambition >= 80:
             guidance_lines.append("- 【野心极大】此人志向远大，渴望功成名就，为此可以忍受常人不能忍之事")
-        elif npc.ambition >= 60:
+        elif ambition >= 60:
             guidance_lines.append("- 【野心勃勃】此人渴望出人头地，有强烈的进取心，可能为此不择手段")
-        elif npc.ambition <= 20:
+        elif ambition <= 20:
             guidance_lines.append("- 【毫无野心】此人淡泊名利，只想安稳度日，对权力地位毫无兴趣")
-        elif npc.ambition <= 40:
+        elif ambition <= 40:
             guidance_lines.append("- 【较为淡泊】此人安于现状，更重视当下的平静生活")
         else:
             guidance_lines.append("- 【野心适中】此人会争取机会但不会过分强求")
@@ -392,16 +450,16 @@ class RollingStoryGenerator:
             "安全": "极度需要安全感，威胁安全的事会引发强烈反应",
             "正义": "嫉恶如仇，无法容忍不公，会主动挺身而出对抗邪恶"
         }
-        if npc.desire_type in desire_guidance:
-            guidance_lines.append(f"- 【欲望：{npc.desire_type}】{desire_guidance[npc.desire_type]}")
+        if desire_type in desire_guidance:
+            guidance_lines.append(f"- 【欲望：{desire_type}】{desire_guidance[desire_type]}")
         
         # ═══════════════════════════════════════════════════════════════
         # 8. 人情值影响
         # ═══════════════════════════════════════════════════════════════
-        if npc.social_credit > 0:
-            guidance_lines.append(f"- 【人情债】欠玩家人情({npc.social_credit}点)，可能因此感到有义务回报")
-        elif npc.social_credit < 0:
-            guidance_lines.append(f"- 【人情债】玩家欠其人情({-npc.social_credit}点)，可能借此机会要求回报")
+        if social_credit > 0:
+            guidance_lines.append(f"- 【人情债】欠玩家人情({social_credit}点)，可能因此感到有义务回报")
+        elif social_credit < 0:
+            guidance_lines.append(f"- 【人情债】玩家欠其人情({-social_credit}点)，可能借此机会要求回报")
         
         return "\n".join(guidance_lines) if guidance_lines else "（暂无特殊性格影响）"
     
@@ -459,10 +517,10 @@ class RollingStoryGenerator:
     def _create_fallback_card(self, npc: NPCData, seed: NPCDilemmaSeed) -> EventCard:
         """创建备用事件卡（当LLM失败时）"""
         return EventCard(
-            id=f"fallback_{npc.npc_id}",
+            id=f"fallback_{npc.id}",
             title=f"{npc.name}的困境",
             description=f"{npc.name}似乎遇到了一些麻烦，需要有人帮助...",
-            npc_id=npc.npc_id,
+            npc_id=npc.id,
             choices=[
                 EventChoice(
                     text="伸出援手",

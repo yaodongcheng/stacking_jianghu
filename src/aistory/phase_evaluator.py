@@ -70,7 +70,7 @@ class PhaseEvaluator:
 NPC姓名：{npc.name}
 当前情绪：{npc.emotion}/100
 当前健康：{npc.health}/100
-当前财富：{npc.wealth} 文
+当前财富：{npc.money} 文
 
 当前张力强度：
 {self._format_tensions(seed)}
@@ -114,7 +114,7 @@ NPC姓名：{npc.name}
             return DilemmaPhase.ESCALATED
         elif beat_count == 3:
             # 检查NPC状态是否危急
-            if npc.emotion < 20 or npc.health < 30 or npc.wealth < 10:
+            if npc.emotion < 20 or npc.health < 30 or npc.money < 10:
                 return DilemmaPhase.CRISIS
             return DilemmaPhase.ESCALATED
         elif beat_count >= 4:

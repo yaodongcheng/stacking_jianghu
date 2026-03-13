@@ -116,7 +116,7 @@ class RippleEngine:
         
         # 2. 对每个目标生成涟漪效果
         for target in targets:
-            if target.npc_id == source_npc.npc_id:
+            if target.id == source_npc.id:
                 continue
             
             # 使用LLM或启发式生成涟漪
@@ -144,11 +144,11 @@ class RippleEngine:
         
         # 1. 直接关系（同组织、同地点）
         for npc in all_npcs:
-            if npc.npc_id == source_npc.npc_id:
+            if npc.id == source_npc.id:
                 continue
             
             # 同组织
-            if npc.org and npc.org == source_npc.org:
+            if npc.org_id and npc.org_id == source_npc.org_id:
                 targets.append(npc)
                 continue
             
@@ -158,10 +158,10 @@ class RippleEngine:
                 continue
         
         # 2. 社交链关系
-        if source_npc.npc_id in self.social_graph:
-            for link in self.social_graph[source_npc.npc_id]:
+        if source_npc.id in self.social_graph:
+            for link in self.social_graph[source_npc.id]:
                 for npc in all_npcs:
-                    if npc.npc_id == link.target_id:
+                    if npc.id == link.target_id:
                         if npc not in targets:
                             targets.append(npc)
                         break
@@ -177,7 +177,7 @@ class RippleEngine:
         """使用LLM生成涟漪效果"""
         
         # 获取关系信息
-        relation = self._get_relation(source.npc_id, target.npc_id)
+        relation = self._get_relation(source.id, target.id)
         
         prompt = f"""分析以下事件对第三方NPC的影响。
 
@@ -189,10 +189,10 @@ NPC: {source.name}
 
 ===== 受影响NPC =====
 姓名: {target.name}
-身份: {target.identity}
+身份: {target.job}
 性格: {target.personality}
 当前情绪: {target.emotion}/100
-所属组织: {target.org or '无'}
+所属组织: {target.org_id or '无'}
 
 ===== 关系 =====
 {relation or '无明显关系'}
@@ -227,7 +227,7 @@ NPC: {source.name}
         
         try:
             response = await self.llm.generate(prompt)
-            return self._parse_ripple_response(response, target.npc_id)
+            return self._parse_ripple_response(response, target.id)
         except Exception as e:
             print(f"[RippleEngine] LLM生成涟漪失败: {e}")
             return None
@@ -241,11 +241,11 @@ NPC: {source.name}
         """启发式生成涟漪效果（无LLM时）"""
         
         # 同组织成员受影响
-        if source.org and source.org == target.org:
+        if source.org_id and source.org_id == target.org_id:
             # 组织声誉受损或受益
             if '帮' in consequence or '组织' in consequence:
                 return RippleEffect(
-                    target_npc_id=target.npc_id,
+                    target_npc_id=target.id,
                     ripple_type=RippleType.ORG_REACTION,
                     description=f"因{source.name}的事件，对组织产生看法",
                     stat_changes={"emotion": -5},
@@ -256,18 +256,18 @@ NPC: {source.name}
         if source.location == target.location:
             if len(source_seed.story_beats) >= 2:  # 故事有一定发展
                 return RippleEffect(
-                    target_npc_id=target.npc_id,
+                    target_npc_id=target.id,
                     ripple_type=RippleType.RUMOR_SPREAD,
                     description=f"听说了{source.name}的事情",
                     heat_delta=3
                 )
         
         # 社交关系影响
-        relation = self._get_relation(source.npc_id, target.npc_id)
+        relation = self._get_relation(source.id, target.id)
         if relation:
             if relation.relation_type in ['family', 'friend']:
                 return RippleEffect(
-                    target_npc_id=target.npc_id,
+                    target_npc_id=target.id,
                     ripple_type=RippleType.SOCIAL_CHAIN,
                     description=f"因{relation.relation_type}关系受到牵连",
                     stat_changes={"emotion": -10 if '伤害' in consequence else 5},
@@ -386,7 +386,7 @@ NPC: {source.name}
             base_radius += 1
         
         # NPC影响力（通过组织判断）
-        if source_npc.org:
+        if source_npc.org_id:
             base_radius += 1
         
         return min(base_radius, 3)  # 最大3层

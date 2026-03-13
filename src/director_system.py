@@ -78,8 +78,6 @@ class WorldObserver:
         # 3. 收集玩家状态
         self._observe_player(ctx, snapshot)
         
-        # 4. 分析戏剧节奏
-        self._analyze_dramatic_rhythm(snapshot)
         
         # 保存历史
         self.history.append(snapshot)
@@ -126,8 +124,6 @@ class WorldObserver:
         # 3. 收集玩家状态
         self._observe_player(ctx, snapshot)
         
-        # 4. 分析戏剧节奏
-        self._analyze_dramatic_rhythm(snapshot)
         
         # 保存历史
         self.history.append(snapshot)
@@ -477,26 +473,7 @@ class WorldObserver:
                     'type': 'ally' if affinity > 30 else ('enemy' if affinity < -30 else 'neutral')
                 })
     
-    def _analyze_dramatic_rhythm(self, snapshot: WorldSnapshot):
-        """分析戏剧节奏"""
-        # 基于历史判断当前应该是什么类型的事件
-        if len(self.history) < 3:
-            snapshot.current_dramatic_arc = "introduction"
-            return
-            
-        # 统计最近事件类型
-        recent_tensions = []
-        for past in self.history[-5:]:
-            # TODO: 从历史中提取事件类型
-            pass
-        
-        # 判断节奏
-        if len(snapshot.npcs_in_crisis) > 3:
-            snapshot.current_dramatic_arc = "climax"
-        elif len(snapshot.relationship_tensions) > 2:
-            snapshot.current_dramatic_arc = "rising"
-        else:
-            snapshot.current_dramatic_arc = "calm"
+    
 
 
 class AIDirector:
@@ -1059,14 +1036,7 @@ class AIDirector:
                 rel_type = "盟友" if rel['type'] == 'ally' else ("敌人" if rel['type'] == 'enemy' else "普通")
                 world_state.append(f"  - ID={rel['npc_id']} {rel['npc_name']}: {rel_type} (好感:{rel['affinity']})")
         
-        # 戏剧节奏
-        arc_cn = {
-            "introduction": "开场铺垫",
-            "rising": "矛盾上升",
-            "climax": "高潮时刻",
-            "calm": "平静期"
-        }
-        world_state.append(f"\n【当前戏剧节奏】{arc_cn.get(snapshot.current_dramatic_arc, '未知')}")
+       
         
         world_state_text = "\n".join(world_state)
         

@@ -109,7 +109,7 @@ class NPCDilemmaSeed:
     - 热度系统决定何时转化为事件
     - 故事节拍记录已发生的剧情
     """
-    npc_id: str = ""
+    id: str = ""
     
     # ===== 以下全部从NPC现有数据推算，不手写 =====
     # 核心矛盾：欲望 vs 现实
@@ -135,7 +135,7 @@ class NPCDilemmaSeed:
     def to_dict(self) -> Dict:
         """序列化为字典"""
         return {
-            "npc_id": self.npc_id,
+            "id": self.id,
             "desire": self.desire,
             "reality_block": self.reality_block,
             "tensions": [t.to_dict() for t in self.tensions],
@@ -150,7 +150,7 @@ class NPCDilemmaSeed:
     def from_dict(cls, data: Dict) -> 'NPCDilemmaSeed':
         """从字典反序列化"""
         seed = cls(
-            npc_id=data.get("npc_id", ""),
+            id=data.get("id", ""),
             desire=data.get("desire", ""),
             reality_block=data.get("reality_block", ""),
             heat=data.get("heat", 0.0),

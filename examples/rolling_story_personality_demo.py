@@ -96,7 +96,7 @@ async def demo_story_director():
         print(f"  欲望: {npc.desire_type}({npc.desire_level})")
         
         # 初始化张力
-        await director.initialize_npc_tensions(npc.npc_id, world_state)
+        await director.initialize_npc_tensions(npc.id, world_state)
     
     # 显示叙事指导
     print("\n" + "=" * 70)
