@@ -9,6 +9,9 @@ import subprocess
 import sys
 import os
 
+# 全局变量存储复选框状态
+file_checkboxes = {}  # {文件名: (BooleanVar, Checkbutton)}
+
 # 切换到项目目录
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -434,6 +437,143 @@ def update_file_list():
     file_list_text.config(state=tk.DISABLED)
 
 
+def clear_checkboxes():
+    """清除所有复选框"""
+    global file_checkboxes
+    for var, cb in file_checkboxes.values():
+        cb.destroy()
+    file_checkboxes = {}
+
+
+def add_file_checkbox(parent_frame, filename, file_type, color):
+    """为文件添加复选框"""
+    var = tk.BooleanVar()
+    
+    frame = tk.Frame(parent_frame)
+    frame.pack(fill=tk.X, anchor=tk.W)
+    
+    cb = tk.Checkbutton(frame, text=filename, variable=var, 
+                        font=("Consolas", 9), fg=color,
+                        selectcolor="white", anchor=tk.W)
+    cb.pack(side=tk.LEFT, fill=tk.X, expand=True)
+    
+    file_checkboxes[filename] = (var, cb)
+    return var
+
+
+def get_selected_files():
+    """获取所有选中的文件"""
+    selected = []
+    for filename, (var, cb) in file_checkboxes.items():
+        if var.get():
+            selected.append(filename)
+    return selected
+
+
+def stage_selected_files():
+    """将选中的文件添加到暂存区"""
+    selected = get_selected_files()
+    
+    if not selected:
+        messagebox.showinfo("提示", "请先勾选要添加的文件")
+        return
+    
+    files_str = ' '.join([f'"{f}"' for f in selected])
+    success, stdout, stderr = run_git(f"git add {files_str}")
+    
+    if success:
+        messagebox.showinfo("成功", f"已添加 {len(selected)} 个文件到暂存区")
+        update_file_list()
+        update_status_label()
+    else:
+        messagebox.showerror("错误", f"添加失败:\n{stderr}")
+
+
+def select_all_untracked():
+    """全选所有未跟踪文件"""
+    staged, modified, untracked = get_file_status()
+    count = 0
+    for filename in untracked:
+        if filename in file_checkboxes:
+            var, cb = file_checkboxes[filename]
+            var.set(True)
+            count += 1
+    if count > 0:
+        messagebox.showinfo("提示", f"已勾选 {count} 个未跟踪文件")
+
+
+def select_all_modified():
+    """全选所有已修改文件"""
+    staged, modified, untracked = get_file_status()
+    count = 0
+    for filename in modified:
+        if filename in file_checkboxes:
+            var, cb = file_checkboxes[filename]
+            var.set(True)
+            count += 1
+    if count > 0:
+        messagebox.showinfo("提示", f"已勾选 {count} 个已修改文件")
+
+
+def clear_all_selection():
+    """取消所有勾选"""
+    for var, cb in file_checkboxes.values():
+        var.set(False)
+
+
+def update_file_list():
+    """更新文件列表（带复选框版本）"""
+    global file_checkboxes
+    staged, modified, untracked = get_file_status()
+    
+    # 清除旧的复选框
+    clear_checkboxes()
+    
+    # 清空文本区域
+    file_list_text.config(state=tk.NORMAL)
+    file_list_text.delete(1.0, tk.END)
+    
+    # 创建用于放置复选框的父框架
+    checkbox_frame = tk.Frame(file_list_text)
+    file_list_text.window_create(tk.END, window=checkbox_frame)
+    
+    if staged:
+        header = tk.Label(checkbox_frame, text="【已暂存 - 将被提交】", 
+                          font=("Microsoft YaHei", 10, "bold"), 
+                          fg="#4CAF50", anchor=tk.W)
+        header.pack(fill=tk.X, anchor=tk.W, pady=(5, 0))
+        
+        for f in staged:
+            lbl = tk.Label(checkbox_frame, text=f"  ✓ {f}", 
+                          font=("Consolas", 9), fg="#2E7D32", anchor=tk.W)
+            lbl.pack(fill=tk.X, anchor=tk.W)
+    
+    if modified:
+        header = tk.Label(checkbox_frame, text="【已修改 - 未暂存】", 
+                          font=("Microsoft YaHei", 10, "bold"), 
+                          fg="#FF9800", anchor=tk.W)
+        header.pack(fill=tk.X, anchor=tk.W, pady=(10, 0))
+        
+        for f in modified:
+            add_file_checkbox(checkbox_frame, f, "modified", "#EF6C00")
+    
+    if untracked:
+        header = tk.Label(checkbox_frame, text="【未跟踪 - 新文件】", 
+                          font=("Microsoft YaHei", 10, "bold"), 
+                          fg="#9E9E9E", anchor=tk.W)
+        header.pack(fill=tk.X, anchor=tk.W, pady=(10, 0))
+        
+        for f in untracked:
+            add_file_checkbox(checkbox_frame, f, "untracked", "#616161")
+    
+    if not staged and not modified and not untracked:
+        lbl = tk.Label(checkbox_frame, text="工作区干净，没有未提交的更改", 
+                      font=("Microsoft YaHei", 10), fg="#4CAF50")
+        lbl.pack(pady=20)
+    
+    file_list_text.config(state=tk.DISABLED)
+
+
 def update_status_label():
     """更新状态标签"""
     staged, modified, untracked = get_file_status()
@@ -509,20 +649,25 @@ def main():
               command=commit_and_build).pack(padx=5)
 
     # 文件列表显示区
-    list_frame = tk.LabelFrame(root, text="文件状态", font=("Microsoft YaHei", 11), padx=10, pady=10)
+    list_frame = tk.LabelFrame(root, text='文件状态 (勾选文件后点击"添加选中")', 
+                               font=("Microsoft YaHei", 11), padx=10, pady=10)
     list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    # 操作按钮框架
+    checkbox_btn_frame = tk.Frame(list_frame)
+    checkbox_btn_frame.pack(fill=tk.X, pady=(0, 5))
+    
+    tk.Button(checkbox_btn_frame, text="☑️ 全选未跟踪", font=("Microsoft YaHei", 9),
+              command=select_all_untracked).pack(side=tk.LEFT, padx=2)
+    tk.Button(checkbox_btn_frame, text="☑️ 全选已修改", font=("Microsoft YaHei", 9),
+              command=select_all_modified).pack(side=tk.LEFT, padx=2)
+    tk.Button(checkbox_btn_frame, text="⬜ 取消全选", font=("Microsoft YaHei", 9),
+              command=clear_all_selection).pack(side=tk.LEFT, padx=2)
+    tk.Button(checkbox_btn_frame, text="➕ 添加选中到暂存区", font=("Microsoft YaHei", 9, "bold"),
+              bg="#4CAF50", fg="white", command=stage_selected_files).pack(side=tk.LEFT, padx=10)
 
     file_list_text = scrolledtext.ScrolledText(list_frame, wrap=tk.WORD, font=("Consolas", 9), height=15)
     file_list_text.pack(fill=tk.BOTH, expand=True)
-
-    # 配置文本样式
-    file_list_text.tag_config("staged_header", foreground="#4CAF50", font=("Microsoft YaHei", 10, "bold"))
-    file_list_text.tag_config("staged", foreground="#2E7D32")
-    file_list_text.tag_config("modified_header", foreground="#FF9800", font=("Microsoft YaHei", 10, "bold"))
-    file_list_text.tag_config("modified", foreground="#EF6C00")
-    file_list_text.tag_config("untracked_header", foreground="#9E9E9E", font=("Microsoft YaHei", 10, "bold"))
-    file_list_text.tag_config("untracked", foreground="#616161")
-    file_list_text.tag_config("clean", foreground="#4CAF50", font=("Microsoft YaHei", 10))
 
     file_list_text.config(state=tk.DISABLED)
 

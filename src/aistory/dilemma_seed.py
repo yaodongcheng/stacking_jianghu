@@ -62,7 +62,7 @@ class Tension:
         }
 
 
-@dataclass  
+@dataclass
 class StoryBeat:
     """
     已经发生的一个故事节拍
@@ -80,6 +80,11 @@ class StoryBeat:
     npc_state_change: Dict = field(default_factory=dict)  # NPC状态的具体变化
     heat_delta: float = 0.0         # 这个节拍让热度变化了多少
     phase: 'DilemmaPhase' = None    # 发生时的困境阶段
+    # 新增字段：用于记录完整的困境信息，供后续阶段参考
+    dilemma_type: str = ""          # 困境类型（如 SACRIFICE, BETRAY 等）
+    event_theme: str = ""           # 事件主题（如 维持生计-赌博成瘾）
+    desire: str = ""                # 内心渴望
+    misgiving: str = ""             # 内心顾虑
     
     def __post_init__(self):
         if self.phase is None:
@@ -95,7 +100,11 @@ class StoryBeat:
             "consequence_summary": self.consequence_summary,
             "npc_state_change": self.npc_state_change,
             "heat_delta": self.heat_delta,
-            "phase": self.phase.value if self.phase else "latent"
+            "phase": self.phase.value if self.phase else "latent",
+            "dilemma_type": self.dilemma_type,
+            "event_theme": self.event_theme,
+            "desire": self.desire,
+            "misgiving": self.misgiving
         }
 
 
