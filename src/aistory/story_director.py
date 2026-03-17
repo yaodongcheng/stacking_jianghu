@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from src.ui.event_notification import LiveNewsItem
+
 from .dilemma_seed import NPCDilemmaSeed, DilemmaPhase, StoryBeat, Tension
 from .dilemma_deriver import DilemmaDeriver
 from .shared_types import WorldSnapshot
@@ -667,7 +669,7 @@ class StoryDirector:
         StoryDirector._start_parallel_generation_for_dilemma(news_item, ctx)
     
     @staticmethod
-    def _start_parallel_generation_for_dilemma(news_item: 'LiveNewsItem', ctx):
+    def _start_parallel_generation_for_dilemma(news_item: LiveNewsItem, ctx):
         """
         为困境事件启动并行配图生成+对话扩写
         改编自director_system.py的_start_parallel_generation
