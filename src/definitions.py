@@ -243,7 +243,7 @@ DEBUG_COMBAT = False  # 战斗相关调试打印，默认关闭
 DEBUG_RECIPE_AI = False  # NPC配方驱动AI调试（去建筑合成配方），默认关闭
 DEBUG_ORG_AGGRO = False  # NPC组织仇恨感知调试（感知友方被攻击），默认关闭
 DEBUG_SKIP_YUXISHI = True  # 【调试】跳过鱼西施主线，直接进入自由模式
-DEBUG_LIVE_NEWS_TEST_EVENT = False  # 【调试】在大宋实况-历史版面显示测试事件
+DEBUG_LIVE_NEWS_TEST_EVENT = True  # 【调试】在大宋实况-历史版面显示测试事件
 
 # [新增] 允许控制非己方 NPC (如丢弃物品)
 DEBUG_CONTROLNPC = False 

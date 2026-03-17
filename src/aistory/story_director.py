@@ -570,17 +570,6 @@ class StoryDirector:
     @staticmethod
     def _handle_generated_event_static(npc, event_card, ctx):
         """处理生成的事件卡片（静态版本）- 接入director_system的配图和扩写流程"""
-        print(f"[DilemmaTest] 成功生成事件: {event_card.title}")
-        print(f"[DilemmaTest] 事件描述: {event_card.description}")
-        print(f"[DilemmaTest] 选项数: {len(event_card.choices)}")
-        
-        # 显示浮动提示
-        if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
-            ctx.ft_manager.add_text(
-                f"[AI] {npc.name}的困境事件已生成!",
-                npc.rect.centerx, npc.rect.top - 50, (100, 255, 150)
-            )
-        
         # 将EventCard转换为LiveNewsItem并接入配图+扩写流程
         StoryDirector._convert_and_start_generation(npc, event_card, ctx)
     

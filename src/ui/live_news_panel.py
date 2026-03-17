@@ -146,7 +146,7 @@ class LiveNewsPanel:
         test_news_1 = LiveNewsItem(
             id="test_event_001",
             title="【爆款】甜水巷商会与泼皮发生冲突！",
-            description="郁芊芊的商队运送贵重布料途中，被泼皮牛二当街拦路勒索。牛二声称要收'过路费'，否则不让通行。郁芊芊不愿屈服，双方僵持不下。",
+            description="郁芊芊的商队运送贵重布料途中，被泼皮牛二当街拦路勒索。牛二声称要收'过路费'，否则不让通行。郁芊芊不愿屈服，双方僵持不下。郁芊芊的商队运送贵重布料途中，被泼皮牛二当街拦路勒索。牛二声称要收'过路费'，否则不让通行。郁芊芊不愿屈服，双方僵持不下。",
             category=NewsCategory.SOCIAL,
             dilemma_type=DilemmaType.MORAL_GREY,
             actor_ids=[1006, 1024],  # 郁芊芊, 泼皮牛二

@@ -114,6 +114,21 @@ class LiveSnapshotPanel:
         self.comment_scroll_speed = 25  # 每次滚动像素数
         self.comment_area_rect = None  # 评论区区域（用于滚轮检测）
         
+        # 正文区滚动
+        self.desc_scroll_y = 0  # 正文滚动偏移量
+        self.desc_max_scroll = 0  # 正文最大滚动值
+        self.desc_area_rect = None  # 正文区域（用于滚轮检测）
+        self.DESC_MAX_LINES = 4  # 正文最大显示行数
+        self.desc_line_height = 24  # 每行高度
+        self.desc_scrollbar_dragging = False  # 是否正在拖动正文滚动条
+        self.desc_scrollbar_drag_start_y = 0  # 拖动起始Y坐标
+        self.desc_scrollbar_drag_start_scroll = 0  # 拖动起始滚动值
+        
+        # 评论区滚动条拖动
+        self.comment_scrollbar_dragging = False  # 是否正在拖动评论滚动条
+        self.comment_scrollbar_drag_start_y = 0  # 拖动起始Y坐标
+        self.comment_scrollbar_drag_start_scroll = 0  # 拖动起始滚动值
+        
         # 两级选择状态
         self.choice_level = 1  # 1=第一级(当面/快信), 2=第二级(具体选项)
         self.original_choices = []  # 保存原始选项
@@ -197,6 +212,14 @@ class LiveSnapshotPanel:
                     'speed': random.uniform(1.0, 2.5),
                     'color': self._get_comment_color(comment.get('type', '中立'))
                 })
+        
+        # 重置滚动状态
+        self.desc_scroll_y = 0
+        self.desc_max_scroll = 0
+        self.desc_scrollbar_dragging = False
+        self.comment_scroll_y = 0
+        self.comment_max_scroll = 0
+        self.comment_scrollbar_dragging = False
     
     def hide(self):
         """隐藏面板"""
@@ -366,6 +389,36 @@ class LiveSnapshotPanel:
             if not panel_rect.collidepoint(mx, my):
                 self.hide()
                 return True
+            
+            # 检查是否点击正文区滚动条
+            if self.desc_max_scroll > 0 and self.desc_area_rect:
+                scrollbar_rect = self._get_desc_scrollbar_rect()
+                scrollbar_track_rect = self._get_desc_scrollbar_track_rect()
+                if scrollbar_rect and scrollbar_rect.collidepoint(mx, my):
+                    self.desc_scrollbar_dragging = True
+                    self.desc_scrollbar_drag_start_y = my
+                    self.desc_scrollbar_drag_start_scroll = self.desc_scroll_y
+                    return True
+                elif scrollbar_track_rect and scrollbar_track_rect.collidepoint(mx, my):
+                    click_ratio = (my - scrollbar_track_rect.top) / scrollbar_track_rect.height
+                    self.desc_scroll_y = int(click_ratio * self.desc_max_scroll)
+                    self.desc_scroll_y = max(0, min(self.desc_scroll_y, self.desc_max_scroll))
+                    return True
+            
+            # 检查是否点击评论区滚动条
+            if self.comment_max_scroll > 0 and self.comment_area_rect:
+                scrollbar_rect = self._get_comment_scrollbar_rect()
+                scrollbar_track_rect = self._get_comment_scrollbar_track_rect()
+                if scrollbar_rect and scrollbar_rect.collidepoint(mx, my):
+                    self.comment_scrollbar_dragging = True
+                    self.comment_scrollbar_drag_start_y = my
+                    self.comment_scrollbar_drag_start_scroll = self.comment_scroll_y
+                    return True
+                elif scrollbar_track_rect and scrollbar_track_rect.collidepoint(mx, my):
+                    click_ratio = (my - scrollbar_track_rect.top) / scrollbar_track_rect.height
+                    self.comment_scroll_y = int(click_ratio * self.comment_max_scroll)
+                    self.comment_scroll_y = max(0, min(self.comment_scroll_y, self.comment_max_scroll))
+                    return True
         
         elif event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
@@ -383,19 +436,67 @@ class LiveSnapshotPanel:
             # 如果悬停变化，清除 tooltip（让新的悬停重新准备）
             if prev_hover != self.hovered_choice:
                 self.choice_tooltip = None
+            
+            # 处理正文区滚动条拖动
+            if self.desc_scrollbar_dragging:
+                if pygame.mouse.get_pressed()[0]:
+                    if self.desc_max_scroll > 0 and self.desc_area_rect:
+                        scrollbar_height = self.desc_area_rect.height - 10
+                        total_lines = self._get_desc_total_lines()
+                        thumb_height = max(20, scrollbar_height * (self.DESC_MAX_LINES / total_lines))
+                        scroll_track_height = scrollbar_height - thumb_height
+                        if scroll_track_height > 0:
+                            drag_delta = my - self.desc_scrollbar_drag_start_y
+                            scroll_ratio = drag_delta / scroll_track_height
+                            self.desc_scroll_y = self.desc_scrollbar_drag_start_scroll + int(scroll_ratio * self.desc_max_scroll)
+                            self.desc_scroll_y = max(0, min(self.desc_scroll_y, self.desc_max_scroll))
+                else:
+                    self.desc_scrollbar_dragging = False
+            
+            # 处理评论区滚动条拖动
+            if self.comment_scrollbar_dragging:
+                if pygame.mouse.get_pressed()[0]:
+                    if self.comment_max_scroll > 0 and self.comment_area_rect:
+                        scrollbar_height = self.comment_area_rect.height - 10
+                        # 使用与绘制时相同的比例计算滑块高度
+                        total_height = self.comment_max_scroll + self.comment_area_rect.height
+                        thumb_height = max(30, scrollbar_height * (self.comment_area_rect.height / total_height))
+                        scroll_track_height = scrollbar_height - thumb_height
+                        if scroll_track_height > 0:
+                            drag_delta = my - self.comment_scrollbar_drag_start_y
+                            scroll_ratio = drag_delta / scroll_track_height
+                            self.comment_scroll_y = self.comment_scrollbar_drag_start_scroll + int(scroll_ratio * self.comment_max_scroll)
+                            self.comment_scroll_y = max(0, min(self.comment_scroll_y, self.comment_max_scroll))
+                else:
+                    self.comment_scrollbar_dragging = False
         
         # 处理评论区滚轮事件
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4 or event.button == 5:  # 滚轮上/下
                 mx, my = event.pos
+                
+                # 检查鼠标是否在正文区区域内
+                if self.desc_area_rect and self.desc_area_rect.collidepoint(mx, my):
+                    if self.desc_max_scroll > 0:
+                        direction = -1 if event.button == 4 else 1
+                        self.desc_scroll_y += direction * self.comment_scroll_speed
+                        self.desc_scroll_y = max(0, min(self.desc_scroll_y, self.desc_max_scroll))
+                        return True
+                
                 # 检查鼠标是否在评论区区域内
                 if self.comment_area_rect and self.comment_area_rect.collidepoint(mx, my):
-                    # 计算滚动方向：4=上滚(向上滚动内容)，5=下滚(向下滚动内容)
+                    # 计算滚动方向：4=上滚(向上滚动内容)，5=下滚(向下滚动内容）
                     direction = -1 if event.button == 4 else 1
                     self.comment_scroll_y += direction * self.comment_scroll_speed
                     # 限制滚动范围
                     self.comment_scroll_y = max(0, min(self.comment_scroll_y, self.comment_max_scroll))
                     return True  # 消费事件
+        
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                # 停止拖动
+                self.desc_scrollbar_dragging = False
+                self.comment_scrollbar_dragging = False
         
         return True  # 面板打开时消费所有事件
     
@@ -550,7 +651,9 @@ class LiveSnapshotPanel:
             pass
         
         for i, choice in enumerate(self.snapshot.choices):
-            btn_rect = pygame.Rect(30, start_y + i * 75, self.panel_w - 60, 55)
+            btn_height = 40
+            btn_gap = 10
+            btn_rect = pygame.Rect(30, start_y + i * (btn_height + btn_gap), self.panel_w - 60, btn_height)
             
             # 缓存按钮位置（相对坐标，用于handle_event）
             self._cached_button_rects.append(btn_rect)
@@ -592,7 +695,7 @@ class LiveSnapshotPanel:
                 req_surf = small_font.render(req_text, True, 
                     (180, 140, 100) if is_enabled else (100, 100, 110))
                 req_x = btn_rect.centerx - req_surf.get_width() // 2
-                req_y = btn_rect.bottom - 18
+                req_y = btn_rect.bottom - 14  # 调整位置适应新高度
                 surface.blit(req_surf, (req_x, req_y))
             
             # 如果悬停且满足条件，准备 tooltip
@@ -814,7 +917,7 @@ class LiveSnapshotPanel:
         """计算图片区域底部Y坐标"""
         margin_x = 40
         max_img_w = self.panel_w - margin_x * 2
-        max_img_h = 360
+        max_img_h = 260  # 同步缩小100像素
         
         # 检查是否有实际图片
         img_surface = None
@@ -834,8 +937,8 @@ class LiveSnapshotPanel:
                 display_h = max_img_h
             return start_y + display_h
         else:
-            # 占位图或加载中高度
-            return start_y + 280
+            # 占位图或加载中高度（同步缩小100像素）
+            return start_y + 260
     
     def _get_title_bottom_y(self, start_y: int) -> int:
         """计算标题区域底部Y坐标"""
@@ -900,7 +1003,7 @@ class LiveSnapshotPanel:
         h = 20  # 顶部边距
         
         # 图片高度
-        h += 280  # 图片默认高度
+        h += 180  # 图片默认高度（缩小100像素后）
         h += self.SECTION_GAP
         
         # 标题高度（最多2行）
@@ -910,9 +1013,13 @@ class LiveSnapshotPanel:
         if self.snapshot.actor_names:
             h += 28 + 8  # 头像高度 + 间距
         
-        # 描述高度（最多3行）
+        # 描述高度 - 根据实际行数，最多4行
         if self.snapshot.description:
-            h += 28 * 3
+            font_md = self._get_font(20)
+            content_width = self.panel_w - 40  # 左右边距20*2
+            desc_lines = self._wrap_text(self.snapshot.description, font_md, content_width)
+            actual_lines = min(len(desc_lines), self.DESC_MAX_LINES)
+            h += self.desc_line_height * actual_lines
         
         h += self.SECTION_GAP
         
@@ -958,8 +1065,9 @@ class LiveSnapshotPanel:
             h += 10  # 底部间距
         
         # 按钮区域高度 - 确保按钮完全可见
+        # 按钮高度45 + 间距70，每个按钮实际占用70像素（原来是60）
         num_choices = len(self.snapshot.choices) if self.snapshot.choices else 0
-        h += self.COMMENT_BUTTON_GAP + num_choices * 60 + 50  # 间距 + 按钮 + 更大的底部边距
+        h += self.COMMENT_BUTTON_GAP + num_choices * 60 + 20  # 间距 + 按钮(45高+25空隙) + 底部边距
         
         return h
     
@@ -1057,7 +1165,7 @@ class LiveSnapshotPanel:
         
         margin_x = 40  # 左右边距
         max_img_w = self.panel_w - margin_x * 2  # 最大可用宽度
-        max_img_h = 360  # 最大高度（避免过大）
+        max_img_h = 260  # 最大高度（缩小100像素，为按钮区腾出空间）
         
         drawn = False
         img_surface = None
@@ -1120,7 +1228,7 @@ class LiveSnapshotPanel:
         elif self.snapshot.image_url == "loading":
             img_x = margin_x
             loading_w = max_img_w
-            loading_h = 280
+            loading_h = max_img_h  # 与图片最大高度保持一致
             self._draw_loading_image(surface, img_x, y, loading_w, loading_h)
             drawn = True
             actual_img_h = loading_h
@@ -1129,7 +1237,7 @@ class LiveSnapshotPanel:
         if not drawn:
             img_x = margin_x
             placeholder_w = max_img_w
-            placeholder_h = 280
+            placeholder_h = max_img_h  # 与图片最大高度保持一致
             
             # 创建优雅占位图
             placeholder = pygame.Surface((placeholder_w, placeholder_h), pygame.SRCALPHA)
@@ -1275,15 +1383,73 @@ class LiveSnapshotPanel:
             
             y += AVATAR_SIZE + 10  # 头像高度 + 间距
         
-        # ===== 事件描述（正文）=====
+        # ===== 事件描述（正文）- 支持滚动 =====
         description = self.snapshot.description
+        desc_start_y = y
         if description:
             desc_lines = self._wrap_text(description, font_md, content_width)
+            total_desc_lines = len(desc_lines)
             
-            for line in desc_lines[:3]:  # 最多3行
-                desc_surf = font_md.render(line, True, (70, 70, 70))
-                surface.blit(desc_surf, (MARGIN, y))
-                y += 24
+            # 计算正文区域高度
+            if total_desc_lines <= self.DESC_MAX_LINES:
+                # 4行以内，不需要滚动
+                visible_lines = total_desc_lines
+                desc_area_height = visible_lines * self.desc_line_height
+                self.desc_max_scroll = 0
+            else:
+                # 超过4行，需要滚动，固定显示4行高度
+                visible_lines = self.DESC_MAX_LINES
+                desc_area_height = self.DESC_MAX_LINES * self.desc_line_height
+                self.desc_max_scroll = (total_desc_lines - self.DESC_MAX_LINES) * self.desc_line_height
+            
+            # 记录正文区域（用于滚轮检测）- 使用屏幕坐标
+            self.desc_area_rect = pygame.Rect(
+                self.panel_x + MARGIN,
+                self.panel_y + desc_start_y,
+                content_width,
+                desc_area_height
+            )
+            
+            # 创建裁剪区域
+            clip_rect = pygame.Rect(MARGIN, desc_start_y, content_width, desc_area_height)
+            original_clip = surface.get_clip()
+            surface.set_clip(clip_rect)
+            
+            # 绘制可见的行（考虑滚动偏移）
+            current_y = desc_start_y - self.desc_scroll_y
+            for i, line in enumerate(desc_lines):
+                # 检查是否在可见区域内
+                line_top = current_y
+                line_bottom = current_y + self.desc_line_height
+                
+                # 只绘制在裁剪区域内的行
+                if line_bottom > desc_start_y and line_top < desc_start_y + desc_area_height:
+                    desc_surf = font_md.render(line, True, (70, 70, 70))
+                    surface.blit(desc_surf, (MARGIN, current_y))
+                
+                current_y += self.desc_line_height
+            
+            # 恢复裁剪区域
+            surface.set_clip(original_clip)
+            
+            # 绘制滚动条（如果需要）
+            if self.desc_max_scroll > 0:
+                scrollbar_x = self.panel_w - 20
+                scrollbar_top = desc_start_y + 5
+                scrollbar_height = desc_area_height - 10
+                
+                # 滚动条背景
+                pygame.draw.rect(surface, (220, 220, 220), 
+                               (scrollbar_x, scrollbar_top, 6, scrollbar_height), border_radius=3)
+                
+                # 滚动条滑块
+                scroll_ratio = self.desc_scroll_y / self.desc_max_scroll if self.desc_max_scroll > 0 else 0
+                thumb_height = max(20, scrollbar_height * (self.DESC_MAX_LINES / total_desc_lines))
+                thumb_y = scrollbar_top + (scrollbar_height - thumb_height) * scroll_ratio
+                pygame.draw.rect(surface, (100, 100, 120), 
+                               (scrollbar_x, thumb_y, 6, thumb_height), border_radius=3)
+            
+            y = desc_start_y + desc_area_height
         
         return y + 8
     
@@ -1758,6 +1924,75 @@ class LiveSnapshotPanel:
         c1 = 1.70158
         c3 = c1 + 1
         return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+    
+    def _get_desc_scrollbar_rect(self) -> Optional[pygame.Rect]:
+        """获取正文区滚动条的位置（屏幕坐标）"""
+        if not self.desc_area_rect or self.desc_max_scroll <= 0:
+            return None
+        
+        scrollbar_x = self.panel_x + self.panel_w - 20
+        scrollbar_top = self.desc_area_rect.top + 5
+        scrollbar_height = self.desc_area_rect.height - 10
+        
+        # 计算滑块位置和高度
+        total_lines = self._get_desc_total_lines()
+        thumb_height = max(20, scrollbar_height * (self.DESC_MAX_LINES / total_lines))
+        scroll_ratio = self.desc_scroll_y / self.desc_max_scroll if self.desc_max_scroll > 0 else 0
+        thumb_y = scrollbar_top + (scrollbar_height - thumb_height) * scroll_ratio
+        
+        return pygame.Rect(scrollbar_x, thumb_y, 6, thumb_height)
+    
+    def _get_desc_total_lines(self) -> int:
+        """获取正文总行数"""
+        if not self.snapshot or not self.snapshot.description:
+            return 0
+        font_md = self._get_font(20)
+        content_width = self.panel_w - 40
+        desc_lines = self._wrap_text(self.snapshot.description, font_md, content_width)
+        return len(desc_lines)
+    
+    def _get_comment_scrollbar_rect(self) -> Optional[pygame.Rect]:
+        """获取评论区滚动条滑块的位置（屏幕坐标）"""
+        if not self.comment_area_rect or self.comment_max_scroll <= 0:
+            return None
+        
+        scrollbar_x = self.panel_x + self.panel_w - 15
+        scrollbar_top = self.comment_area_rect.top + 5
+        scrollbar_height = self.comment_area_rect.height - 10
+        
+        # 计算滑块高度：使用与绘制时相同的比例
+        # actual_display_height / total_comments_height 的比例
+        # 这里用 comment_area_rect.height 代替 actual_display_height
+        # 用 comment_max_scroll + comment_area_rect.height 代替 total_comments_height
+        total_height = self.comment_max_scroll + self.comment_area_rect.height
+        thumb_height = max(30, scrollbar_height * (self.comment_area_rect.height / total_height))
+        scroll_track_height = scrollbar_height - thumb_height
+        scroll_ratio = self.comment_scroll_y / self.comment_max_scroll if self.comment_max_scroll > 0 else 0
+        thumb_y = scrollbar_top + scroll_ratio * scroll_track_height
+        
+        return pygame.Rect(scrollbar_x, thumb_y, 8, thumb_height)
+    
+    def _get_comment_scrollbar_track_rect(self) -> Optional[pygame.Rect]:
+        """获取评论区滚动条轨道的位置（屏幕坐标）"""
+        if not self.comment_area_rect or self.comment_max_scroll <= 0:
+            return None
+        
+        scrollbar_x = self.panel_x + self.panel_w - 15
+        scrollbar_top = self.comment_area_rect.top + 5
+        scrollbar_height = self.comment_area_rect.height - 10
+        
+        return pygame.Rect(scrollbar_x, scrollbar_top, 8, scrollbar_height)
+    
+    def _get_desc_scrollbar_track_rect(self) -> Optional[pygame.Rect]:
+        """获取正文区滚动条轨道的位置（屏幕坐标）"""
+        if not self.desc_area_rect or self.desc_max_scroll <= 0:
+            return None
+        
+        scrollbar_x = self.panel_x + self.panel_w - 20
+        scrollbar_top = self.desc_area_rect.top + 5
+        scrollbar_height = self.desc_area_rect.height - 10
+        
+        return pygame.Rect(scrollbar_x, scrollbar_top, 6, scrollbar_height)
 
 
 # 全局单例
