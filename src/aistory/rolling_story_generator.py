@@ -254,7 +254,24 @@ class RollingStoryGenerator:
                     
                     relations = npc_data.get('relations', [])
                     if relations:
-                        rel_str = ", ".join(relations[:3])
+                        # 处理不同格式的relations
+                        if isinstance(relations, dict):
+                            # 字典格式，取前3个键
+                            rel_items = list(relations.items())[:3]
+                            rel_strs = []
+                            for rel_name, rel_val in rel_items:
+                                if isinstance(rel_val, (int, float)):
+                                    rel_strs.append(f"{rel_name}({int(rel_val)})")
+                                elif isinstance(rel_val, dict):
+                                    rel_strs.append(f"{rel_name}")
+                                else:
+                                    rel_strs.append(f"{rel_name}")
+                            rel_str = ", ".join(rel_strs)
+                        elif isinstance(relations, list):
+                            # 列表格式
+                            rel_str = ", ".join(str(r) for r in relations[:3])
+                        else:
+                            rel_str = str(relations)
                         world_state.append(f"        关系: {rel_str}")
                     
                     memories = npc_data.get('recent_memories', [])
@@ -352,20 +369,28 @@ actors数组中的role字段可选值：
 ## 已有困境记录
 {dilemma_history}
 
-## 当前局势压力：
+## 当前困境压力：
 {tension_level}
 
-## 相关NPC（至少选1位卷入困境）
-{related_npcs}
 
-## 世界状态
-- 当前势力格局: {self._get_faction_status(snapshot)}
+## 当前世界状态
+{world_state_text}
+
+## 当前势力格局
+{self._get_faction_status(snapshot)}
 
 ## 玩家状态
 - 银钱: {getattr(player, 'money', 0)} 文
 - 能力属性: strength:{getattr(player, 'strength', 0)}, agility:{getattr(player, 'agility', 0)}, wit:{getattr(player, 'wit', 0)}, charm:{getattr(player, 'charm', 0)}
 
 ## 字段格式详细说明
+
+### 内容要求
+1. 标题要有爆点，像小红书热门标题
+2. 评论要模拟真实网友风格（支持、反对、调侃都要有），网友不能是虚构，必须来自于完整演员池（所有可用NPC，但是剔除当事人）
+3. effect格式：角色:属性:增减值，多个用分号隔开
+4. 角色可以是 A/B/C（对应actors顺序）或 PLAYER5、
+5. tags数组中的标签只写纯文字，如 ["职场霸凌", "废柴集合"]等吸引人注目的标签
 
 ### requirement字段格式
 格式: `actor_name:attribute:compare_symbol:needvalue`
@@ -579,16 +604,26 @@ actors数组中的role字段可选值：
         return "，".join(traits) if traits else "性情平和"
 
     def _calculate_tension_level(self, beats: List[StoryBeat]) -> str:
-        """计算当前局势压力"""
-        beat_count = len(beats)
-        if beat_count == 0:
-            return "0(低)"
-        elif beat_count == 1:
-            return "50(中)"
-        elif beat_count == 2:
-            return "70(高)"
+        """
+        计算当前局势压力（基于各节拍的 tension_delta 累计）
+        
+        每个 StoryBeat 的 tension_delta 字段记录了该节拍带来的张力变化
+        从0开始累计，得到当前总张力值
+        """
+        total_tension = 0
+        for beat in beats:
+            # 累加每个节拍的张力变化
+            total_tension += getattr(beat, 'tension_delta', 0) or 0
+        
+        # 根据累计值返回张力等级描述
+        if total_tension <= 0:
+            return f"{int(total_tension)}(低)"
+        elif total_tension <= 30:
+            return f"{int(total_tension)}(中)"
+        elif total_tension <= 60:
+            return f"{int(total_tension)}(高)"
         else:
-            return "0(无)"
+            return f"{int(total_tension)}(极高)"
 
     def _get_task_description(self, phase: StoryPhase) -> str:
         """获取任务描述"""
@@ -658,12 +693,42 @@ actors数组中的role字段可选值：
         
         # 从NPC的relations获取相关人物
         relations = getattr(npc, 'relations', [])
+        # 确保 relations 是列表
+        if relations and isinstance(relations, dict):
+            # 如果是字典，转换为列表（处理值可能是int或dict的情况）
+            converted_relations = []
+            for k, v in relations.items():
+                if isinstance(v, dict):
+                    # 值是字典格式
+                    converted_relations.append({
+                        'target_name': k, 
+                        'rel_type': v.get('type', '未知'), 
+                        'rel_value': v.get('value', 0)
+                    })
+                elif isinstance(v, (int, float)):
+                    # 值是数字格式（直接是好感度）
+                    converted_relations.append({
+                        'target_name': k, 
+                        'rel_type': '关系', 
+                        'rel_value': int(v)
+                    })
+                else:
+                    # 其他格式，使用默认值
+                    converted_relations.append({
+                        'target_name': k, 
+                        'rel_type': '未知', 
+                        'rel_value': 0
+                    })
+            relations = converted_relations
+        elif not isinstance(relations, list):
+            relations = []
+        
         if relations:
             lines.append("与事件主角有关系的NPC：")
             for rel in relations[:5]:
-                target_name = getattr(rel, 'target_name', '未知')
-                rel_type = getattr(rel, 'rel_type', '未知')
-                rel_value = getattr(rel, 'rel_value', 0)
+                target_name = getattr(rel, 'target_name', '') or rel.get('target_name', '未知')
+                rel_type = getattr(rel, 'rel_type', '') or rel.get('rel_type', '未知')
+                rel_value = getattr(rel, 'rel_value', 0) or rel.get('rel_value', 0)
                 lines.append(f"- {target_name} ({rel_type}, 好感度: {rel_value})")
         
         # 添加可用演员池中的其他NPC

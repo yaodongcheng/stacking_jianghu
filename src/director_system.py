@@ -1224,13 +1224,13 @@ class AIDirector:
                 }
                 category = cat_map.get(template.get('category', ''), NewsCategory.SOCIAL)
             
-            # 确定困境类型
+            # 确定困境类型（与新定义的 DilemmaType 保持一致）
             tension = decision.get('tension_level', 'MEDIUM')
             dilemma_map = {
                 'LOW': None,
-                'MEDIUM': DilemmaType.JUSTICE,
+                'MEDIUM': DilemmaType.MORAL_GREY,
                 'HIGH': DilemmaType.SACRIFICE,
-                'CRITICAL': DilemmaType.BETRAYAL
+                'CRITICAL': DilemmaType.BETRAY
             }
             dilemma = dilemma_map.get(tension)
             

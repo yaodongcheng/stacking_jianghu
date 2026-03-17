@@ -93,18 +93,12 @@ class DilemmaDeriver:
         """
         seed = NPCDilemmaSeed(npc_id=npc.id)
         
-        # 1. 派生核心矛盾
-        seed.desire, seed.reality_block = self._derive_core_conflict(npc)
+        # 1. 派生核心矛盾（重构后使用 desire 和 misgiving）
+        seed.desire, seed.misgiving = self._derive_core_conflict(npc)
         
-        # 2. 派生张力线（使用LLM）
-        if self.llm:
-            seed.tensions = await self._derive_tensions_with_llm(npc, world_state)
-        else:
-            # 无LLM时使用启发式规则
-            seed.tensions = self._derive_tensions_heuristic(npc, world_state)
-        
-        # 3. 计算热度
-        seed.heat = self.calculate_heat(seed, world_state)
+        # 【重构后】不再派生 tensions 列表
+        # 2. 计算热度（简化版）
+        seed.heat = self._calculate_simple_heat(npc, world_state)
         
         # 缓存
         self._cache[npc.id] = seed
@@ -348,48 +342,49 @@ class DilemmaDeriver:
         elif friendship > 60:  # 不重情义
             desire += "，不惜为此牺牲人情往来"
         
-        # === 基于性格推断阻碍 ===
-        reality_block = ""
+        # === 基于性格推断顾虑（misgiving）===
+        # 【重构后】使用第一人称口吻，与JSON中的misgiving字段对应
+        misgiving = ""
         
         # 1. 基于主义（理想vs现实，数值型：越小越理想）
         if ism < 40:  # 理想主义
             if npc.money < 30:
-                reality_block = "理想主义在贫困现实面前的无力"
+                misgiving = "我担心理想主义在贫困现实面前不堪一击"
             else:
-                reality_block = "理想与世俗现实的冲突"
+                misgiving = "我害怕理想与世俗现实产生不可调和的冲突"
         elif ism > 60:  # 现实主义
             if npc.money < 30:
-                reality_block = "贫困的经济状况限制了选择"
+                misgiving = "我担心贫困的经济状况会让我别无选择"
             else:
-                reality_block = "现实主义带来的道德困境"
+                misgiving = "我害怕现实主义会让我陷入道德困境"
         
         # 2. 基于行事风格（数值型：越小越缜密）
-        if not reality_block:
+        if not misgiving:
             if act_style < 40:  # 缜密
-                reality_block = "过于谨慎导致错失机会"
+                misgiving = "我担心过于谨慎会让我错失良机"
             elif act_style > 60:  # 豪放/大胆
-                reality_block = "冒进带来的风险和后果"
+                misgiving = "我害怕冒进会带来无法预料的风险"
         
         # 3. 基于现状（兜底逻辑）
         # 获取健康值（NPC使用hp而不是health）
         health = getattr(npc, 'hp', getattr(npc, 'health', 100))
-        if not reality_block:
+        if not misgiving:
             if npc.money < 20:
-                reality_block = "贫困的经济状况限制了选择"
+                misgiving = "我担心贫困会让我没有选择余地"
             elif npc.money > 200:
-                reality_block = "财富带来的嫉妒和觊觎"
+                misgiving = "我害怕财富会引来嫉妒和觊觎"
             elif npc.org_id and "底层" in npc.org_id:
-                reality_block = "出身卑微，缺乏上升渠道"
+                misgiving = "我担心出身卑微会让我永无出头之日"
             elif health < 50:
-                reality_block = "身体抱恙，力不从心"
+                misgiving = "我害怕身体抱恙会让我力不从心"
             else:
-                reality_block = "复杂的人际关系和社会环境"
+                misgiving = "我担心复杂的人际关系会让我陷入困境"
         
         # 4. 基于脾气调整（数值型：越大越暴躁）
         if temper > 60:  # 暴躁
-            reality_block += "，加上急躁性格容易让事情变得更糟"
+            misgiving += "，也害怕急躁性格会让事情变得更糟"
         
-        return desire, reality_block
+        return desire, misgiving
     
     def calculate_heat(self, seed: NPCDilemmaSeed, world_state: WorldSnapshot) -> float:
         """
@@ -402,29 +397,29 @@ class DilemmaDeriver:
         4. 距离上次事件的时间间隔（太久没出现要降权，但积累的矛盾要升温）
         5. 与其他NPC故事线的交叉度
         """
-        heat = 0.0
+        heat = 30.0  # 基础热度
         
-        # 基础张力热度
-        for tension in seed.tensions:
-            heat += tension.intensity * 0.3
+        # 【重构后】不再基于 tensions 计算热度
+        # 基于 story_beats 数量调整
+        beat_count = len(seed.story_beats)
+        heat += beat_count * 5  # 每个节拍+5热度
         
-        # 阶段加成
+        # 阶段加成（起承转合四阶段）
         phase_bonus = {
-            DilemmaPhase.LATENT: 0,
-            DilemmaPhase.SURFACED: 10,
-            DilemmaPhase.ESCALATED: 25,
-            DilemmaPhase.CRISIS: 40,
-            DilemmaPhase.AFTERMATH: -50  # 已结束，降低热度
+            DilemmaPhase.EMERGE: 0,
+            DilemmaPhase.ESCALATE: 10,
+            DilemmaPhase.CLIMAX: 25,
+            DilemmaPhase.SETTLE: -50  # 已结束，降低热度
         }
         heat += phase_bonus.get(seed.phase, 0)
         
         # 时间压力
         if seed.story_beats:
             days_since_last = self._days_since(seed.story_beats[-1].timestamp)
-            if seed.phase == DilemmaPhase.ESCALATED:
+            if seed.phase == DilemmaPhase.ESCALATE:
                 heat += min(days_since_last * 5, 30)  # 升级阶段，每天热度+5
-            elif seed.phase == DilemmaPhase.SURFACED:
-                heat += min(days_since_last * 2, 15)  # 浮出水面，慢慢升温
+            elif seed.phase == DilemmaPhase.EMERGE:
+                heat += min(days_since_last * 2, 15)  # 事件初现，慢慢升温
         
         # 玩家关系加权
         player_relation = self._get_player_relation(seed.id, world_state)
@@ -436,6 +431,32 @@ class DilemmaDeriver:
         heat += cross_count * 10  # 和其他活跃故事线有交叉的优先
         
         return min(heat, 100)
+    
+    def _calculate_simple_heat(self, npc: NPCData, world_state) -> float:
+        """简化版热度计算（重构后不再依赖 tensions）"""
+        base_heat = 30.0  # 基础热度
+        
+        # 根据NPC状态调整
+        if hasattr(npc, 'emotion'):
+            if npc.emotion < 30:  # 情绪低落
+                base_heat += 20
+            elif npc.emotion > 70:  # 情绪高涨（可能冲动）
+                base_heat += 10
+        
+        if hasattr(npc, 'hp_percent') and npc.hp_percent < 0.5:  # 受伤
+            base_heat += 15
+        
+        if hasattr(npc, 'hunger') and npc.hunger > 70:  # 饥饿
+            base_heat += 10
+        
+        # 财富极端情况
+        if hasattr(npc, 'money'):
+            if npc.money < 20:  # 贫困
+                base_heat += 15
+            elif npc.money > 300:  # 富有（可能被觊觎）
+                base_heat += 5
+        
+        return min(100.0, base_heat)
     
     def _parse_tensions(self, response: str) -> List[Tension]:
         """解析LLM返回的张力JSON"""
@@ -556,7 +577,7 @@ class DilemmaDeriver:
         
         for npc_id in related:
             other_seed = self._cache.get(npc_id)
-            if other_seed and other_seed.phase not in [DilemmaPhase.LATENT, DilemmaPhase.AFTERMATH]:
+            if other_seed and other_seed.phase not in [DilemmaPhase.EMERGE, DilemmaPhase.SETTLE]:
                 count += 1
         
         return count
@@ -573,7 +594,7 @@ class DilemmaDeriver:
         """获取所有活跃的困境种子（非LATENT、非AFTERMATH）"""
         return [
             seed for seed in self._cache.values()
-            if seed.phase not in [DilemmaPhase.LATENT, DilemmaPhase.AFTERMATH]
+            if seed.phase not in [DilemmaPhase.EMERGE, DilemmaPhase.SETTLE]
         ]
     
     def get_hottest_seeds(self, limit: int = 5) -> List[NPCDilemmaSeed]:

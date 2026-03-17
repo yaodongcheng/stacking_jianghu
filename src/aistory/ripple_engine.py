@@ -343,20 +343,8 @@ NPC: {source.name}
                 new_val = max(0, min(100, current + delta))
                 setattr(target_npc, stat, new_val)
         
-        # 2. 应用张力变化
-        for change in ripple.tension_changes:
-            tension_id = change.get('tension_id')
-            delta = change.get('delta', 0)
-            
-            for tension in target_seed.tensions:
-                if tension.tension_id == tension_id:
-                    tension.intensity = max(0, min(100, tension.intensity + delta))
-                    break
-        
-        # 3. 添加新张力
-        target_seed.tensions.extend(ripple.new_tensions)
-        
-        # 4. 更新热度
+        # 【重构后】不再处理张力变化（tensions 已移除）
+        # 2. 更新热度
         target_seed.heat = max(0, min(100, target_seed.heat + ripple.heat_delta))
         
         print(f"[RippleEngine] 涟漪应用到 {target_npc.name}: {ripple.description}")

@@ -10,48 +10,23 @@ from PIL import Image
 import logging
 import uuid
 
+
+
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
-def signed_headers(app_id, app_key, project_id):
-    # 生成10位随机字母数字字符串作为nonce
-    chars = string.ascii_letters + string.digits
-    nonce = ''.join(secrets.choice(chars) for _ in range(10))
-
-    # 获取秒级时间戳
-    timestamp = str(int(time.time()))
-
-    # 构建签名字符串
-    str2_sign = f"appId={app_id}&nonce={nonce}&timestamp={timestamp}&appkey={app_key}"
-
-    # 计算MD5签名并转为大写
-    sign = hashlib.md5(str2_sign.encode('utf-8')).hexdigest().upper()
-
-    # 构造请求头
-    headers = {
-        "Content-Type": "application/json",
-        "appId": app_id,
-        "projectId": project_id,
-        "nonce": nonce,
-        "timestamp": timestamp,
-        "sign": sign,
-        "version": "v2"
-    }
-    return headers
-
-
 if __name__ == "__main__":
 
-    app_key = "sk-xp97drsAZGjr7RNKvk6CmciZA0mmPyHh"
-    app_id = "99cd5156-c089-45e1-a22d-fdd16873c1959"
-    project_id = "default"  # 请替换为你的实际 project_id
-    url = "https://aigc-api.apps-hangyan.danlu.netease.com/api/v3/text/chat"
+
+    api_key = "sk-xp97drsAZGjr7RNKvk6CmciZA0mmPyHh"  # 请替换为你的实际 API Key
+    url = "https://aigc-api.fuxi.netease.com/v3/text/chat"
+
+
 
     inputjson = {
         "model": "doubao-seedream-5-0-260128",
-        "prompt": "星际穿越，黑洞，黑洞里冲出一辆快支离破碎的复古列车，抢视觉冲击力，电影大片，末日既视感，动感，对比色，oc渲染，光线追踪，动态模糊，景深，超现实主义，深蓝，画面通过细腻的丰富的色彩层次塑造主体与场景，质感真实，暗黑风背景的光影效果营造出氛围，整体兼具艺术幻想感，夸张的广角透视效果，耀光，反射，极致的光影，强引力，吞噬",
+        "prompt": "那恶霸猛地一拍桌子，吓得周围人纷纷后退 围观的百姓开始窃窃私语，有人悄悄退开",
         "size": "2K",
         "sequential_image_generation": "disabled",
         "stream": False,
@@ -59,8 +34,11 @@ if __name__ == "__main__":
         "seed": -1,
         "watermark": True
     }
-    
-    headers = signed_headers(app_id=app_id, app_key=app_key, project_id=project_id)
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     logger.info("开始请求...")
     resp = requests.post(url, headers=headers, json=inputjson)
     logger.info(f"请求结束，状态码: {resp.status_code}")

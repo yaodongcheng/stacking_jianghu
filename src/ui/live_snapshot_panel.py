@@ -100,6 +100,10 @@ class LiveSnapshotPanel:
         # 选项悬停
         self.hovered_choice = -1
         
+        # 选项tooltip
+        self.choice_tooltip = None  # {text: str, rect: Rect, alpha: float}
+        self.tooltip_font = None
+        
         # 当事人头像悬停
         self.hovered_actor_index = -1  # 当前悬浮的当事人索引
         self.actor_name_widths = {}  # 缓存名字宽度
@@ -285,6 +289,25 @@ class LiveSnapshotPanel:
                     # 将相对坐标转换为屏幕坐标
                     screen_rect = btn_rect.move(self.panel_x, self.panel_y)
                     if screen_rect.collidepoint(mx, my):
+                        choice = self.snapshot.choices[i]
+                        
+                        # 检查 requirement，不满足则拒绝点击
+                        player = None
+                        try:
+                            from src.context import ctx
+                            player = getattr(ctx, 'player', None)
+                        except:
+                            pass
+                        req_str = choice.get('requirement')
+                        if not self._check_choice_requirement(player, req_str):
+                            # 播放拒绝音效
+                            try:
+                                from src.audio.sound_manager import get_sound_manager
+                                get_sound_manager().play_cancel()
+                            except:
+                                pass
+                            return True  # 消费事件但不执行
+                        
                         # [!] 播放选择确认音效
                         try:
                             from src.audio.sound_manager import get_sound_manager
@@ -292,7 +315,6 @@ class LiveSnapshotPanel:
                         except Exception:
                             pass
                         
-                        choice = self.snapshot.choices[i]
                         action = choice.get('action', '')
                         
                         # 第一级选择处理
@@ -347,6 +369,7 @@ class LiveSnapshotPanel:
         
         elif event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
+            prev_hover = self.hovered_choice
             self.hovered_choice = -1
             
             # 使用缓存的按钮位置检测悬停
@@ -356,6 +379,10 @@ class LiveSnapshotPanel:
                     if screen_rect.collidepoint(mx, my):
                         self.hovered_choice = i
                         break
+            
+            # 如果悬停变化，清除 tooltip（让新的悬停重新准备）
+            if prev_hover != self.hovered_choice:
+                self.choice_tooltip = None
         
         # 处理评论区滚轮事件
         elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -482,43 +509,304 @@ class LiveSnapshotPanel:
         # 绘制到屏幕（使用实际位置，不使用动画缩放）
         screen.blit(panel_surface, (self.panel_x, self.panel_y))
         
+        # 绘制选项 tooltip（在面板上方，使用屏幕坐标）
+        if self.choice_tooltip and self.hovered_choice >= 0:
+            # 转换 tooltip 的按钮 rect 为屏幕坐标
+            tooltip = self.choice_tooltip
+            btn_rect_screen = tooltip['btn_rect'].move(self.panel_x, self.panel_y)
+            # 临时替换为屏幕坐标绘制
+            original_rect = tooltip['btn_rect']
+            tooltip['btn_rect'] = btn_rect_screen
+            self._draw_choice_tooltip(screen)
+            tooltip['btn_rect'] = original_rect
+        
         # 绘制弹幕（在面板外绘制）
         self._draw_danmaku(screen)
     
     def _draw_choices_at_y(self, surface: pygame.Surface, start_y: int):
-        """在指定Y位置绘制选项按钮，并缓存按钮位置用于点击检测"""
+        """在指定Y位置绘制选项按钮，并缓存按钮位置用于点击检测
+        
+        特性：
+        - 检查 requirement，不满足则置灰
+        - 显示 requirement 文本在按钮下方
+        - 悬停时显示 tooltip（cost/effect/consequence_preview）
+        """
         if not self.snapshot.choices:
             return
         
         font = self._get_font(22)
+        small_font = self._get_font(14)
         num_choices = len(self.snapshot.choices)
         
         # 初始化按钮位置缓存
         self._cached_button_rects = []
         
+        # 获取玩家对象用于检查 requirement
+        player = None
+        try:
+            from src.context import ctx
+            player = getattr(ctx, 'player', None)
+        except:
+            pass
+        
         for i, choice in enumerate(self.snapshot.choices):
-            btn_rect = pygame.Rect(30, start_y + i * 60, self.panel_w - 60, 50)
+            btn_rect = pygame.Rect(30, start_y + i * 75, self.panel_w - 60, 55)
             
             # 缓存按钮位置（相对坐标，用于handle_event）
             self._cached_button_rects.append(btn_rect)
             
-            is_hover = (i == self.hovered_choice)
+            # 检查 requirement
+            req_str = choice.get('requirement')
+            is_enabled = self._check_choice_requirement(player, req_str)
             
-            if is_hover:
+            is_hover = (i == self.hovered_choice) and is_enabled
+            
+            # 根据状态决定颜色
+            if not is_enabled:
+                # 不满足条件 - 置灰
+                btn_color = (35, 35, 40)
+                border_color = (60, 60, 70)
+                text_color = (120, 120, 130)
+            elif is_hover:
                 btn_color = (60, 60, 80)
                 border_color = (100, 100, 140)
+                text_color = (255, 255, 255)
             else:
                 btn_color = (40, 40, 60)
                 border_color = (70, 70, 90)
+                text_color = (255, 255, 255)
             
             pygame.draw.rect(surface, btn_color, btn_rect, border_radius=8)
             pygame.draw.rect(surface, border_color, btn_rect, 2, border_radius=8)
             
+            # 绘制选项文本
             text = choice.get('text', f'选项{i+1}')
-            text_surf = font.render(text, True, (255, 255, 255))
+            text_surf = font.render(text, True, text_color)
             text_x = btn_rect.centerx - text_surf.get_width() // 2
-            text_y = btn_rect.centery - text_surf.get_height() // 2
+            text_y = btn_rect.centery - text_surf.get_height() // 2 - 5
             surface.blit(text_surf, (text_x, text_y))
+            
+            # 绘制 requirement 文本（在按钮下方）
+            if req_str:
+                req_text = self._format_requirement_text(req_str)
+                req_surf = small_font.render(req_text, True, 
+                    (180, 140, 100) if is_enabled else (100, 100, 110))
+                req_x = btn_rect.centerx - req_surf.get_width() // 2
+                req_y = btn_rect.bottom - 18
+                surface.blit(req_surf, (req_x, req_y))
+            
+            # 如果悬停且满足条件，准备 tooltip
+            if is_hover:
+                self._prepare_choice_tooltip(choice, btn_rect)
+    
+    def _check_choice_requirement(self, player, req_str: str) -> bool:
+        """检查选项是否满足条件
+        
+        格式: "actor_name:attribute:compare:needvalue"
+        示例: "PLAYER:money:>=:100" 或 "npc_001:charm:>::50"
+        """
+        if not req_str or not player:
+            return True
+        
+        try:
+            parts = req_str.split(':')
+            if len(parts) < 4:
+                return True
+            
+            actor, attr, compare, need_val = parts[0], parts[1], parts[2], parts[3]
+            
+            # 解析数值
+            try:
+                need_num = int(need_val)
+            except:
+                need_num = need_val
+            
+            # 获取实际值
+            if actor == 'PLAYER':
+                actual_val = getattr(player, attr, 0)
+            else:
+                # NPC 属性检查 - 简化处理，默认通过
+                return True
+            
+            # 比较
+            if compare in ('>=', '>::'):
+                return actual_val >= need_num
+            elif compare in ('<=', '<::'):
+                return actual_val <= need_num
+            elif compare in ('>', '>>'):
+                return actual_val > need_num
+            elif compare in ('<', '<<'):
+                return actual_val < need_num
+            elif compare in ('=', '=='):
+                return actual_val == need_num
+            
+            return True
+        except:
+            return True
+    
+    def _format_requirement_text(self, req_str: str) -> str:
+        """将 requirement 格式化为可读文本"""
+        if not req_str:
+            return ""
+        
+        try:
+            parts = req_str.split(':')
+            if len(parts) < 4:
+                return req_str
+            
+            actor, attr, compare, need_val = parts[0], parts[1], parts[2], parts[3]
+            
+            # 属性名映射
+            attr_names = {
+                'money': '金钱', 'charm': '魅力', 'str': '力量',
+                'int': '智力', 'fame': '声望', 'health': '生命',
+                'energy': '精力', 'kungfu': '武功'
+            }
+            attr_name = attr_names.get(attr, attr)
+            
+            # 比较符映射
+            compare_symbols = {
+                '>=': '≥', '<=': '≤', '>::': '≥', '<::': '≤',
+                '>': '>', '<': '<', '==': '=', '=': '='
+            }
+            symbol = compare_symbols.get(compare, compare)
+            
+            return f"需: {attr_name}{symbol}{need_val}"
+        except:
+            return req_str
+    
+    def _prepare_choice_tooltip(self, choice: dict, btn_rect: pygame.Rect):
+        """准备选项的 tooltip 内容"""
+        lines = []
+        
+        # Cost（代价）
+        cost = choice.get('cost')
+        if cost:
+            cost_text = self._format_effect_text(cost, is_cost=True)
+            lines.append(f"💰 代价: {cost_text}")
+        
+        # Effect（收益）
+        effect = choice.get('effect')
+        if effect:
+            effect_text = self._format_effect_text(effect, is_cost=False)
+            lines.append(f"✨ 收益: {effect_text}")
+        
+        # Consequence preview（后果预测）
+        preview = choice.get('consequence_preview')
+        if preview:
+            lines.append("")  # 空行
+            lines.append("📜 后果预测:")
+            # 解析 consequence_preview 的4个标签
+            for tag in ['[即时反应]', '[资源波动]', '[关系变化]', '[埋下隐患]', '[最终走向]', '[长远影响]']:
+                if tag in preview:
+                    # 提取标签后的内容
+                    start = preview.find(tag)
+                    end = preview.find('[', start + 1)
+                    if end == -1:
+                        end = len(preview)
+                    content = preview[start:end].replace(tag, '').strip()
+                    if content:
+                        lines.append(f"  {tag} {content}")
+        
+        if lines:
+            self.choice_tooltip = {
+                'lines': lines,
+                'btn_rect': btn_rect,
+                'alpha': 0.0
+            }
+    
+    def _format_effect_text(self, effect_str: str, is_cost: bool) -> str:
+        """格式化 effect/cost 文本"""
+        if not effect_str:
+            return "无"
+        
+        try:
+            parts = effect_str.split(':')
+            if len(parts) < 3:
+                return effect_str
+            
+            actor, attr, val = parts[0], parts[1], parts[2]
+            
+            # 属性名映射
+            attr_names = {
+                'money': '金钱', 'charm': '魅力', 'str': '力量',
+                'int': '智力', 'fame': '声望', 'health': '生命',
+                'energy': '精力', 'kungfu': '武功'
+            }
+            attr_name = attr_names.get(attr, attr)
+            
+            # 数值
+            try:
+                num = int(val)
+                sign = "-" if num < 0 else "+"
+                return f"{attr_name} {sign}{abs(num)}"
+            except:
+                return f"{attr_name} {val}"
+        except:
+            return effect_str
+    
+    def _draw_choice_tooltip(self, surface: pygame.Surface):
+        """绘制选项 tooltip"""
+        if not self.choice_tooltip:
+            return
+        
+        tooltip = self.choice_tooltip
+        lines = tooltip['lines']
+        btn_rect = tooltip['btn_rect']
+        
+        # 淡入动画
+        tooltip['alpha'] = min(1.0, tooltip['alpha'] + 0.15)
+        alpha = int(230 * tooltip['alpha'])
+        
+        # 计算 tooltip 尺寸
+        font = self._get_font(16)
+        line_height = 22
+        padding = 12
+        
+        max_width = 0
+        for line in lines:
+            w = font.size(line)[0]
+            max_width = max(max_width, w)
+        
+        tooltip_w = max_width + padding * 2
+        tooltip_h = len(lines) * line_height + padding * 2
+        
+        # 位置：按钮上方或下方
+        tooltip_x = btn_rect.centerx - tooltip_w // 2
+        tooltip_y = btn_rect.top - tooltip_h - 10
+        
+        # 如果上方空间不足，显示在下方
+        if tooltip_y < 10:
+            tooltip_y = btn_rect.bottom + 10
+        
+        tooltip_rect = pygame.Rect(tooltip_x, tooltip_y, tooltip_w, tooltip_h)
+        
+        # 绘制背景
+        bg_surface = pygame.Surface((tooltip_w, tooltip_h), pygame.SRCALPHA)
+        bg_surface.fill((20, 20, 30, alpha))
+        surface.blit(bg_surface, tooltip_rect)
+        
+        # 绘制边框
+        border_color = (180, 150, 100, alpha)
+        pygame.draw.rect(surface, border_color, tooltip_rect, 2, border_radius=6)
+        
+        # 绘制文本
+        y = tooltip_rect.top + padding
+        for i, line in enumerate(lines):
+            if line.startswith("💰"):
+                color = (255, 150, 150)  # 代价 - 红色
+            elif line.startswith("✨"):
+                color = (150, 255, 150)  # 收益 - 绿色
+            elif line.startswith("📜"):
+                color = (255, 230, 150)  # 标题 - 金色
+            elif line.strip().startswith('['):
+                color = (200, 200, 220)  # 标签内容 - 淡紫
+            else:
+                color = (255, 255, 255)
+            
+            text_surf = font.render(line, True, color)
+            surface.blit(text_surf, (tooltip_rect.left + padding, y))
+            y += line_height
     
     # 注意：旧的绘制代码已删除
     

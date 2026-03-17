@@ -36,12 +36,17 @@ class NewsCategory(Enum):
 
 
 class DilemmaType(Enum):
-    """困境类型"""
-    BETRAYAL = "betrayal"
-    SACRIFICE = "sacrifice"
-    GREATER_GOOD = "greater_good"
-    JUSTICE = "justice"
-    MERCY = "mercy"
+    """
+    困境类型 - 与 rolling_story_generator.py 保持一致
+    必须属于以下七大类之一
+    """
+    SACRIFICE = "SACRIFICE"         # 自我牺牲（帮别人但自己受损）
+    BETRAY = "BETRAY"               # 背叛（为了自己收益最大化，让朋友受损）
+    COMPROMISE = "COMPROMISE"       # 妥协（自己和敌人都获得了好处，即使不是最优解）
+    DESTRUCTION = "DESTRUCTION"     # 玉石俱焚（为了打击敌人宁愿自己也受损失）
+    BIAS = "BIAS"                   # 偏心（两个亲近的人对立，帮一个必然损害另一个）
+    MORAL_GREY = "MORAL_GREY"       # 道德灰色（两个选择都不完全道德）
+    SHORT_VS_LONG = "SHORT_VS_LONG" # 短期vs长期（眼前利益vs长远正义）
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

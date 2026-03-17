@@ -170,7 +170,7 @@ class LLMStoryDemo:
         # 显示当前状态
         print(f"\n📊 当前故事状态:")
         print(f"   - 主角: {self.npc.name} ({self.npc.job})")
-        print(f"   - 困境: {self.npc.desc}")
+        print(f"   - 人设: {self.npc.desc}")
         print(f"   - 已发生事件数: {len(self.story_beats)}")
         
         if self.story_beats:

@@ -14,12 +14,19 @@ from datetime import datetime
 
 
 class DilemmaPhase(Enum):
-    """困境阶段 - 不是预设的，而是从已发生的节拍推断的"""
-    LATENT = "latent"           # 困境潜伏，玩家还不知道
-    SURFACED = "surfaced"       # 困境浮出水面，玩家见过一次
-    ESCALATED = "escalated"     # 事态升级，不处理会恶化
-    CRISIS = "crisis"           # 危机爆发，必须做决定
-    AFTERMATH = "aftermath"     # 尘埃落定，NPC人生转折
+    """
+    困境阶段 - 起承转合四阶段模型（与aistory_prompt_example.md一致）
+    
+    阶段规则：
+    - EMERGE(起): 0个节拍，事件初现，3个选项
+    - ESCALATE(承): 1个节拍，矛盾升级，3个选项
+    - CLIMAX(转): 2个节拍，关键抉择，2个选项（必须选边站）
+    - SETTLE(合): 3个节拍，尘埃落定，2个选项
+    """
+    EMERGE = "EMERGE"           # 起：事件初现，暴露内心困境
+    ESCALATE = "ESCALATE"       # 承：矛盾升级，压力增大
+    CLIMAX = "CLIMAX"           # 转：关键抉择，必须选边站
+    SETTLE = "SETTLE"           # 合：尘埃落定，后果显现
 
 
 class TensionType(Enum):
@@ -78,7 +85,7 @@ class StoryBeat:
     player_choice: str = ""         # 玩家做了什么选择
     consequence_summary: str = ""   # 造成了什么后果
     npc_state_change: Dict = field(default_factory=dict)  # NPC状态的具体变化
-    heat_delta: float = 0.0         # 这个节拍让热度变化了多少
+    tension_delta: float = 0.0      # 这个节拍让局势压力变化了多少（与JSON输出对应）
     phase: 'DilemmaPhase' = None    # 发生时的困境阶段
     # 新增字段：用于记录完整的困境信息，供后续阶段参考
     dilemma_type: str = ""          # 困境类型（如 SACRIFICE, BETRAY 等）
@@ -89,7 +96,7 @@ class StoryBeat:
     def __post_init__(self):
         if self.phase is None:
             from .dilemma_seed import DilemmaPhase
-            self.phase = DilemmaPhase.LATENT
+            self.phase = DilemmaPhase.EMERGE
     
     def to_dict(self) -> Dict:
         return {
@@ -99,8 +106,8 @@ class StoryBeat:
             "player_choice": self.player_choice,
             "consequence_summary": self.consequence_summary,
             "npc_state_change": self.npc_state_change,
-            "heat_delta": self.heat_delta,
-            "phase": self.phase.value if self.phase else "latent",
+            "tension_delta": self.tension_delta,
+            "phase": self.phase.value if self.phase else "EMERGE",
             "dilemma_type": self.dilemma_type,
             "event_theme": self.event_theme,
             "desire": self.desire,
@@ -111,22 +118,18 @@ class StoryBeat:
 @dataclass
 class NPCDilemmaSeed:
     """
-    NPC困境种子 - 从NPC原始数据自动派生的人生张力
+    NPC困境种子 - 简化版，用于记录故事进度
     
-    这是导演系统的核心数据结构：
-    - 不是手写的剧本，而是从人物数据推算
-    - 热度系统决定何时转化为事件
-    - 故事节拍记录已发生的剧情
+    【重构后】核心变化：
+    - 不再预计算 tensions 列表
+    - desire 和 misgiving 在生成时从 NPC 属性动态计算
+    - 主要作为状态容器，记录阶段和历史节拍
     """
     id: str = ""
     
-    # ===== 以下全部从NPC现有数据推算，不手写 =====
-    # 核心矛盾：欲望 vs 现实
-    desire: str = ""                # 从性格+背景推算出的深层渴望
-    reality_block: str = ""         # 阻碍欲望的现实因素
-    
-    # 张力来源（多个，可叠加）
-    tensions: List[Tension] = field(default_factory=list)
+    # 核心矛盾：欲望 vs 顾虑（在首次生成时从NPC动态计算）
+    desire: str = ""                # 内心渴望（首次生成时计算）
+    misgiving: str = ""             # 内心顾虑（首次生成时计算，代替原来的reality_block）
     
     # 困境热度（0-100），越高越该被导演安排事件
     heat: float = 0.0
@@ -135,7 +138,7 @@ class NPCDilemmaSeed:
     story_beats: List[StoryBeat] = field(default_factory=list)
     
     # 当前困境阶段（从已发生的节拍推断）
-    phase: DilemmaPhase = DilemmaPhase.LATENT
+    phase: DilemmaPhase = DilemmaPhase.EMERGE
     
     # 元数据
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -146,8 +149,7 @@ class NPCDilemmaSeed:
         return {
             "id": self.id,
             "desire": self.desire,
-            "reality_block": self.reality_block,
-            "tensions": [t.to_dict() for t in self.tensions],
+            "misgiving": self.misgiving,
             "heat": self.heat,
             "story_beats": [b.to_dict() for b in self.story_beats],
             "phase": self.phase.value,
@@ -161,26 +163,15 @@ class NPCDilemmaSeed:
         seed = cls(
             id=data.get("id", ""),
             desire=data.get("desire", ""),
-            reality_block=data.get("reality_block", ""),
+            # 兼容旧数据：reality_block 映射到 misgiving
+            misgiving=data.get("misgiving") or data.get("reality_block", ""),
             heat=data.get("heat", 0.0),
-            phase=DilemmaPhase(data.get("phase", "latent")),
+            phase=DilemmaPhase(data.get("phase", "EMERGE")),
             created_at=data.get("created_at", ""),
             last_updated=data.get("last_updated", "")
         )
         
-        # 反序列化张力
-        for t_data in data.get("tensions", []):
-            tension = Tension(
-                type=TensionType(t_data.get("type", "relationship")),
-                force_a=t_data.get("force_a", ""),
-                force_b=t_data.get("force_b", ""),
-                intensity=t_data.get("intensity", 0.0),
-                related_npcs=t_data.get("related_npcs", []),
-                potential_crisis=t_data.get("potential_crisis", "")
-            )
-            seed.tensions.append(tension)
-        
-        # 反序列化故事节拍
+        # 反序列化故事节拍（包含新的 dilemma_type, event_theme 等字段）
         for b_data in data.get("story_beats", []):
             beat = StoryBeat(
                 beat_number=b_data.get("beat_number", 0),
@@ -189,24 +180,26 @@ class NPCDilemmaSeed:
                 player_choice=b_data.get("player_choice", ""),
                 consequence_summary=b_data.get("consequence_summary", ""),
                 npc_state_change=b_data.get("npc_state_change", {}),
-                heat_delta=b_data.get("heat_delta", 0.0)
+                heat_delta=b_data.get("heat_delta", 0.0),
+                tension_delta=b_data.get("tension_delta", b_data.get("heat_delta", 0.0)),
+                dilemma_type=b_data.get("dilemma_type", ""),
+                event_theme=b_data.get("event_theme", ""),
+                desire=b_data.get("desire", ""),
+                misgiving=b_data.get("misgiving", "")
             )
             seed.story_beats.append(beat)
         
         return seed
     
-    def get_max_tension(self) -> Optional[Tension]:
-        """获取当前最强的张力"""
-        if not self.tensions:
-            return None
-        return max(self.tensions, key=lambda t: t.intensity)
-    
-    def get_related_npcs(self) -> List[str]:
-        """获取所有相关的NPC ID"""
-        related = set()
-        for tension in self.tensions:
-            related.update(tension.related_npcs)
-        return list(related)
+    def get_story_summary(self) -> str:
+        """获取故事摘要，用于生成上下文"""
+        if not self.story_beats:
+            return "故事刚刚开始，这是第一个节拍。"
+        
+        summaries = []
+        for beat in self.story_beats[-3:]:  # 最近3个节拍
+            summaries.append(f"第{beat.beat_number}幕：{beat.event_summary}")
+        return "；".join(summaries)
     
     def add_story_beat(self, beat: StoryBeat):
         """添加一个新的故事节拍"""
@@ -220,10 +213,10 @@ class NPCDilemmaSeed:
         判断此NPC是否可被招募
         
         条件：
-        1. 困境已进入AFTERMATH阶段
+        1. 困境已进入SETTLE阶段
         2. 玩家一路帮助了此人（通过story_beats判断）
         """
-        if self.phase != DilemmaPhase.AFTERMATH:
+        if self.phase != DilemmaPhase.SETTLE:
             return False
         
         # 检查玩家是否一路帮助
@@ -234,7 +227,7 @@ class NPCDilemmaSeed:
             if beat.player_choice:
                 total_choices += 1
                 # 简单启发式：如果后果是正面的，认为是帮助
-                if beat.heat_delta > 0 or "感谢" in beat.consequence_summary:
+                if beat.tension_delta > 0 or "感谢" in beat.consequence_summary:
                     helpful_choices += 1
         
         # 至少70%的选择是帮助性的

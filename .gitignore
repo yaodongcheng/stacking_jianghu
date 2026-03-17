@@ -5,7 +5,7 @@ build/
 release/
 dist/
 *.spec
-
+image_cache/
 # Python 缓存
 __pycache__/
 *.py[cod]

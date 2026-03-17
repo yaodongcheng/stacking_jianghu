@@ -21,6 +21,7 @@ import threading
 from typing import Optional, Callable, Dict, Any
 from pathlib import Path
 
+from src.definitions import *
 from src.utils import log_game_event, resource_path
 
 # 尝试导入PIL用于图像处理
@@ -186,7 +187,28 @@ class DoubaoImageGenerator:
             style: 风格提示 (anime/realistic/artistic)
             reference_images: 参考图路径列表，用于保持人物一致性
         """
+        # 根据配置选择使用哪个服务提供商
+        from src.definitions import IMAGE_GEN_PROVIDER
         
+        if IMAGE_GEN_PROVIDER == 'DANQINGYUE':
+            # 使用丹青约API
+            self._generate_image_async_danqingyue(prompt, callback, width, height, style, reference_images)
+        else:
+            # 默认使用豆包API
+            self._generate_image_async_doubao(prompt, callback, width, height, style, reference_images)
+    
+    def _generate_image_async_doubao(
+        self, 
+        prompt: str, 
+        callback: Callable[[Optional[Any], Optional[str]], None],
+        width: int = 512,
+        height: int = 512,
+        style: str = "artistic",
+        reference_images: Optional[list] = None
+    ):
+        """
+        使用豆包API异步生成图片
+        """
         # 构建缓存key（包含参考图信息）
         cache_key = prompt
         if reference_images:
@@ -237,6 +259,141 @@ class DoubaoImageGenerator:
         
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
+    
+    def _generate_image_async_danqingyue(
+        self, 
+        prompt: str, 
+        callback: Callable[[Optional[Any], Optional[str]], None],
+        width: int = 512,
+        height: int = 512,
+        style: str = "artistic",
+        reference_images: Optional[list] = None
+    ):
+        """
+        使用丹青约API异步生成图片
+        """
+        # 构建缓存key
+        cache_key = f"danqingyue_{prompt}"
+        if reference_images:
+            cache_key += "|" + "|".join(reference_images)
+        
+        # 检查缓存
+        cached = self.check_cache(cache_key)
+        if cached:
+            print(f"[Danqingyue·异步] 命中缓存: {cached}")
+            surface = self._load_image_as_surface(cached)
+            callback(surface, cached)
+            return
+        
+        # 检查是否已有相同请求在处理中
+        with self._lock:
+            if cache_key in self._pending_requests:
+                print(f"[Danqingyue·异步] [!] 请求已在处理中，跳过")
+                return
+            self._pending_requests[cache_key] = True
+        
+        print(f"[Danqingyue·异步] 启动后台工作线程...")
+        
+        # 启动后台线程
+        def worker():
+            try:
+                result_path = self._generate_with_danqingyue(prompt, width, height, style, reference_images)
+                print(f"[Danqingyue·worker] 返回: {result_path}")
+                
+                if result_path:
+                    surface = self._load_image_as_surface(result_path)
+                    callback(surface, result_path)
+                else:
+                    callback(None, None)
+            except Exception as e:
+                print(f"[Danqingyue·worker] [!] 工作线程异常: {e}")
+                import traceback
+                traceback.print_exc()
+                callback(None, None)
+            finally:
+                with self._lock:
+                    self._pending_requests.pop(cache_key, None)
+                print(f"[Danqingyue·worker] 工作线程结束")
+        
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+    
+    def _generate_with_danqingyue(
+        self, 
+        prompt: str, 
+        width: int, 
+        height: int, 
+        style: str,
+        reference_images: Optional[list] = None
+    ) -> Optional[str]:
+        """
+        使用丹青约API同步生成图片 - 与danqingyue_test.py完全一致
+        """
+        import requests
+        import json
+        
+        # 获取API配置
+        config = self._get_config()
+        api_key = config.danqingyue_api_key if hasattr(config, 'danqingyue_api_key') else None
+        api_key = "sk-xp97drsAZGjr7RNKvk6CmciZA0mmPyHh"  # 临时代码，实际使用时请从配置获取
+        if not api_key:
+            print("[Danqingyue] API Key未配置，使用占位图")
+            return self._generate_placeholder(prompt, width, height)
+        
+        # 增强prompt
+        enhanced_prompt = self._enhance_prompt(prompt, style)
+        
+        url = "https://aigc-api.fuxi.netease.com/v3/text/chat"
+        
+        # 构建请求体（与danqingyue_test.py完全一致）
+        payload = {
+            "model": "doubao-seedream-5-0-260128",
+            "prompt": enhanced_prompt,
+            "size": "2K",
+            "sequential_image_generation": "disabled",
+            "stream": False,
+            "response_format": "b64_json",
+            "seed": -1,
+            "watermark": True
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            print(f"[Danqingyue] 开始请求...")
+            
+            resp = requests.post(url, headers=headers, json=payload)
+            
+            print(f"[Danqingyue] 请求结束，状态码: {resp.status_code}")
+            
+            if resp.status_code == 200:
+                result = json.loads(resp.text)
+                if 'data' in result and len(result['data']) > 0:
+                    output_base64_data = result['data'][0]['b64_json']
+                    image_bytes = base64.b64decode(output_base64_data)
+                    
+                    # 保存到缓存
+                    cache_path = self.get_cache_path(f"danqingyue_{prompt}")
+                    with open(cache_path, 'wb') as f:
+                        f.write(image_bytes)
+                    
+                    print(f"[Danqingyue] 图片已保存: {cache_path}")
+                    return str(cache_path)
+                else:
+                    print(f"[Danqingyue] 响应中没有数据: {result}")
+                    return self._generate_placeholder(prompt, width, height)
+            else:
+                print(f"[Danqingyue] 请求失败: {resp.status_code}, {resp.text[:200]}")
+                return self._generate_placeholder(prompt, width, height)
+                
+        except Exception as e:
+            print(f"[Danqingyue] 请求异常: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._generate_placeholder(prompt, width, height)
     
     def _generate_image_sync(
         self, 
