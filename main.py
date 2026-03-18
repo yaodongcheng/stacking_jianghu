@@ -927,14 +927,29 @@ def main():
             if camera.event_focus_active:
                 camera.update_event_focus()
             elif not camera.story_locked:  # 剧情锁定时禁止边缘滚动
-                # 若检测到边缘滚动触发，取消跟随模式
-                zone = EDGE_SCROLL_ZONE
-                if (0 <= mx < zone or
-                    camera.view_w - zone < mx <= camera.view_w or
-                    (mx <= camera.view_w and TOPBAR_H <= my < TOPBAR_H + zone) or
-                    (mx <= camera.view_w and my >= camera.screen_h - zone)):
-                    camera.follow_player = False
-                camera.update(dt, mx, my)
+                # 【系统UI面板打开时禁止摄像机移动】
+                # 检查是否打开了任何系统UI面板
+                ui_panel_states = [
+                    GAME_STATE_TECH_TREE,
+                    GAME_STATE_NEWS_FEED,
+                    GAME_STATE_ROSTER,
+                    GAME_STATE_FACTION_VIEW,
+                    GAME_STATE_QUEST_LOG,
+                    GAME_STATE_FATE_GRAPH,
+                    GAME_STATE_NPC_DETAIL,
+                    GAME_STATE_FOLLOWER_PANEL,
+                ]
+                is_ui_panel_open = ctx.current_state in ui_panel_states
+                
+                # 若检测到边缘滚动触发且没有打开UI面板，取消跟随模式
+                if not is_ui_panel_open:
+                    zone = EDGE_SCROLL_ZONE
+                    if (0 <= mx < zone or
+                        camera.view_w - zone < mx <= camera.view_w or
+                        (mx <= camera.view_w and TOPBAR_H <= my < TOPBAR_H + zone) or
+                        (mx <= camera.view_w and my >= camera.screen_h - zone)):
+                        camera.follow_player = False
+                    camera.update(dt, mx, my)
 
         # 1. 输入事件处理
         current_event = None  # 保存当前事件用于渲染

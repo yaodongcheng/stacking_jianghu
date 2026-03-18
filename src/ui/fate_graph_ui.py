@@ -145,6 +145,10 @@ class FateGraphUI:
         self.drag_start_y = 0
         self.drag_start_scroll = 0
         
+        # 节点详情弹窗位置
+        self.detail_popup_x = 0
+        self.detail_popup_y = 0
+        
     def set_fonts(self, font_big, font_ui, font_small):
         """设置字体"""
         self.font_big = font_big
@@ -164,7 +168,7 @@ class FateGraphUI:
             heat=90.0
         )
         
-        # 节点1: 高衙内逼婚 (过去，玩家介入)
+        # 节点1: 高衙内逼婚 (过去，玩家介入) - 时间延后避免与NPC信息重叠
         node1_1 = FateNode(
             npc_id="1008",
             npc_name="鱼西施",
@@ -172,8 +176,8 @@ class FateGraphUI:
             dilemma_title="高衙内逼婚",
             dilemma_desc="高衙内要强纳她为妾，威胁不从就让她无法在城中卖鱼",
             phase="EMERGE",
-            game_day=30,
-            game_season="春",
+            game_day=150,  # 延后到第150天，避免与左侧NPC信息重叠
+            game_season="夏",
             game_year=1,
             player_choice="拒绝婚事",
             alternative_choices=["顺从高衙内"],
@@ -181,7 +185,7 @@ class FateGraphUI:
             node_type=NodeType.PLAYER_INTERVENED
         )
         
-        # 节点2: 泼皮抢鱼摊 (过去，玩家介入)
+        # 节点2: 泼皮抢鱼摊 (改为NPC自然选择，只保留第一个玩家介入节点)
         node1_2 = FateNode(
             npc_id="1008",
             npc_name="鱼西施",
@@ -189,13 +193,13 @@ class FateGraphUI:
             dilemma_title="泼皮抢鱼摊",
             dilemma_desc="泼皮牛二带人来收保护费，要霸占她的鱼摊",
             phase="ESCALATE",
-            game_day=200,
+            game_day=320,
             game_season="冬",
             game_year=1,
-            player_choice="挺身而出",
-            alternative_choices=["忍气吞声"],
-            consequence="泼皮被赶走，但结下梁子",
-            node_type=NodeType.PLAYER_INTERVENED
+            player_choice=None,  # 改为NPC自然选择
+            alternative_choices=["挺身而出", "忍气吞声"],
+            consequence="大声呼救，引来街坊赶走泼皮",
+            node_type=NodeType.NPC_NATURAL
         )
         
         # 节点3: 黑风寨来人 (当前可介入)
@@ -233,7 +237,7 @@ class FateGraphUI:
             dilemma_title="欠下赌债",
             dilemma_desc="赌钱输光了，欠了一屁股债",
             phase="EMERGE",
-            game_day=60,
+            game_day=120,  # 延后避免与NPC信息重叠
             game_season="夏",
             game_year=1,
             player_choice=None,
@@ -242,7 +246,7 @@ class FateGraphUI:
             node_type=NodeType.NPC_NATURAL
         )
         
-        # 节点2: 调戏鱼西施被教训 (玩家介入)
+        # 节点2: 调戏鱼西施被教训 (改为NPC自然选择，只保留一个玩家介入节点)
         node2_2 = FateNode(
             npc_id="1026",
             npc_name="泼皮牛二",
@@ -250,13 +254,13 @@ class FateGraphUI:
             dilemma_title="调戏鱼西施被教训",
             dilemma_desc="调戏鱼西施时被玩家打败",
             phase="ESCALATE",
-            game_day=200,
+            game_day=280,
             game_season="冬",
             game_year=1,
-            player_choice="放他一马",
-            alternative_choices=["送官查办"],
-            consequence="心存怨恨，伺机报复",
-            node_type=NodeType.PLAYER_INTERVENED
+            player_choice=None,  # 改为NPC自然选择
+            alternative_choices=["放他一马", "送官查办"],
+            consequence="被痛打一顿，心存怨恨",
+            node_type=NodeType.NPC_NATURAL
         )
         
         # 节点3: 得罪高衙内 (NPC选择)
@@ -310,7 +314,7 @@ class FateGraphUI:
             dilemma_title="寨子缺粮",
             dilemma_desc="冬天寨子粮食不够，兄弟们要饿肚子",
             phase="EMERGE",
-            game_day=100,
+            game_day=220,  # 延后避免与NPC信息重叠
             game_season="冬",
             game_year=1,
             player_choice=None,
@@ -352,8 +356,8 @@ class FateGraphUI:
             dilemma_title="发现主公秘密",
             dilemma_desc="发现方承意暗中打压政敌，手段并不光明",
             phase="EMERGE",
-            game_day=120,
-            game_season="春",
+            game_day=200,  # 延后避免与NPC信息重叠
+            game_season="夏",
             game_year=1,
             player_choice=None,
             alternative_choices=["向主公进谏", "装作不知"],
@@ -368,13 +372,13 @@ class FateGraphUI:
             dilemma_title="忠义的抉择",
             dilemma_desc="方承意命令他做违背良心的事",
             phase="ESCALATE",
-            game_day=350,
-            game_season="夏",
+            game_day=450,
+            game_season="秋",
             game_year=2,
-            player_choice="婉拒执行",
+            player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
             alternative_choices=["违心执行", "直言进谏"],
-            consequence="主公对他产生嫌隙",
-            node_type=NodeType.PLAYER_INTERVENED
+            consequence="婉拒执行，主公对他产生嫌隙",
+            node_type=NodeType.NPC_NATURAL
         )
         
         timeline4.nodes = [node4_1, node4_2]
@@ -396,7 +400,7 @@ class FateGraphUI:
             dilemma_title="醉酒打人",
             dilemma_desc="因醉酒打伤了寺中僧人，方丈要罚他禁闭",
             phase="EMERGE",
-            game_day=80,
+            game_day=180,  # 延后避免与NPC信息重叠
             game_season="夏",
             game_year=1,
             player_choice=None,
@@ -412,13 +416,13 @@ class FateGraphUI:
             dilemma_title="救林冲",
             dilemma_desc="林冲被陷害充军，他出手相救",
             phase="CLIMAX",
-            game_day=380,
-            game_season="冬",
+            game_day=480,
+            game_season="春",
             game_year=2,
-            player_choice="大闹野猪林",
-            alternative_choices=["暗中护送", "不插手"],
-            consequence="与官府结仇，被迫流亡",
-            node_type=NodeType.PLAYER_INTERVENED
+            player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
+            alternative_choices=["大闹野猪林", "不插手"],
+            consequence="暗中护送，与官府结仇",
+            node_type=NodeType.NPC_NATURAL
         )
         
         timeline5.nodes = [node5_1, node5_2]
@@ -702,27 +706,29 @@ class FateGraphUI:
             if click_event:
                 return "CLOSE"
         
-        # 检查节点点击
+        # 检查节点点击/悬停
         timeline_y = content_top - self.scroll_offset
+        hovered_node = None
         
         for timeline in self.timelines:
             row_rect = pygame.Rect(content_left, timeline_y, content_w, self.npc_row_h)
             
             if row_rect.collidepoint(mx, my):
-                # 检查是否点击了某个节点
+                # 检查是否悬停/点击了某个节点
                 for node in timeline.nodes:
                     node_x = self._get_node_x(node)
-                    node_y = timeline_y + self.npc_row_h // 2
+                    node_y = timeline_y + self.npc_row_h - 35  # 与绘制时的line_y一致
                     node_rect = pygame.Rect(
-                        node_x - self.node_size,
-                        node_y - self.node_size,
-                        self.node_size * 2,
-                        self.node_size * 2
+                        node_x - self.node_size - 5,
+                        node_y - self.node_size - 5,
+                        self.node_size * 2 + 10,
+                        self.node_size * 2 + 10
                     )
                     
                     if node_rect.collidepoint(mx, my):
-                        self.selected_node = node
+                        hovered_node = node
                         if click_event:
+                            self.selected_node = node
                             if node.is_intervenable:
                                 return f"INTERVENE:{node.npc_id}"
                             else:
@@ -730,6 +736,14 @@ class FateGraphUI:
                         break
             
             timeline_y += self.npc_row_h
+        
+        # 如果没有悬停在节点上，清除选中状态（但保留详情弹窗）
+        if not hovered_node and not click_event:
+            # 检查鼠标是否在详情弹窗内
+            if self.selected_node:
+                popup_rect = pygame.Rect(self.detail_popup_x, self.detail_popup_y, 400, 320)
+                if not popup_rect.collidepoint(mx, my):
+                    self.selected_node = None
         
         return None
     
@@ -870,11 +884,13 @@ class FateGraphUI:
                            (content_left + self.timeline_start_x - 20, timeline_y + self.npc_row_h - 5),
                            (content_left + content_w, timeline_y + self.npc_row_h - 5), 1)
             
-            # NPC信息（左侧）
-            self._draw_npc_info(screen, timeline, content_left + 10, timeline_y + 10)
+            # NPC信息（左侧）- 垂直居中显示
+            info_y = timeline_y + (self.npc_row_h - 60) // 2  # 60是信息区域的大概高度
+            self._draw_npc_info(screen, timeline, content_left + 10, info_y)
             
-            # 命运节点和连线
-            self._draw_nodes_for_timeline(screen, timeline, timeline_y + self.npc_row_h // 2, mx, my)
+            # 命运节点和连线 - 在行的下半部分，与NPC信息底部对齐
+            line_y = timeline_y + self.npc_row_h - 35  # 距离底部35像素
+            self._draw_nodes_for_timeline(screen, timeline, line_y, mx, my)
             
             timeline_y += self.npc_row_h
         
@@ -886,25 +902,29 @@ class FateGraphUI:
             self._draw_scrollbar(screen, content_top, clip_rect.height)
     
     def _draw_npc_info(self, screen: pygame.Surface, timeline: NPCTimeline, x: int, y: int):
-        """绘制NPC基本信息（显示正确头像）"""
-        # 加载头像（使用npc_data.csv中的head_img字段格式）
+        """绘制NPC基本信息（使用与npc_detail_panel相同的头像加载方式）"""
+        # 加载头像（使用Appearance类相同的路径格式：assets/head_icon/{name}.png）
+        from src.utils import Appearance
         avatar = None
         try:
-            # 尝试加载头像，使用head_01.png或head_02.png格式
-            import random
-            head_img = f"head_0{random.randint(1, 2)}.png"  # 临时使用随机头像，实际应该从NPC数据中获取
-            avatar_path = f"assets/head_icon/{head_img}"
-            avatar = pygame.image.load(avatar_path)
-            avatar = pygame.transform.scale(avatar, (self.avatar_size, self.avatar_size))
-        except:
-            # 如果加载失败，使用默认头像框
-            avatar = None
+            # 尝试加载头像，使用NPC名字
+            avatar_path = Appearance.get_avatar_path(timeline.npc_name)
+            if avatar_path:
+                img = pygame.image.load(avatar_path).convert_alpha()
+                # 使用平滑缩放
+                avatar = pygame.transform.smoothscale(img, (self.avatar_size, self.avatar_size))
+        except Exception as e:
+            # 如果加载失败，avatar保持为None
+            pass
+        
+        # 绘制头像背景框
+        pygame.draw.rect(screen, (60, 60, 70), (x - 2, y - 2, self.avatar_size + 4, self.avatar_size + 4), border_radius=4)
         
         # 绘制头像
         if avatar:
             screen.blit(avatar, (x, y))
         else:
-            # 默认头像框
+            # 默认头像框（灰色背景+首字母）
             pygame.draw.rect(screen, (80, 80, 90), (x, y, self.avatar_size, self.avatar_size), border_radius=4)
             default_initials = timeline.npc_name[:1] if timeline.npc_name else "?"
             initial_surf = self.font_ui.render(default_initials, True, self.colors['text'])
@@ -930,11 +950,11 @@ class FateGraphUI:
     
     def _draw_nodes_for_timeline(self, screen: pygame.Surface, timeline: NPCTimeline, 
                                   center_y: int, mx: int, my: int):
-        """为一条时间线绘制所有节点"""
+        """为一条时间线绘制所有节点（完全匹配fate.md交互示意图样式）"""
         if not timeline.nodes:
             return
         
-        # 绘制节点间的连线
+        # 绘制节点间的连线和文字
         for i in range(len(timeline.nodes) - 1):
             node1 = timeline.nodes[i]
             node2 = timeline.nodes[i + 1]
@@ -942,13 +962,76 @@ class FateGraphUI:
             x1 = self._get_node_x(node1)
             x2 = self._get_node_x(node2)
             
-            # 实线连接
+            # 实线连接（已走过的真实路径）
             pygame.draw.line(screen, self.colors['line_real'], (x1, center_y), (x2, center_y), 2)
+            
+            # 绘制节点后的选择文字（在节点右侧、实线起点处）
+            # 如：━"父亲病逝"━□🎮━"留下继承"━━━━━
+            choice_text = None
+            if node1.player_choice:
+                choice_text = f'"{node1.player_choice}"'
+            elif node1.node_type == NodeType.NPC_NATURAL and not node1.is_intervenable:
+                # NPC自然选择，显示后果或默认文本
+                choice_text = f'"{node1.consequence[:6]}..."' if node1.consequence else None
+            
+            if choice_text:
+                text_surf = self.font_small.render(choice_text, True, self.colors['text'])
+                # 文字在节点右侧，紧挨着节点
+                text_x = x1 + self.node_size + 5
+                text_y = center_y - 6
+                screen.blit(text_surf, (text_x, text_y))
         
         # 绘制节点
-        for node in timeline.nodes:
+        for i, node in enumerate(timeline.nodes):
             node_x = self._get_node_x(node)
+            
+            # 绘制节点前的困境文字（在节点左侧，紧挨着节点）
+            # 如：━"父亲病逝"━□
+            dilemma_text = f'"{node.dilemma_title}"'
+            text_surf = self.font_small.render(dilemma_text, True, self.colors['text'])
+            # 文字在节点左侧，从右向左排列
+            text_x = node_x - self.node_size - 5 - text_surf.get_width()
+            text_y = center_y - 6
+            screen.blit(text_surf, (text_x, text_y))
+            
+            # 绘制节点
             self._draw_node(screen, node, node_x, center_y, mx, my)
+            
+            # 绘制未选择的路径（虚线向右上角飘散，带文字）
+            # 如：╱ ╌╌"离开打工"╌╌
+            if node.alternative_choices and len(node.alternative_choices) > 0:
+                alt_text = f'"{node.alternative_choices[0]}"'
+                alt_surf = self.font_small.render(alt_text, True, self.colors['text_dim'])
+                
+                # 虚线起点（从节点右上方开始）
+                start_x = node_x + 5
+                start_y = center_y - 8
+                
+                # 绘制虚线（向右上角飘散）
+                # ╱ 方向的虚线（右上）
+                for j in range(8):
+                    dash_x = start_x + j * 8  # 向右
+                    dash_y = start_y - j * 6  # 向上
+                    pygame.draw.circle(screen, self.colors['line_alt'], (dash_x, dash_y), 2)
+                
+                # 虚线终点文字（在虚线上方偏右）
+                end_x = start_x + 7 * 8 - alt_surf.get_width() // 2
+                end_y = start_y - 7 * 6 - 15
+                screen.blit(alt_surf, (end_x, end_y))
+        
+        # 绘制最后一个节点后的"命运继续"箭头（如果有当前可介入节点）
+        if timeline.nodes:
+            last_node = timeline.nodes[-1]
+            if last_node.is_intervenable:
+                last_x = self._get_node_x(last_node)
+                # 绘制箭头 ▶
+                arrow_x = last_x + self.node_size + 20
+                arrow_points = [
+                    (arrow_x, center_y - 5),
+                    (arrow_x + 10, center_y),
+                    (arrow_x, center_y + 5)
+                ]
+                pygame.draw.polygon(screen, self.colors['line_real'], arrow_points)
     
     def _draw_node(self, screen: pygame.Surface, node: FateNode, x: int, y: int, mx: int, my: int):
         """绘制单个命运节点"""
@@ -1065,52 +1148,143 @@ class FateGraphUI:
         pygame.draw.line(screen, x_color, (x2, y1), (x1, y2), 3)
     
     def _draw_node_detail(self, screen: pygame.Surface, node: FateNode, mx: int, my: int):
-        """绘制节点详情弹窗"""
+        """绘制节点详情弹窗（优化设计：配图区+描述区+选择区）"""
         # 弹窗尺寸
-        popup_w = 350
-        popup_h = 200
+        popup_w = 400
+        popup_h = 320
         
-        # 计算位置（在节点附近）
-        node_x = self._get_node_x(node)
-        popup_x = min(max(node_x - popup_w // 2, self.panel_x + 10), 
+        # 计算位置（跟随鼠标，但限制在面板内）
+        popup_x = min(max(mx + 20, self.panel_x + 10), 
                      self.panel_x + self.panel_w - popup_w - 10)
-        popup_y = self.panel_y + self.header_h + self.timeline_h + 50
+        popup_y = min(max(my - popup_h // 2, self.panel_y + self.header_h + 50),
+                     self.panel_y + self.panel_h - self.legend_h - popup_h - 10)
         
-        # 弹窗背景
+        # 保存位置供后续使用
+        self.detail_popup_x = popup_x
+        self.detail_popup_y = popup_y
+        
+        # 弹窗背景（带阴影）
+        shadow_rect = pygame.Rect(popup_x + 4, popup_y + 4, popup_w, popup_h)
+        pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect, border_radius=10)
+        
         popup_rect = pygame.Rect(popup_x, popup_y, popup_w, popup_h)
-        pygame.draw.rect(screen, (45, 48, 55), popup_rect, border_radius=8)
-        pygame.draw.rect(screen, self.colors['border'], popup_rect, 2, border_radius=8)
+        pygame.draw.rect(screen, (40, 43, 50), popup_rect, border_radius=10)
+        pygame.draw.rect(screen, self.colors['border'], popup_rect, 2, border_radius=10)
+        
+        # 顶部标题栏
+        header_rect = pygame.Rect(popup_x, popup_y, popup_w, 35)
+        pygame.draw.rect(screen, (55, 58, 65), header_rect, border_radius=10)
+        pygame.draw.rect(screen, (55, 58, 65), pygame.Rect(popup_x, popup_y + 25, popup_w, 15))
+        
+        # 节点类型图标
+        type_icon = "■" if node.is_intervenable else "🎮" if node.player_choice else "⚙"
+        type_color = self.colors['node_current'] if node.is_intervenable else \
+                     self.colors['node_player'] if node.player_choice else self.colors['node_npc']
         
         # 标题
-        title_surf = self.font_ui.render(node.dilemma_title, True, self.colors['title'])
-        screen.blit(title_surf, (popup_x + 15, popup_y + 15))
+        title_text = f"{type_icon} {node.dilemma_title}"
+        title_surf = self.font_ui.render(title_text, True, self.colors['title'])
+        screen.blit(title_surf, (popup_x + 15, popup_y + 10))
         
-        # 描述
-        desc_lines = [node.dilemma_desc[i:i+20] for i in range(0, len(node.dilemma_desc), 20)]
-        desc_y = popup_y + 45
-        for line in desc_lines[:3]:
-            desc_surf = self.font_small.render(line, True, self.colors['text'])
-            screen.blit(desc_surf, (popup_x + 15, desc_y))
-            desc_y += 18
+        # 时间信息
+        time_text = f"第{node.game_year}年·{node.game_season} 第{node.game_day}天"
+        time_surf = self.font_small.render(time_text, True, self.colors['text_dim'])
+        screen.blit(time_surf, (popup_x + popup_w - time_surf.get_width() - 15, popup_y + 12))
         
-        # 玩家选择
+        # 左侧：配图区（128x128）
+        img_x = popup_x + 15
+        img_y = popup_y + 45
+        img_size = 100
+        
+        # 配图背景框
+        img_rect = pygame.Rect(img_x, img_y, img_size, img_size)
+        pygame.draw.rect(screen, (30, 33, 40), img_rect, border_radius=6)
+        pygame.draw.rect(screen, (70, 70, 80), img_rect, 1, border_radius=6)
+        
+        # 尝试加载NPC头像作为配图
+        from src.utils import Appearance
+        try:
+            avatar_path = Appearance.get_avatar_path(node.npc_name)
+            if avatar_path:
+                img = pygame.image.load(avatar_path).convert_alpha()
+                img = pygame.transform.smoothscale(img, (img_size - 8, img_size - 8))
+                screen.blit(img, (img_x + 4, img_y + 4))
+        except:
+            # 显示默认图标
+            default_text = self.font_big.render(node.npc_name[:1], True, (80, 80, 90))
+            screen.blit(default_text, (img_x + img_size//2 - default_text.get_width()//2,
+                                      img_y + img_size//2 - default_text.get_height()//2))
+        
+        # 右侧：事件描述区
+        desc_x = img_x + img_size + 15
+        desc_y = img_y
+        desc_w = popup_w - img_size - 45
+        
+        # 描述标题
+        desc_title = self.font_small.render("【困境描述】", True, self.colors['text_dim'])
+        screen.blit(desc_title, (desc_x, desc_y))
+        
+        # 描述内容（自动换行）
+        desc_text = node.dilemma_desc if node.dilemma_desc else "暂无描述"
+        words = []
+        for i in range(0, len(desc_text), 14):
+            words.append(desc_text[i:i+14])
+        
+        desc_content_y = desc_y + 20
+        for i, line in enumerate(words[:4]):
+            line_surf = self.font_small.render(line, True, self.colors['text'])
+            screen.blit(line_surf, (desc_x, desc_content_y + i * 18))
+        
+        # 下方：选择区域
+        choice_y = img_y + img_size + 20
+        
+        # 分隔线
+        pygame.draw.line(screen, (60, 60, 70), 
+                        (popup_x + 15, choice_y - 10),
+                        (popup_x + popup_w - 15, choice_y - 10), 1)
+        
+        # 真实选择（如果已做出）
         if node.player_choice:
-            choice_surf = self.font_small.render(f"你的选择: {node.player_choice[:15]}", 
-                                                True, self.colors['node_player'])
-            screen.blit(choice_surf, (popup_x + 15, desc_y + 5))
-            desc_y += 20
+            real_choice_title = self.font_small.render("✓ 实际选择：", True, self.colors['node_player'])
+            screen.blit(real_choice_title, (popup_x + 15, choice_y))
+            
+            real_choice_text = f'"{node.player_choice}"'
+            real_choice_surf = self.font_ui.render(real_choice_text, True, self.colors['text'])
+            screen.blit(real_choice_surf, (popup_x + 15, choice_y + 20))
+            
+            # 后果
+            if node.consequence:
+                cons_text = f"→ {node.consequence}"
+                cons_surf = self.font_small.render(cons_text[:35], True, self.colors['text_dim'])
+                screen.blit(cons_surf, (popup_x + 15, choice_y + 45))
+        elif node.is_intervenable:
+            # 可介入提示
+            hint_surf = self.font_ui.render("【当前可介入此困境】", True, self.colors['node_current'])
+            screen.blit(hint_surf, (popup_x + (popup_w - hint_surf.get_width()) // 2, choice_y + 10))
+            
+            # 提示文字
+            hint2_surf = self.font_small.render("点击节点进行介入，改变NPC的命运", True, self.colors['text_dim'])
+            screen.blit(hint2_surf, (popup_x + (popup_w - hint2_surf.get_width()) // 2, choice_y + 35))
+        else:
+            # NPC自然选择
+            npc_choice_title = self.font_small.render("⚙ NPC选择：", True, self.colors['node_npc'])
+            screen.blit(npc_choice_title, (popup_x + 15, choice_y))
+            
+            if node.consequence:
+                npc_choice_text = f"{node.consequence}"
+                npc_choice_surf = self.font_small.render(npc_choice_text[:35], True, self.colors['text'])
+                screen.blit(npc_choice_surf, (popup_x + 15, choice_y + 20))
         
-        # 后果
-        if node.consequence:
-            cons_surf = self.font_small.render(f"后果: {node.consequence[:20]}...", 
-                                              True, self.colors['text_dim'])
-            screen.blit(cons_surf, (popup_x + 15, desc_y + 5))
-        
-        # 可介入提示
-        if node.is_intervenable:
-            hint_surf = self.font_ui.render("【点击介入此困境】", True, self.colors['node_current'])
-            screen.blit(hint_surf, (popup_x + (popup_w - hint_surf.get_width()) // 2, 
-                                   popup_y + popup_h - 30))
+        # 未选择的路径（如果有）
+        if node.alternative_choices and len(node.alternative_choices) > 0:
+            alt_y = choice_y + 70
+            if alt_y + 20 < popup_y + popup_h - 15:
+                alt_title = self.font_small.render("✗ 未选择：", True, (150, 100, 100))
+                screen.blit(alt_title, (popup_x + 15, alt_y))
+                
+                alt_text = f'"{node.alternative_choices[0]}"'
+                alt_surf = self.font_small.render(alt_text, True, (120, 120, 120))
+                screen.blit(alt_surf, (popup_x + 15, alt_y + 18))
     
     def _draw_scrollbar(self, screen: pygame.Surface, content_top: int, content_h: int):
         """绘制滚动条（支持拖动）"""
