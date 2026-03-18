@@ -562,52 +562,7 @@ class StoryDirector:
                     npc.rect.centerx, npc.rect.top - 50, (150, 200, 255)
                 )
                 
-            # 运行异步任务
-            try:
-                # 尝试获取当前事件循环
-                loop = asyncio.get_running_loop()
-                # 如果已经在事件循环中，创建任务
-                future = asyncio.ensure_future(_async_trigger())
-                # 由于我们在Pygame的主循环中，不能阻塞等待
-                # 所以我们设置一个回调来处理结果
-                def on_event_generated(fut):
-                    try:
-                        event_card = fut.result()
-                        if event_card:
-                            StoryDirector._handle_generated_event_static(npc, event_card, ctx)
-                        else:
-                            print(f"[DilemmaTest] 未能生成事件")
-                            if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
-                                ctx.ft_manager.add_text(
-                                    f"[AI] 暂时无法生成事件",
-                                    npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
-                                )
-                    except Exception as e:
-                        print(f"[DilemmaTest] 生成事件时出错: {e}")
-                        import traceback
-                        traceback.print_exc()
-                
-                future.add_done_callback(on_event_generated)
-                
-                # 显示正在生成的提示
-                if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
-                    ctx.ft_manager.add_text(
-                        f"[AI] 正在为{npc.name}生成困境事件...",
-                        npc.rect.centerx, npc.rect.top - 50, (150, 200, 255)
-                    )
-                
-            except RuntimeError:
-                # 没有正在运行的事件循环，创建一个新的
-                event_card = asyncio.run(_async_trigger())
-                if event_card:
-                    StoryDirector._handle_generated_event_static(npc, event_card, ctx)
-                else:
-                    print(f"[DilemmaTest] 未能生成事件")
-                    if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
-                        ctx.ft_manager.add_text(
-                            f"[AI] 暂时无法生成事件",
-                            npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
-                        )
+        
                 
         except Exception as e:
             print(f"[DilemmaTest] 错误: {e}")
