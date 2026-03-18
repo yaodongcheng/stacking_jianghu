@@ -1364,6 +1364,7 @@ class AIDirector:
                 # 将预生成的剧本挂到 news_item 上
                 news_item._pregen_script = full_script
                 elapsed = time.time() - start_time
+                log_game_event(f"[Director] 对话扩写完成({full_script})", tag="DIRECTOR")
                 log_game_event(f"[Director] 对话扩写完成({elapsed:.1f}秒)", tag="DIRECTOR")
                 
             except Exception as e:

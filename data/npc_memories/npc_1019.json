@@ -1,0 +1,180 @@
+{
+  "npc_id": 1019,
+  "npc_name": "铁牛",
+  "short_term": [
+    {
+      "id": "mem_1773753907322",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你好」",
+      "importance": 2,
+      "timestamp": 1773753907.322755,
+      "real_timestamp": 1773753907.322755,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 4
+    },
+    {
+      "id": "mem_1773753910132",
+      "memory_type": "conversation",
+      "content": "铁牛说：「嗯。」",
+      "importance": 1,
+      "timestamp": 1773753910.132024,
+      "real_timestamp": 1773753910.132024,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "铁牛"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753912902",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「啊」",
+      "importance": 2,
+      "timestamp": 1773753912.902416,
+      "real_timestamp": 1773753912.902416,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 3
+    },
+    {
+      "id": "mem_1773753915070",
+      "memory_type": "conversation",
+      "content": "铁牛说：「嗯？」",
+      "importance": 1,
+      "timestamp": 1773753915.0706139,
+      "real_timestamp": 1773753915.0706139,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "铁牛"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753918869",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「你咋了」",
+      "importance": 2,
+      "timestamp": 1773753918.8697002,
+      "real_timestamp": 1773753918.8697002,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753921185",
+      "memory_type": "conversation",
+      "content": "铁牛说：「没啥，就是饿了。」",
+      "importance": 1,
+      "timestamp": 1773753921.1855888,
+      "real_timestamp": 1773753921.1855888,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "铁牛"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753930182",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「那你知道我的名字image」",
+      "importance": 2,
+      "timestamp": 1773753930.1825185,
+      "real_timestamp": 1773753930.1825185,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753933506",
+      "memory_type": "conversation",
+      "content": "铁牛说：「不知。你是何人？」",
+      "importance": 1,
+      "timestamp": 1773753933.5062904,
+      "real_timestamp": 1773753933.5062904,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "铁牛"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1773753933506",
+      "memory_type": "knowledge",
+      "content": "玩家自称名叫姚东成，但我不认识此人",
+      "importance": 3,
+      "timestamp": 1773753933.5062904,
+      "real_timestamp": 1773753933.5062904,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1773753933.5062904,
+      "interaction_count": 4
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1773753937.0609257
+}

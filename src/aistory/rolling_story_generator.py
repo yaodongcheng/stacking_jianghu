@@ -986,10 +986,23 @@ actors数组中的role字段可选值：
         system_prompt, user_prompt = self._build_rolling_story_prompt(npc, seed, player, worldsnapshot)
         
         try:
-            response = self.llm.chat(
-                system_prompt=system_prompt,
-                user_message=user_prompt,
-                max_tokens=3000
+            import asyncio
+            # 修复：在Pygame环境中，获取事件循环可能导致死锁
+            # 使用 get_running_loop() 获取当前运行的事件循环
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # 如果没有运行中的循环，才使用 get_event_loop()
+                loop = asyncio.get_event_loop()
+            
+            # 在线程池中执行同步LLM调用，避免阻塞事件循环
+            response = await loop.run_in_executor(
+                None,  # 使用默认线程池
+                lambda: self.llm.chat(
+                    system_prompt=system_prompt,
+                    user_message=user_prompt,
+                    max_tokens=3000
+                )
             )
             log_game_event(f"[RollingStoryGenerator] LLM响应: {response.raw_response}", tag="LLM_RESPONSE")
             

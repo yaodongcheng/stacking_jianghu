@@ -468,6 +468,8 @@ class StoryDirector:
             from src.utils import log_game_event
             from .shared_types import WorldSnapshot
             from datetime import datetime
+            import asyncio
+            import threading
             
             # 获取LLM服务
             llm_service = LLMService.get_instance()
@@ -482,39 +484,84 @@ class StoryDirector:
                 log_game_event("[DilemmaTest] 错误：无法获取StoryDirector", tag="DILEMMA")
                 return
             
-            # 使用异步执行器来运行异步代码
+            # 修复：在新线程中创建独立的事件循环来执行异步代码
+            # 这避免了与Pygame事件循环的冲突（这是导致卡死的根本原因）
+            def _run_async():
+                try:
+                    # 创建新的事件循环
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    async def _async_trigger():
+                        npc_data = npc
+                        npc_id = npc_data.id
+                        
+                        # 检查NPC是否已注册，如果没有则注册
+                        if npc_id not in director.npc_data:
+                            director.register_npc(npc_data)
+                            print(f"[DilemmaTest] 已注册NPC {npc.name} 到StoryDirector")
+                        
+                        # 确保 seed 存在
+                        if npc_id not in director.seeds:
+                            from src.aistory.dilemma_seed import NPCDilemmaSeed
+                            director.seeds[npc_id] = NPCDilemmaSeed(id=npc_id)
+                            print(f"[DilemmaTest] 已为 {npc.name} 创建空的困境种子")
+                        
+                        # 构建世界快照
+                        from src.director_system import WorldObserver
+                        observer = WorldObserver()
+                        world_state = observer.observe(ctx)
+                        
+                        if hasattr(ctx, 'player'):
+                            world_state.player = ctx.player
+                        
+                        # 生成故事节拍
+                        event_card = await director.try_to_generate_beat(npc_id, world_state)
+                        return event_card
+                    
+                    # 运行异步函数
+                    event_card = loop.run_until_complete(_async_trigger())
+                    
+                    # 处理结果（需要在主线程回调）
+                    def on_result():
+                        if event_card:
+                            StoryDirector._handle_generated_event_static(npc, event_card, ctx)
+                        else:
+                            print(f"[DilemmaTest] 未能生成事件")
+                            if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                                ctx.ft_manager.add_text(
+                                    f"[AI] 暂时无法生成事件",
+                                    npc.rect.centerx, npc.rect.top - 50, (255, 200, 100)
+                                )
+                    
+                    # 调度回调到主线程（Pygame需要在主线程更新UI）
+                    if hasattr(ctx, 'pygame') or hasattr(ctx, 'clock'):
+                        # 简单的回调机制：存储待处理的回调
+                        if not hasattr(ctx, '_pending_callbacks'):
+                            ctx._pending_callbacks = []
+                        ctx._pending_callbacks.append(on_result)
+                    else:
+                        # 如果没有 pygame，直接执行
+                        on_result()
+                        
+                except Exception as e:
+                    print(f"[DilemmaTest] 异步执行出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    loop.close()
             
-            async def _async_trigger():
-                npc_data = npc
-                npc_id = npc_data.id
-                
-                # 检查NPC是否已注册，如果没有则注册
-                if npc_id not in director.npc_data:
-                    director.register_npc(npc_data)
-                    print(f"[DilemmaTest] 已注册NPC {npc.name} 到StoryDirector")
-                
-                # 【关键】确保 seed 存在（像 demo_llm_story.py 一样）
-                # desire 和 misgiving 将由 LLM 在生成事件时动态生成
-                if npc_id not in director.seeds:
-                    from src.aistory.dilemma_seed import NPCDilemmaSeed
-                    director.seeds[npc_id] = NPCDilemmaSeed(id=npc_id)
-                    print(f"[DilemmaTest] 已为 {npc.name} 创建空的困境种子")
-                
-                # 【使用 WorldObserver 构建世界快照】
-                from src.director_system import WorldObserver
-                observer = WorldObserver()
-                world_state = observer.observe(ctx)
-                
-                # 将玩家对象附加到 world_state（供生成器使用）
-                if hasattr(ctx, 'player'):
-                    world_state.player = ctx.player
-                
-                # 【重构后】直接生成故事节拍，不再依赖张力系统
-                # RollingStoryGenerator 会基于 NPC 的属性和当前阶段直接生成事件
-                event_card = await director.try_to_generate_beat(npc_id, world_state)
-                
-                return event_card
+            # 在新线程中运行
+            t = threading.Thread(target=_run_async, daemon=True)
+            t.start()
             
+            # 显示正在生成的提示
+            if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
+                ctx.ft_manager.add_text(
+                    f"[AI] 正在为{npc.name}生成困境事件...",
+                    npc.rect.centerx, npc.rect.top - 50, (150, 200, 255)
+                )
+                
             # 运行异步任务
             try:
                 # 尝试获取当前事件循环
