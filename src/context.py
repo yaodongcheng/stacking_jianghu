@@ -27,6 +27,9 @@ class GameContext:
         self.economy_system = None
         self.movement_system = None
         
+        # 【命运图谱】叙事导演系统
+        self.story_director = None
+        
         # 游戏状态
         self.current_state = GAME_STATE_PLAYING # GAME_STATE_PLAYING
         self.running = True

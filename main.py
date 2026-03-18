@@ -243,6 +243,14 @@ def main():
     # 事件生成器和导演系统
     ctx.director = get_director()
     
+    # 【命运图谱】初始化叙事导演系统
+    from src.aistory.story_director import StoryDirector, DirectorConfig
+    from src.llm.llm_service import LLMService
+    llm_service = LLMService.get_instance()
+    director_config = DirectorConfig()
+    ctx.story_director = StoryDirector.get_instance(llm_service, director_config)
+    print("[Init] StoryDirector 已初始化")
+    
     # 初始化实况快照面板
     from src.ui.live_snapshot_panel import get_snapshot_panel, LiveSnapshotData
     ctx.snapshot_panel = get_snapshot_panel(SCREEN_W, SCREEN_H)

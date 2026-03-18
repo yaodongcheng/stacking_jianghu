@@ -680,6 +680,50 @@ class RenderSystem:
                     ctx.event_manager.request_interaction_resume()
             else:
                 ctx.current_state = GAME_STATE_PLAYING
+        
+        # ══════════════════════════════════════════════════════════════
+        # 【命运图谱】NPC命运轨迹面板
+        # ══════════════════════════════════════════════════════════════
+        elif ctx.current_state == GAME_STATE_FATE_GRAPH:
+            from src.ui.fate_graph_ui import get_fate_graph_ui
+            
+            fate_ui = get_fate_graph_ui(screen.get_width(), screen.get_height())
+            fate_ui.set_fonts(self.ui_manager.font_big, self.ui_manager.font_ui, self.ui_manager.font_small)
+            
+            # 加载数据
+            story_director = getattr(ctx, 'story_director', None)
+            # 从player获取天数，从event_manager获取game_tick计算季节
+            current_day = getattr(ctx.player, 'day', 1)
+            fate_ui.load_data(story_director, ctx.all_cards, current_day)
+            
+            # 处理事件（支持滚轮滚动和滚动条拖动）
+            mouse_down = (event.type == pygame.MOUSEBUTTONDOWN) if event else False
+            mouse_up = (event.type == pygame.MOUSEBUTTONUP) if event else False
+            # 获取鼠标滚轮值
+            scroll_y = 0
+            if event and event.type == pygame.MOUSEWHEEL:
+                scroll_y = event.y
+            action = fate_ui.handle_event(mx, my, click_event, mouse_down, mouse_up, scroll_y)
+            if action == "CLOSE":
+                ctx.current_state = GAME_STATE_PLAYING
+            elif action and action.startswith("INTERVENE:"):
+                # 介入某个NPC的困境
+                npc_id = action.split(":")[1]
+                # TODO: 触发介入逻辑
+                print(f"[FateGraph] 介入NPC: {npc_id}")
+                ctx.current_state = GAME_STATE_PLAYING
+            elif action and action.startswith("VIEW:"):
+                # 查看节点详情
+                npc_id = action.split(":")[1]
+                print(f"[FateGraph] 查看NPC: {npc_id}")
+            
+            # 绘制
+            game_time = {
+                'year': 1 + current_day // 360,
+                'season': ["春", "夏", "秋", "冬"][(current_day // 90) % 4],
+                'day': current_day
+            }
+            fate_ui.draw(screen, mx, my, game_time)
 
     def _trigger_hostile_alarm(self, ctx, user, building, controller_name, controller_org_id=None):
         """
@@ -1194,6 +1238,7 @@ class RenderSystem:
             ('TECH', "[科技] 政策科技", (140, 60, 140), True),
             ('FACTION', "[势力] 势力纵横", (160, 120, 60), True),
             ('QUEST', "[任务] 任务日志", (60, 100, 180), True),
+            ('FATE', "[命运] 命运图谱", (180, 100, 180), True),  # 【新增】命运图谱
             ('SKIP_QUEST', "[跳过] 跳过任务(调试)", (100, 180, 100), True),
         ]
         
@@ -1320,6 +1365,10 @@ class RenderSystem:
                 ctx.current_state = GAME_STATE_FACTION_VIEW
             elif clicked_action == 'QUEST':
                 ctx.current_state = GAME_STATE_QUEST_LOG
+            elif clicked_action == 'FATE':
+                # 【新增】打开命运图谱
+                ctx.current_state = GAME_STATE_FATE_GRAPH
+                return  # 立即返回，避免同一帧中命运图谱处理点击事件
             elif clicked_action == 'FOCUS':
                 if self.camera:
                     self.camera.follow_player = not self.camera.follow_player
