@@ -349,10 +349,20 @@ class LiveSnapshotPanel:
                                 self.hide()
                                 return True
                             elif action == 'LETTER':
-                                # 快信处理：切换到第二级选项
+                                # 快信处理：切换到第二级选项（过滤掉需要亲自前往的选项）
                                 self.choice_level = 2
-                                # 恢复原始选项，并在最后添加返回键
-                                self.snapshot.choices = self.original_choices.copy()
+                                # 过滤掉 START_DIALOG（需要玩家亲自前往的选项）
+                                filtered_choices = [c for c in self.original_choices if c.get('action') != 'START_DIALOG']
+                                # ===== [调试] 打印过滤后的选项 =====
+                                print(f"[LiveSnapshotPanel] ========== 点击了【快信处理】==========")
+                                print(f"  过滤前选项数量: {len(self.original_choices)}")
+                                print(f"  过滤后选项数量: {len(filtered_choices)}")
+                                for idx, orig in enumerate(filtered_choices):
+                                    print(f"    选项{idx+1}: {orig.get('text')} (action={orig.get('action')})")
+                                print("=" * 50)
+                                # =====================================
+                                # 使用过滤后的选项，并在最后添加返回键
+                                self.snapshot.choices = filtered_choices
                                 self.snapshot.choices.append({
                                     "text": "← 返回",
                                     "action": "BACK",

@@ -823,17 +823,7 @@ class StoryDirector:
             dialog_thread = threading.Thread(target=generate_dialog, daemon=True)
             dialog_thread.start()
             
-            # 设置超时保护
-            def timeout_check():
-                time.sleep(max_wait_time)
-                if not news_added[0]:
-                    log_game_event(f"[DilemmaTest] 生成超时({max_wait_time}秒)，强制添加新闻", tag="DILEMMA")
-                    image_done.set()
-                    dialog_done.set()
-                    _try_add_news()
-            
-            timeout_thread = threading.Thread(target=timeout_check, daemon=True)
-            timeout_thread.start()
+            # 超时配置已在 definition 中处理，此处不再重复设置超时
             
         except Exception as e:
             log_game_event(f"[DilemmaTest] 启动并行生成失败: {e}", tag="DILEMMA")

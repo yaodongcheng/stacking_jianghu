@@ -1450,27 +1450,7 @@ class AIDirector:
         dialog_thread = threading.Thread(target=generate_dialog, daemon=True)
         dialog_thread.start()
         
-        # 超时兜底：确保即使任务卡住也能显示事件
-        def timeout_checker():
-            import time as time_module
-            time_module.sleep(max_wait_time)
-            if not news_added[0]:
-                # 标记未完成的任务
-                if not image_done.is_set():
-                    log_game_event(f"[Director] 图片生成超时({max_wait_time}秒)", tag="DIRECTOR")
-                    news_item._image_path = "placeholder"
-                    image_done.set()
-                if not dialog_done.is_set():
-                    log_game_event(f"[Director] 对话扩写超时({max_wait_time}秒)", tag="DIRECTOR")
-                    dialog_done.set()
-                # 强制添加新闻
-                if not news_added[0]:
-                    news_added[0] = True
-                    news_mgr.add_news(news_item)
-                    log_game_event(f"[Director] 超时后强制添加新闻: {news_item.title}", tag="DIRECTOR")
-        
-        timeout_thread = threading.Thread(target=timeout_checker, daemon=True)
-        timeout_thread.start()
+        # 超时配置已在 definition 中处理，此处不再重复设置超时
     
     
     
