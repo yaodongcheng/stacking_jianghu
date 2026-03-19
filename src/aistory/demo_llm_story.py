@@ -18,6 +18,19 @@ from typing import List, Dict
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# ═══════════════════════════════════════════════════════════════
+# 关键：先预加载 ui 模块，打破循环导入
+# 这样当 story_director 导入 ui 时，ui 已经初始化完成
+# ═══════════════════════════════════════════════════════════════
+# 先强制初始化 ui 模块链，避免循环
+import src.ui.event_notification
+import src.ui.manager
+import src.ui.npc_detail_panel
+
+# 现在可以安全导入 story_director
+from src.aistory.story_director import StoryDirector
+
+# 导入其他模块
 from src.aistory.rolling_story_generator import (
     RollingStoryGenerator, StoryPhase, DilemmaType
 )
