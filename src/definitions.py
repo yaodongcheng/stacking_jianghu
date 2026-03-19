@@ -50,6 +50,19 @@ GAME_STATE_FEE_CONFIRM = 18      # 【手续费系统】使用费确认弹窗
 GAME_STATE_BUILDING_INFO = 19    # 【建筑面板】建筑详情与占领界面
 GAME_STATE_LIVE_SNAPSHOT = 20    # 【大宋实况】实况快照面板
 GAME_STATE_FATE_GRAPH = 21       # 【命运图谱】NPC命运轨迹面板
+
+# UI 面板状态列表：打开这些面板时禁止摄像机边缘滚动
+UI_PANEL_STATES = [
+    GAME_STATE_TECH_TREE,
+    GAME_STATE_NEWS_FEED,
+    GAME_STATE_ROSTER,
+    GAME_STATE_FACTION_VIEW,
+    GAME_STATE_QUEST_LOG,
+    GAME_STATE_FATE_GRAPH,
+    GAME_STATE_NPC_DETAIL,
+    GAME_STATE_FOLLOWER_PANEL,
+    GAME_STATE_LIVE_SNAPSHOT,  # 大宋实况详细面板
+]
 # =========================================
 # 2. 视觉配置
 # =========================================
