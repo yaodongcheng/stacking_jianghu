@@ -24,6 +24,7 @@ from src.definitions import (
     GAME_STATE_PLAYING
 )
 from src.utils import resource_path
+from src.data_loader import get_npc_name_by_id_global
 
 # 默认屏幕尺寸（实际值由构造函数传入）
 DEFAULT_SCREEN_W = 1280
@@ -696,27 +697,29 @@ class LiveSnapshotPanel:
             text = choice.get('text', f'选项{i+1}')
             text_surf = font.render(text, True, text_color)
             text_x = btn_rect.centerx - text_surf.get_width() // 2
-            text_y = btn_rect.centery - text_surf.get_height() // 2 - 5
+            text_y = btn_rect.centery - text_surf.get_height() // 2
             surface.blit(text_surf, (text_x, text_y))
             
-            # 绘制 requirement 文本（在按钮下方）
-            if req_str:
-                req_text = self._format_requirement_text(req_str)
-                req_surf = small_font.render(req_text, True, 
-                    (180, 140, 100) if is_enabled else (100, 100, 110))
-                req_x = btn_rect.centerx - req_surf.get_width() // 2
-                req_y = btn_rect.bottom - 14  # 调整位置适应新高度
-                surface.blit(req_surf, (req_x, req_y))
-            
-            # 如果悬停且满足条件，准备 tooltip
+            # 如果悬停，准备 tooltip（即使条件不满足也显示，但不满足时标红）
             if is_hover:
-                self._prepare_choice_tooltip(choice, btn_rect)
+                self._prepare_choice_tooltip(choice, btn_rect, is_enabled)
+    
+    def _format_compare_symbol(self, compare: str) -> str:
+        """将比较符格式化为自然语言"""
+        compare_map = {
+            '>=': '大于等于', '>::': '大于等于',
+            '<=': '小于等于', '<::': '小于等于',
+            '>': '大于', '>>': '大于',
+            '<': '小于', '<<': '小于',
+            '==': '等于', '=': '等于'
+        }
+        return compare_map.get(compare, compare)
     
     def _check_choice_requirement(self, player, req_str: str) -> bool:
         """检查选项是否满足条件
         
         格式: "actor_name:attribute:compare:needvalue"
-        示例: "PLAYER:money:>=:100" 或 "npc_001:charm:>::50"
+        示例: "PLAYER:money:>=:100" 或 "1001:charm:>::50"
         """
         if not req_str or not player:
             return True
@@ -758,59 +761,92 @@ class LiveSnapshotPanel:
             return True
     
     def _format_requirement_text(self, req_str: str) -> str:
-        """将 requirement 格式化为可读文本"""
-        if not req_str:
+        """将 requirement 格式化为自然语言"""
+        if not req_str or str(req_str).lower() == 'null':
             return ""
         
         try:
             parts = req_str.split(':')
             if len(parts) < 4:
-                return req_str
+                return ""
             
             actor, attr, compare, need_val = parts[0], parts[1], parts[2], parts[3]
+            
+            # 关系属性特殊处理（如 1005:relation:>:0 表示与NPC 1005好感大于0）
+            if attr == 'relation' or attr.endswith('_relation'):
+                npc_name = get_npc_name_by_id_global(actor)
+                compare_text = self._format_compare_symbol(compare)
+                return f"与{npc_name}好感{compare_text}{need_val}"
             
             # 属性名映射
             attr_names = {
                 'money': '金钱', 'charm': '魅力', 'str': '力量',
-                'int': '智力', 'fame': '声望', 'health': '生命',
-                'energy': '精力', 'kungfu': '武功'
+                'int': '智力', 'wit': '智力', 'fame': '声望', 
+                'health': '生命', 'energy': '精力', 'kungfu': '武功',
+                'mood': '心情', 'stress': '压力', 'fatigue': '疲劳'
             }
             attr_name = attr_names.get(attr, attr)
             
-            # 比较符映射
-            compare_symbols = {
-                '>=': '≥', '<=': '≤', '>::': '≥', '<::': '≤',
-                '>': '>', '<': '<', '==': '=', '=': '='
-            }
-            symbol = compare_symbols.get(compare, compare)
+            # 比较符映射为自然语言
+            compare_text = self._format_compare_symbol(compare)
             
-            return f"需: {attr_name}{symbol}{need_val}"
+            return f"拥有{compare_text}{need_val}{attr_name}"
         except:
             return req_str
     
-    def _prepare_choice_tooltip(self, choice: dict, btn_rect: pygame.Rect):
-        """准备选项的 tooltip 内容"""
+    def _prepare_choice_tooltip(self, choice: dict, btn_rect: pygame.Rect, requirement_met: bool = True):
+        """准备选项的 tooltip 内容
+        Args:
+            choice: 选项数据
+            btn_rect: 按钮区域
+            requirement_met: 条件是否满足
+        """
         lines = []
+           
+        # Requirement（条件，显示在顶部）- 标题和内容分开
+        req_str = choice.get('requirement')
+        req_satisfied = True  # 标记条件是否满足
+        if req_str and str(req_str).lower() != 'null':
+            req_text = self._format_requirement_text(req_str)
+            # 检查实际是否满足条件
+            player = None
+            try:
+                from src.context import ctx
+                player = getattr(ctx, 'player', None)
+            except:
+                pass
+            req_satisfied = self._check_choice_requirement(player, req_str)
+            # 标题单独一行
+            lines.append(('【条件】', 'title'))
+            # 内容单独一行，根据满足状态
+            lines.append((req_text, 'req_unsatisfied' if not req_satisfied else 'req_satisfied'))
         
-        # Cost（代价）
+        # Cost（代价）- 标题和内容分开
         cost = choice.get('cost')
-        if cost:
+        if cost and str(cost).lower() != 'null':
             cost_text = self._format_effect_text(cost, is_cost=True)
-            lines.append(f"💰 代价: {cost_text}")
+            if cost_text != "无":
+                lines.append(('【需要】', 'title'))
+                lines.append((cost_text, 'cost'))
         
-        # Effect（收益）
+        # Effect（收益）- 标题和内容分开
         effect = choice.get('effect')
-        if effect:
+        if effect and str(effect).lower() != 'null':
             effect_text = self._format_effect_text(effect, is_cost=False)
-            lines.append(f"✨ 收益: {effect_text}")
+            if effect_text != "无":
+                lines.append(('【获得】', 'title'))
+                lines.append((effect_text, 'effect'))
         
-        # Consequence preview（后果预测）
+        # Consequence preview（后果预测：即时反应 + 长期影响）
         preview = choice.get('consequence_preview')
-        if preview:
-            lines.append("")  # 空行
-            lines.append("📜 后果预测:")
-            # 解析 consequence_preview 的4个标签
-            for tag in ['[即时反应]', '[资源波动]', '[关系变化]', '[埋下隐患]', '[最终走向]', '[长远影响]']:
+        if preview and str(preview).lower() != 'null':
+            # 预处理：删除所有换行符，将连续内容合并
+            import re
+            preview = re.sub(r'[\r\n]+', '', preview)
+            lines.append(('', 'normal'))  # 空行
+            lines.append(('【后续】', 'title'))
+            # 解析两个标签：[即时反应] + [埋下隐患]/[最终走向]/[长远影响]（长期）
+            for tag in ['[即时反应]', '[埋下隐患]', '[最终走向]', '[长远影响]']:
                 if tag in preview:
                     # 提取标签后的内容
                     start = preview.find(tag)
@@ -819,7 +855,7 @@ class LiveSnapshotPanel:
                         end = len(preview)
                     content = preview[start:end].replace(tag, '').strip()
                     if content:
-                        lines.append(f"  {tag} {content}")
+                        lines.append((f"  {tag} {content}", 'normal'))
         
         if lines:
             self.choice_tooltip = {
@@ -829,37 +865,86 @@ class LiveSnapshotPanel:
             }
     
     def _format_effect_text(self, effect_str: str, is_cost: bool) -> str:
-        """格式化 effect/cost 文本"""
-        if not effect_str:
+        """格式化 effect/cost 文本为自然语言，支持多个效果"""
+        if not effect_str or effect_str.lower() == 'null':
             return "无"
         
-        try:
-            parts = effect_str.split(':')
-            if len(parts) < 3:
-                return effect_str
+        # 支持多个效果（用分号分隔）
+        effects = effect_str.split(';')
+        result_parts = []
+        
+        for effect in effects:
+            effect = effect.strip()
+            if not effect or effect.lower() == 'null':
+                continue
             
-            actor, attr, val = parts[0], parts[1], parts[2]
-            
-            # 属性名映射
-            attr_names = {
-                'money': '金钱', 'charm': '魅力', 'str': '力量',
-                'int': '智力', 'fame': '声望', 'health': '生命',
-                'energy': '精力', 'kungfu': '武功'
-            }
-            attr_name = attr_names.get(attr, attr)
-            
-            # 数值
             try:
-                num = int(val)
-                sign = "-" if num < 0 else "+"
-                return f"{attr_name} {sign}{abs(num)}"
+                parts = effect.split(':')
+                if len(parts) < 3:
+                    continue
+                
+                actor, attr, val = parts[0], parts[1], parts[2]
+                
+                # 关系属性特殊处理
+                if attr == 'relation' or attr.endswith('_relation'):
+                    # 使用 get_npc_name_by_id_global 获取 NPC 名字，不显示 ID
+                    npc_name = get_npc_name_by_id_global(actor)
+                    try:
+                        num = int(val)
+                        if num > 0:
+                            result_parts.append(f"与{npc_name}关系变好({num})")
+                        else:
+                            result_parts.append(f"与{npc_name}关系变差({abs(num)})")
+                    except:
+                        result_parts.append(f"与{npc_name}关系变化")
+                    continue
+                
+                # NPC情绪属性特殊处理（如 1001:emotion:HAPPY 表示NPC 1001变得开心）
+                if attr == 'emotion':
+                    npc_name = get_npc_name_by_id_global(actor)
+                    # 从definitions导入情绪中文映射
+                    from src.definitions import EMOTION_CN
+                    emotion_text = EMOTION_CN.get(val, val)
+                    result_parts.append(f"{npc_name}变得{emotion_text}")
+                    continue
+                
+                # 属性名映射（增加更多属性）
+                attr_names = {
+                    'money': '金钱', 'charm': '魅力', 'str': '力量',
+                    'int': '智力', 'wit': '智力', 'fame': '声望', 
+                    'health': '生命', 'energy': '精力', 'kungfu': '武功',
+                    'mood': '心情', 'stress': '压力', 'fatigue': '疲劳',
+                    'social': '社交'
+                }
+                attr_name = attr_names.get(attr, attr)
+                
+                # 数值
+                try:
+                    num = int(val)
+                    if is_cost:
+                        # 代价：显示为"消耗X"或"减少X"
+                        if num > 0:
+                            result_parts.append(f"消耗{num}{attr_name}")
+                        else:
+                            result_parts.append(f"减少{abs(num)}{attr_name}")
+                    else:
+                        # 收益：显示为"获得X"或"增加X"
+                        if num > 0:
+                            result_parts.append(f"获得{num}{attr_name}")
+                        else:
+                            result_parts.append(f"失去{abs(num)}{attr_name}")
+                except:
+                    result_parts.append(f"{attr_name} {val}")
             except:
-                return f"{attr_name} {val}"
-        except:
-            return effect_str
+                continue
+        
+        if not result_parts:
+            return "无"
+        
+        return "，".join(result_parts)
     
     def _draw_choice_tooltip(self, surface: pygame.Surface):
-        """绘制选项 tooltip"""
+        """绘制选项 tooltip（显示在选项右侧，不透明背景，支持文本换行）"""
         if not self.choice_tooltip:
             return
         
@@ -869,34 +954,64 @@ class LiveSnapshotPanel:
         
         # 淡入动画
         tooltip['alpha'] = min(1.0, tooltip['alpha'] + 0.15)
-        alpha = int(230 * tooltip['alpha'])
+        alpha = int(255 * tooltip['alpha'])
         
         # 计算 tooltip 尺寸
         font = self._get_font(16)
-        line_height = 22
+        line_height = 26
         padding = 12
         
-        max_width = 0
-        for line in lines:
-            w = font.size(line)[0]
-            max_width = max(max_width, w)
+        # 固定 tooltip 宽度
+        fixed_tooltip_w = 280
         
-        tooltip_w = max_width + padding * 2
-        tooltip_h = len(lines) * line_height + padding * 2
+        # 对每行文本进行换行处理（按字符宽度换行，不到边缘不换行）
+        wrapped_lines = []
+        for line_data in lines:
+            # 支持新旧两种格式：字符串或元组 (text, color_type)
+            if isinstance(line_data, tuple):
+                text, color_type = line_data
+            else:
+                text = line_data
+                color_type = 'normal'
+            
+            # 直接按字符添加，当宽度超过时才换行
+            if not text:
+                wrapped_lines.append((text, color_type))
+                continue
+                
+            # 计算这一行能容纳的最大宽度
+            max_width = fixed_tooltip_w - padding * 2
+            
+            # 按字符逐个添加，超过宽度才换行
+            current_line = ""
+            for char in text:
+                test_line = current_line + char
+                if font.size(test_line)[0] <= max_width:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        wrapped_lines.append((current_line, color_type))
+                    current_line = char
+            if current_line:
+                wrapped_lines.append((current_line, color_type))
         
-        # 位置：按钮上方或下方
-        tooltip_x = btn_rect.centerx - tooltip_w // 2
-        tooltip_y = btn_rect.top - tooltip_h - 10
+        tooltip_w = fixed_tooltip_w
+        tooltip_h = len(wrapped_lines) * line_height + padding * 2
         
-        # 如果上方空间不足，显示在下方
-        if tooltip_y < 10:
-            tooltip_y = btn_rect.bottom + 10
+        # 位置：按钮右侧（始终显示在右侧）
+        tooltip_x = btn_rect.right + 25  # 右侧偏移
+        tooltip_y = btn_rect.top  # 与按钮顶部对齐
+        
+        # 确保不超出面板底部边界
+        if tooltip_y + tooltip_h > self.panel_h - 10:
+            tooltip_y = self.panel_h - tooltip_h - 10  # 往上移动，确保不超出底部
         
         tooltip_rect = pygame.Rect(tooltip_x, tooltip_y, tooltip_w, tooltip_h)
         
-        # 绘制背景
+        # 绘制不透明背景（深色底）
+        bg_color = (25, 25, 35, alpha)  # 深色背景
         bg_surface = pygame.Surface((tooltip_w, tooltip_h), pygame.SRCALPHA)
-        bg_surface.fill((20, 20, 30, alpha))
+        bg_surface.fill(bg_color)
         surface.blit(bg_surface, tooltip_rect)
         
         # 绘制边框
@@ -905,17 +1020,39 @@ class LiveSnapshotPanel:
         
         # 绘制文本
         y = tooltip_rect.top + padding
-        for i, line in enumerate(lines):
-            if line.startswith("💰"):
-                color = (255, 150, 150)  # 代价 - 红色
-            elif line.startswith("✨"):
-                color = (150, 255, 150)  # 收益 - 绿色
-            elif line.startswith("📜"):
-                color = (255, 230, 150)  # 标题 - 金色
-            elif line.strip().startswith('['):
-                color = (200, 200, 220)  # 标签内容 - 淡紫
+        for i, line_data in enumerate(wrapped_lines):
+            # 支持新旧两种格式
+            if isinstance(line_data, tuple):
+                line, color_type = line_data
             else:
+                line = line_data
+                color_type = 'normal'
+            
+            # 根据颜色类型决定颜色
+            if color_type == 'title':
+                # 标题用白色
                 color = (255, 255, 255)
+            elif color_type == 'req_satisfied':
+                # 条件满足 - 绿色
+                color = (100, 220, 100)
+            elif color_type == 'req_unsatisfied':
+                # 条件不满足 - 红色
+                color = (255, 80, 80)
+            elif color_type == 'cost':
+                # 代价 - 橙色
+                color = (255, 180, 100)
+            elif color_type == 'effect':
+                # 收益 - 绿色
+                color = (100, 220, 100)
+            elif color_type == 'normal':
+                # 正常正文 - 白色
+                color = (255, 255, 255)
+            else:
+                # 兼容旧格式 True/False
+                if color_type:
+                    color = (255, 200, 100)
+                else:
+                    color = (255, 80, 80)
             
             text_surf = font.render(line, True, color)
             surface.blit(text_surf, (tooltip_rect.left + padding, y))

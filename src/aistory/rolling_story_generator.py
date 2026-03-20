@@ -30,6 +30,13 @@ except ImportError:
     def log_game_event(text, tag="INFO"):
         print(f"[{tag}] {text}")
 
+# 动态导入情绪枚举
+try:
+    from src.definitions import Emotion
+    EMOTION_OPTIONS = ",".join([f"{e.value[0]}({e.value[1]})" for e in Emotion])
+except ImportError:
+    EMOTION_OPTIONS = "NORMAL(平静),HAPPY(开心),SAD(悲伤),ANGRY(愤怒),DEPRESSED(沮丧),DESPAIR(绝望),ANXIOUS(焦虑),CONFUSED(困惑)"
+
 
 # ═══════════════════════════════════════════════════════════════
 # 起承转合四阶段枚举
@@ -397,22 +404,30 @@ actors数组中的role字段可选值：
 - actor_name: 使用NPC的ID（如npc_001）或PLAYER
 - attribute: 属性名（strength/agility/wit/charm/money/emotion/health等）
 - compare_symbol: 比较符号（>、<、>=、<=、=）
-- needvalue: 需要的数值
-- 示例: `PLAYER:charm:>=:50` 或 `npc_001:money:>::100`
+ - needvalue: 需要的数值
+ - 示例: `PLAYER:charm:>=:50` 或 `1001:money:>::100`
 
-### cost/effect/auto_effect字段格式
-格式: `actor_name:attribute:changevalue`（多个用分号隔开）
-- actor_name: 使用NPC的ID（如npc_001）或PLAYER
-- attribute: 属性名
-- changevalue: 变化数值（cost必须为负数，effect为正数）
-- 示例: `PLAYER:money:-200;npc_001:emotion:15`
-
-### consequence_preview标签要求
-必须按顺序包含以下四个标签，用"；"分隔：
-- [即时反应]：选择后的立即效果
-- [资源波动]：金钱/物品变化
-- [关系变化]：与NPC关系变化
-- [埋下隐患]/[最终走向]/[长远影响]：根据阶段使用对应标签
+ ### cost/effect/auto_effect字段格式
+格式: `actor_id:attribute:changevalue`（多个用分号隔开）
+ - actor_id: 使用NPC的纯数字ID（如1001、1013）或PLAYER，不要使用npc_前缀
+ - attribute: 属性名（支持关系属性如1001:relation表示与该NPC的好感度）
+ - changevalue: 变化数值（cost必须为负数，effect为正数）
+ - 示例: `PLAYER:money:-200;1001:relation:-10;1013:relation:20`
+ - NPC情绪变化格式: `actor_id:emotion:EMOTION值`（如1001:emotion:HAPPY表示NPC 1001变得开心）
+ - 情绪枚举候选: {EMOTION_OPTIONS}
+ 
+ ### effect字段重要说明
+ effect字段必须包含以下两类变化：
+ 1. 资源/属性变化：如金钱、魅力、力量、声望等属性的增减
+ 2. 人物关系变化：如1001:relation:-10（与ID1001的NPC关系变差）
+ 3. NPC情绪变化：如1001:emotion:HAPPY（让NPC 1001变得开心）
+ 使用分号分隔多个变化，确保包含人物关系变化和资源变化。
+ 
+ ### consequence_preview标签要求
+ 必须按顺序包含以下两个标签，用"；"分隔：
+ - [即时反应]：选择后的立即效果（短期）
+ - [埋下隐患]或[最终走向]或[长远影响]：选择后产生的潜在影响（长期），根据故事阶段选择最合适的标签
+ 不需要再包含[资源波动]和[关系变化]，这些应该在effect字段中体现。
 
 ## 输出格式
 严格输出下方JSON结构，不要输出任何JSON以外的内容。字段不可缺省。
@@ -444,9 +459,9 @@ actors数组中的role字段可选值：
             "text": "选项文本，15-20字，玩家帮助视角，格式：[手段]具体做法",
             "requirement": "actor_name:attribute:compare_symbol:needvalue 或 null",
             "cost":"actor_name:attribute:changevalue 或 null，多个用分号隔开，changevalue为负数",
-            "effect":"actor_name:attribute:changevalue 或 null，多个用分号隔开，changevalue为正数",
+            "effect":"actor_name:attribute:changevalue 或 null，多个用分号隔开，changevalue为正数，必须包含资源变化和人物关系变化",
             "tension_delta":10,
-            "consequence_preview": "[即时反应]...；[资源波动]...；[关系变化]...；[埋下隐患]/[最终走向]/[长远影响]..."
+            "consequence_preview": "[即时反应]...；[埋下隐患]/[最终走向]/[长远影响]..."
         }}
     ],
   "auto_decay": {{
@@ -454,9 +469,11 @@ actors数组中的role字段可选值：
     "auto_effect": "actor_name:attribute:changevalue 或 null，多个用分号隔开，严重负面",
     "auto_tension_delta":15
   }}
-}}
-```
-"""
+   }}
+ ```
+ """
+        # 格式化system_prompt中的动态变量
+        system_prompt = system_prompt.format(EMOTION_OPTIONS=EMOTION_OPTIONS)
         return system_prompt, user_prompt
 
     def _infer_current_phase(self, seed: NPCDilemmaSeed) -> StoryPhase:

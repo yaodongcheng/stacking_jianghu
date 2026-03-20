@@ -3,7 +3,7 @@ import math
 import pygame
 from src.definitions import *
 from src.entities import Player, NPC, Building,Resource
-from src.data_loader import load_npcs_from_csv
+from src.data_loader import load_npcs_from_csv, register_npc_id_name
 from src.social_system import social_manager
 from src.data.character_seeds import SEEDS
 

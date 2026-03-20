@@ -1,5 +1,30 @@
 # --- src/definitions.py ---
 import pygame
+from enum import Enum
+
+class Emotion(Enum):
+    """NPC情绪枚举"""
+    NORMAL = ("NORMAL", "平静")
+    HAPPY = ("HAPPY", "开心")
+    SAD = ("SAD", "悲伤")
+    ANGRY = ("ANGRY", "愤怒")
+    DEPRESSED = ("DEPRESSED", "沮丧")
+    DESPAIR = ("DESPAIR", "绝望")
+    ANXIOUS = ("ANXIOUS", "焦虑")
+    CONFUSED = ("CONFUSED", "困惑")
+
+# 兼容旧的常量定义（只取value的第一项）
+EMOTION_NORMAL = Emotion.NORMAL.value[0]
+EMOTION_HAPPY = Emotion.HAPPY.value[0]
+EMOTION_SAD = Emotion.SAD.value[0]
+EMOTION_ANGRY = Emotion.ANGRY.value[0]
+EMOTION_DEPRESSED = Emotion.DEPRESSED.value[0]
+EMOTION_DESPAIR = Emotion.DESPAIR.value[0]
+EMOTION_ANXIOUS = Emotion.ANXIOUS.value[0]
+EMOTION_CONFUSED = Emotion.CONFUSED.value[0]
+
+# 情绪中文映射（便于UI层使用）
+EMOTION_CN = {e.value[0]: e.value[1] for e in Emotion}
 
 # =========================================
 # 调试开关
@@ -125,14 +150,7 @@ FREE_FULL = "FULL"
 FAMILY_ISOLATED = "ISOLATED" 
 FAMILY_LOCAL = "LOCAL"       
 
-EMOTION_NORMAL = "NORMAL"
-EMOTION_HAPPY = "HAPPY"
-EMOTION_SAD = "SAD"
-EMOTION_ANGRY = "ANGRY"
-EMOTION_DEPRESSED = "DEPRESSED" 
-EMOTION_DESPAIR = "DESPAIR"     
-EMOTION_ANXIOUS = "ANXIOUS"
-EMOTION_CONFUSED = "CONFUSED"
+# 情绪枚举已移至文件顶部的Emotion类定义
 
 SAFETY_NORMAL = "NORMAL"
 SAFETY_DANGER = "DANGER" 
