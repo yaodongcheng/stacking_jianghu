@@ -386,7 +386,7 @@ class DoubaoImageGenerator:
                     print(f"[Danqingyue] 响应中没有数据: {result}")
                     return self._generate_placeholder(prompt, width, height)
             else:
-                print(f"[Danqingyue] 请求失败: {resp.status_code}, {resp.text[:200]}")
+                print(f"[Danqingyue] 请求失败: {resp.status_code}, {resp.text}")
                 return self._generate_placeholder(prompt, width, height)
                 
         except Exception as e:

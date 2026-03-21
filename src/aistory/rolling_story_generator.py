@@ -80,8 +80,9 @@ class EventChoice:
     """事件选项 - 起承转合规范"""
     text: str = ""                           # 选项描述（15-20字，格式：[手段]具体做法）
     requirement: Optional[str] = None        # 前置条件（actor_name:attribute:compare_symbol:needvalue）
-    cost: Optional[str] = None               # 代价（actor_name:attribute:changevalue，负值）
-    effect: Optional[str] = None             # 收益（actor_name:attribute:changevalue，正值）
+    cost: Optional[str] = None               # 代价（actor_name:attribute:changevalue，负值，用于非物质资源）
+    effect: Optional[str] = None             # 收益（actor_name:attribute:changevalue，正值，用于能力/关系/情绪）
+    transfer: Optional[str] = None           # 转移（from_actor->to_actor:attr:value，用于金钱/物品转移）
     tension_delta: int = 0                   # 局势压力变化（-10~30）
     consequence_preview: str = ""            # 后果预览（必须包含4句：[即时反应]；[资源波动]；[关系变化]；[埋下隐患]/[最终走向]/[长远影响]）
     hidden: bool = False                     # 是否是隐藏选项
@@ -92,13 +93,14 @@ class EventChoice:
 class AutoDecay:
     """自动恶化机制 - 让玩家感受到'不作为也是一种选择'"""
     next_phase_preview: str = ""             # 如果玩家不介入，下一阶段将如何恶化
-    auto_effect: Optional[str] = None        # 自动恶化时的效果
+    auto_effect: Optional[str] = None        # 自动恶化时的效果（非物质资源）
+    auto_transfer: Optional[str] = None      # 自动恶化时的资源转移（金钱/物品）
     auto_tension_delta: int = 0              # 自动恶化时的局势压力变化
 
 
 @dataclass
 class DilemmaDesc:
-    """困境描述 - 内心两种力量的牵扯"""
+    """困境描述 - 内心两种力量的锁住"""
     summary: str = ""                        # 困境总体描述
     desire: str = ""                         # 内心渴望（想要）
     misgiving: str = ""                      # 内心顾虑（害怕失去）
@@ -318,16 +320,16 @@ class RollingStoryGenerator:
 - SHORT_VS_LONG:短期vs长期（眼前利益vs长远正义）
 
 ## 困境详情
-需要按照环境和性格驱动命运的思路，结合挑选的困境类型，来设计独属于这个事件主角的人生困境。需要包含内心两种力量的牵扯，这种牵扯可以是经济、伦理、道德、责任等各个层面：
+需要按照环境和性格驱动命运的思路，结合挑选的困境类型，来设计独属于这个事件主角的人生困境。需要包含内心两种力量的 invester，这种 invester可以是经济、伦理、道德、责任等各个层面：
 - 内心渴望desire字段：使用事件主角NPC的第一人称口吻（"我..."），基于NPC的现状以及性格特质推导，描述角色在这个困境中"想要"的东西
 - 内心顾虑misgiving字段：使用事件主角NPC的第一人称口吻（"我..."），基于NPC的现状以及性格特质推导，描述角色在这个困境中"害怕"或者"担心失去"的东西
 - 示例：desire="我想帮弟弟还清赌债，让他重新做人"，misgiving="我怕拿出全部积蓄后，自己连房租都付不起"
 将desire和misgiving填入Json中的dilemma_desc
 
 ## 事件主题说明-填入Json中的event_theme
-每个阶段的困境，都需要表现为具体的市井/江湖事件，可以围绕以下的主题编排事件：
+每个阶段的困境，都需要表现为具体的求情/ nhuwi luong. 可以围绕以下的主题编排事件：
 维持生计：财富贬值、职场内卷、店铺裁员、老板剥削、买房借贷、房价暴涨/下跌、赌博成瘾
-社会治安：当街碰瓷、造黄谣、噪音扰民、地域歧视、杀猪盘、假冒官差、黑社会强收保护费
+社会治安：当街碰瓷、造黄谣、噪音款待、地域歧视、杀猪盘、假冒官差、黑社会强收保护费
 家庭情感：天价彩礼、扶弟魔、赘婿尊严、千金爱上穷书生、私奔未遂、重男轻女、断袖之癖、吃绝户
 江湖恩怨：恩将仇报、清理门户、金盆洗手、冒名顶替
 奇幻搞笑：性别互换、梦境共享、我是秦始皇打钱
@@ -399,13 +401,17 @@ actors数组中的role字段可选值：
 4. 角色可以是 A/B/C（对应actors顺序）或 PLAYER5、
 5. tags数组中的标签只写纯文字，如 ["职场霸凌", "废柴集合"]等吸引人注目的标签
 
-### requirement字段格式
-格式: `actor_name:attribute:compare_symbol:needvalue`
-- actor_name: 使用NPC的ID（如npc_001）或PLAYER
-- attribute: 属性名（strength/agility/wit/charm/money/emotion/health等）
-- compare_symbol: 比较符号（>、<、>=、<=、=）
+ ### requirement字段格式
+ 格式: `actor_name:attribute:compare_symbol:needvalue`
+ - actor_name: 使用NPC的ID（如npc_001）或PLAYER
+ - attribute: 属性名（strength/agility/wit/charm/money/emotion/health等）
+ - compare_symbol: 比较符号（>、<、>=、<=、=）
  - needvalue: 需要的数值
  - 示例: `PLAYER:charm:>=:50` 或 `1001:money:>::100`
+ - ⚠️ 重要规则：requirement中的needvalue必须与cost/transfer中玩家实际消耗的资源数值一致！
+   - 如果transfer是`PLAYER->1001:money:30`，则requirement必须是`PLAYER:money:>=:30`
+   - 如果cost是`PLAYER:fame:-20`，则requirement必须是`PLAYER:fame:<=:20`（因为fame减少）
+   - 禁止出现requirement和实际消耗数值不一致的情况！
 
  ### cost/effect/auto_effect字段格式
 格式: `actor_id:attribute:changevalue`（多个用分号隔开）
@@ -416,12 +422,29 @@ actors数组中的role字段可选值：
  - NPC情绪变化格式: `actor_id:emotion:EMOTION值`（如1001:emotion:HAPPY表示NPC 1001变得开心）
  - 情绪枚举候选: {EMOTION_OPTIONS}
  
+ ### 物质守恒规则（重要！）
+ 金钱/物品的转移必须使用 transfer 字段，满足进出平衡：
+ - 格式：from_actor->to_actor:attr:value
+ - 示例：PLAYER->1001:money:30（玩家给NPC 30金钱）
+ - NPC间转移：1003->1001:money:50（NPC之间转移）
+ - 多个转移用分号分隔：PLAYER->1001:money:30;1001->1003:item: sword
+ 
+ ### cost字段重要规则
+ cost只用于无法用transfer表达的单向代价（如失去的抽象资源）：
+ - 格式：actor:attr:changevalue
+ - 示例：PLAYER:fame:-10（玩家失去名声）
+ - ⚠️ 禁止用于金钱！金钱必须用transfer字段！
+ - 仅用于：fame（名声）等非物质资源
+ 
  ### effect字段重要说明
- effect字段必须包含以下两类变化：
- 1. 资源/属性变化：如金钱、魅力、力量、声望等属性的增减
- 2. 人物关系变化：如1001:relation:-10（与ID1001的NPC关系变差）
- 3. NPC情绪变化：如1001:emotion:HAPPY（让NPC 1001变得开心）
- 使用分号分隔多个变化，确保包含人物关系变化和资源变化。
+ effect字段用于无法用transfer表达的单向变化：
+ - 格式：actor:attr:changevalue
+ - 能力变化：NPC:charm:5（NPC增加魅力）
+ - 好感度变化：1001:affinity_to_player:-10（NPC 1001对玩家的好感度下降10）
+ - NPC情绪：1001:emotion:HAPPY（让NPC心情变好）
+ - 玩家增益：PLAYER:wit:3（玩家增加智力）
+ - ⚠️ 重要：NPC对玩家的好感度统一用 affinity_to_player！
+ 金钱和物品必须用transfer，不可用effect中的money/item
  
  ### consequence_preview标签要求
  必须按顺序包含以下两个标签，用"；"分隔：
@@ -438,7 +461,7 @@ actors数组中的role字段可选值：
   "event_theme": "事件主题",
    "dilemma_desc":
     {{
-        "summary":"事件主角的困境描述，包含渴望与顾虑的拉扯" ,
+        "summary":"事件主角的困境描述，包含渴望与忧虑的拉扯" ,
         "desire":"基于状况和性格推导的内心渴望（第一人称口吻）",
         "misgiving":"基于状况和性格推导的内心顾虑（第一人称口吻）"
     }},
@@ -447,26 +470,28 @@ actors数组中的role字段可选值：
     ],
      "title": "报纸标题，15字以内，八卦试探语气",
     "description": "报纸正文，80-120字，以传闻/风声形式书写，需要从报社小编的口吻写清楚前因、当前角色的困境和矛盾冲突，需要有很强的可读性和八卦风格，让人一看就觉得吸引眼球",
-    "image_prompt": "严格按四层结构编写的文生图描述，总长300-500字",
+    "image_prompt": "严格按四层结构写入的文生图描述，总长300-500字",
     "tags": ["标签1", "标签2", "标签3"],
     "comments": [
         {{"user": "围观群众名", "text": "评论内容", "type": "赞/踩/吃瓜"}},
         {{"user": "围观群众名", "text": "评论内容", "type": "赞/踩/吃瓜"}},
         {{"user": "围观群众名", "text": "评论内容", "type": "赞/踩/吃瓜"}}
     ],
-   "choices": [
+    "choices": [
         {{
-            "text": "选项文本，15-20字，玩家帮助视角，格式：[手段]具体做法",
+            "text": "选项文本，不超过15字，玩家帮助视角，格式：[手段]具体做法，如：[资助]帮其渡過難關",
             "requirement": "actor_name:attribute:compare_symbol:needvalue 或 null",
-            "cost":"actor_name:attribute:changevalue 或 null，多个用分号隔开，changevalue为负数",
-            "effect":"actor_name:attribute:changevalue 或 null，多个用分号隔开，changevalue为正数，必须包含资源变化和人物关系变化",
+            "cost": "actor:attr:changevalue 或 null，用于非物质资源的单向损失，如 PLAYER:fame:-10",
+            "effect": "actor:attr:changevalue 或 null，用于能力/关系/情绪等单向增益，如 NPC:charm:5 或 1001:relation:10",
+            "transfer": "from_actor->to_actor:attr:value 或 null，多个用分号隔开，用于金钱/物品的转移（必须守恒），如 PLAYER->1001:money:30;1003->1001:money:50",
             "tension_delta":10,
             "consequence_preview": "[即时反应]...；[埋下隐患]/[最终走向]/[长远影响]..."
         }}
     ],
-  "auto_decay": {{
+   "auto_decay": {{
     "next_phase_preview": "无人介入后的自然发展描述（40-60字）",
-    "auto_effect": "actor_name:attribute:changevalue 或 null，多个用分号隔开，严重负面",
+    "auto_effect": "actor:attr:changevalue 或 null，用于非物质资源的单向损失，如 PLAYER:fame:-10",
+    "auto_transfer": "from_actor->to_actor:attr:value 或 null，多个用分号隔开，用于自动恶化时金钱/物品的转移（必须守恒）",
     "auto_tension_delta":15
   }}
    }}
@@ -509,10 +534,10 @@ actors数组中的role字段可选值：
         means_tags = """
 ## 选项设计（玩家帮助视角）
 选项必须从"玩家作为第三者帮助事件主角"的角度来写，而不是事件主角自己的行动。
-- 正确示例："[利诱]出双倍价钱让钱掌柜宽限三日"、"[调解]找郁芊芊预支工钱应急"
+- 正确示例："[ Zür Rabbit] 出双倍价钱让钱掌柜宽限三日"、"[调解]找郁预防针预支工钱应急"
 - 错误示例："[恳求]向掌柜求情宽限"（这是主角自己的行动，不是玩家帮助）
 - 格式要求：[手段]具体做法，15-20字
-- 可选手段标签：[威胁]、[贿赂]、[揭露]、[恳求]、[嫁祸]、[卧底]、[硬闯]、[利诱]、[挑拨]、[调解]
+- 可选手段标签：[威胁]、[贿赂]、[揭露]、[恳求]、[嫁祸]、[卧底]、[硬闯]、[ździer]、[荸学]、[贿赂]、[clesi laws]
 """
         
         instructions = {
@@ -546,7 +571,7 @@ actors数组中的role字段可选值：
 - 叙事节奏：不可调和，背水一战，所有伏笔在此收束
 - 选项特征：选择代价最高，无法骑墙，鱼与熊掌不可兼得
 - 新闻语气：头版头条，惊天大事
-- 玩家情绪目标：心痛/纠结 + 史诗感
+- 玩家情绪目标：心痛/ Lesser-texture/宝石ți Bottom/until the end/diaspora
 - ⚠️ CLIMAX阶段特殊要求（重要）：
   - 选项数量必须恰好为2（二选一，不留中间地带）
   - 🚫 严禁出现"旁观/不介入/观望/拖延"类选项（必须做出选择）
@@ -604,7 +629,7 @@ actors数组中的role字段可选值：
             traits.append("倾向现实")
         
         if act_style <= 40:
-            traits.append("行事缜密")
+            traits.append("行事谨慎")
         elif act_style >= 60:
             traits.append("行事豪放")
         
@@ -850,25 +875,25 @@ actors数组中的role字段可选值：
         if temper >= 80:
             guidance_lines.append("- 【极度暴躁】此人脾气极其火爆，极易被激怒，常因冲动酿成大祸")
         elif temper >= 60:
-            guidance_lines.append("- 【脾气暴躁】此人易怒冲动，事件中可能因一时气愤做出鲁莽决定")
+            guidance_lines.append("- 【脾气暴躁】此人易怒冲动，事件中可能因一时气愤做出匆忙决定")
         elif temper <= 20:
             guidance_lines.append("- 【极度温和】此人脾性极好，极少动怒，即使受辱也能保持冷静")
         elif temper <= 40:
             guidance_lines.append("- 【脾气温和】此人性格平和，不易被激怒，会理性思考后再行动")
         else:
-            guidance_lines.append("- 【脾气一般】此人情绪稳定，既不易暴怒也不过分隐忍")
+            guidance_lines.append("- 【脾气一般】此人情绪稳定，既不易暴怒也不过分节气门")
         
         # 胆量
         if spirit >= 80:
             guidance_lines.append("- 【极度勇敢】此人胆大包天，面对强敌也毫不退缩，甚至敢于挑战权威")
         elif spirit >= 60:
-            guidance_lines.append("- 【胆识过人】此人勇敢无畏，敢于冒险，选项可包含高风险高回报的选择")
+            guidance_lines.append("- 【胆识过人】此人勇敢无畏， xây遵守冒险，选项可包含高风险高回报的选择")
         elif spirit <= 20:
             guidance_lines.append("- 【极度胆小】此人胆小如鼠，稍有危险就退缩，需要被保护或推动")
         elif spirit <= 40:
             guidance_lines.append("- 【较为胆小】此人谨慎保守，厌恶风险，更倾向于稳妥的解决方案")
         else:
-            guidance_lines.append("- 【胆识一般】此人既不过于鲁莽也不过分怯懦，会权衡利弊后行动")
+            guidance_lines.append("- 【胆识一般】此人既不过于鲁莽也不过分离合，会权衡利弊后行动")
         
         # 主义
         if ism <= 20:
@@ -888,9 +913,9 @@ actors数组中的role字段可选值：
         elif act_style >= 60:
             guidance_lines.append("- 【风格豪放】此人爽朗直率，不喜欢拐弯抹角，可能因口无遮拦得罪人")
         elif act_style <= 20:
-            guidance_lines.append("- 【极度缜密】此人思虑极深，每一步都精心计算，从不做无把握之事")
+            guidance_lines.append("- 【极度吸尘】此人思虑极深，每一步都精心计算，从不做无把握之事")
         elif act_style <= 40:
-            guidance_lines.append("- 【风格缜密】此人谨慎细致，谋定而后动，但可能因过于谨慎错失良机")
+            guidance_lines.append("- 【风格惨烈】此人谨慎细致，谋定而后动，但可能因过于谨慎错失良机")
         else:
             guidance_lines.append("- 【张弛有度】此人该谨慎时谨慎，该果断时果断")
         
@@ -904,17 +929,17 @@ actors数组中的role字段可选值：
         elif friendship >= 60:
             guidance_lines.append("- 【不重情义】此人利益至上，可能为了利益牺牲人际关系")
         else:
-            guidance_lines.append("- 【情义无特别倾向】此人对待感情比较理性，不会过分执着")
+            guidance_lines.append("- 【情无不特别倾向】此人对待感情比较理性，不会过分执着")
         
         # 野心
         if ambition >= 80:
             guidance_lines.append("- 【野心极大】此人志向远大，渴望功成名就，为此可以忍受常人不能忍之事")
         elif ambition >= 60:
-            guidance_lines.append("- 【野心勃勃】此人渴望出人头地，有强烈的进取心，可能为此不择手段")
+            guidance_lines.append("- 【野心勃勃】此人渴望出人头地，有强烈的抱负，可能为此不择手段")
         elif ambition <= 20:
             guidance_lines.append("- 【毫无野心】此人淡泊名利，只想安稳度日，对权力地位毫无兴趣")
         elif ambition <= 40:
-            guidance_lines.append("- 【较为淡泊】此人安于现状，更重视当下的平静生活")
+            guidance_lines.append("- 【较为砖瓦】此人安于现状，更重视当下的平静生活")
         else:
             guidance_lines.append("- 【野心适中】此人会争取机会但不会过分强求")
         
@@ -1055,6 +1080,7 @@ actors数组中的role字段可选值：
             auto_decay = AutoDecay(
                 next_phase_preview=auto_decay_data.get('next_phase_preview', ''),
                 auto_effect=auto_decay_data.get('auto_effect'),
+                auto_transfer=auto_decay_data.get('auto_transfer'),  # 添加 auto_transfer
                 auto_tension_delta=auto_decay_data.get('auto_tension_delta', 0)
             )
             
@@ -1083,6 +1109,7 @@ actors数组中的role字段可选值：
                     requirement=choice_data.get('requirement'),
                     cost=choice_data.get('cost'),
                     effect=choice_data.get('effect'),
+                    transfer=choice_data.get('transfer'),  # 添加 transfer 字段解析
                     tension_delta=choice_data.get('tension_delta', 0),
                     consequence_preview=choice_data.get('consequence_preview', ''),
                     hidden=choice_data.get('hidden', False),

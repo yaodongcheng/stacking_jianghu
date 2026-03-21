@@ -360,6 +360,15 @@ class LiveSnapshotPanel:
                                 print(f"  过滤后选项数量: {len(filtered_choices)}")
                                 for idx, orig in enumerate(filtered_choices):
                                     print(f"    选项{idx+1}: {orig.get('text')} (action={orig.get('action')})")
+                                    # 打印所有字段用于调试
+                                    print(f"      - requirement: {orig.get('requirement')}")
+                                    print(f"      - cost: {orig.get('cost')}")
+                                    print(f"      - effect: {orig.get('effect')}")
+                                    print(f"      - transfer: {orig.get('transfer')}")
+                                    # 解析并打印tooltip内容
+                                    cost_text, gain_text = self._format_all_effects(orig)
+                                    print(f"      - 消耗: {cost_text}")
+                                    print(f"      - 收益: {gain_text}")
                                 print("=" * 50)
                                 # =====================================
                                 # 使用过滤后的选项，并在最后添加返回键
@@ -673,7 +682,8 @@ class LiveSnapshotPanel:
             req_str = choice.get('requirement')
             is_enabled = self._check_choice_requirement(player, req_str)
             
-            is_hover = (i == self.hovered_choice) and is_enabled
+            # 悬停检测：无论条件是否满足，只要鼠标悬停就视为hover
+            is_hover = (i == self.hovered_choice)
             
             # 根据状态决定颜色
             if not is_enabled:
@@ -821,21 +831,18 @@ class LiveSnapshotPanel:
             # 内容单独一行，根据满足状态
             lines.append((req_text, 'req_unsatisfied' if not req_satisfied else 'req_satisfied'))
         
-        # Cost（代价）- 标题和内容分开
-        cost = choice.get('cost')
-        if cost and str(cost).lower() != 'null':
-            cost_text = self._format_effect_text(cost, is_cost=True)
-            if cost_text != "无":
-                lines.append(('【需要】', 'title'))
-                lines.append((cost_text, 'cost'))
+        # 使用统一函数解析 cost、effect 和 transfer
+        cost_text, gain_text = self._format_all_effects(choice)
         
-        # Effect（收益）- 标题和内容分开
-        effect = choice.get('effect')
-        if effect and str(effect).lower() != 'null':
-            effect_text = self._format_effect_text(effect, is_cost=False)
-            if effect_text != "无":
-                lines.append(('【获得】', 'title'))
-                lines.append((effect_text, 'effect'))
+        # 消耗（包含 cost + transfer 中的付出）
+        if cost_text != "无":
+            lines.append(('【消耗】', 'title'))
+            lines.append((cost_text, 'cost'))
+        
+        # 收益（包含 transfer 中的获得 + effect）
+        if gain_text != "无":
+            lines.append(('【影响】', 'title'))
+            lines.append((gain_text, 'effect'))
         
         # Consequence preview（后果预测：即时反应 + 长期影响）
         preview = choice.get('consequence_preview')
@@ -844,7 +851,7 @@ class LiveSnapshotPanel:
             import re
             preview = re.sub(r'[\r\n]+', '', preview)
             lines.append(('', 'normal'))  # 空行
-            lines.append(('【后续】', 'title'))
+            lines.append(('【预测】', 'title'))
             # 解析两个标签：[即时反应] + [埋下隐患]/[最终走向]/[长远影响]（长期）
             for tag in ['[即时反应]', '[埋下隐患]', '[最终走向]', '[长远影响]']:
                 if tag in preview:
@@ -894,7 +901,8 @@ class LiveSnapshotPanel:
                         if num > 0:
                             result_parts.append(f"与{npc_name}关系变好({num})")
                         else:
-                            result_parts.append(f"与{npc_name}关系变差({abs(num)})")
+                            # 关系变差保留负号，如 -5
+                            result_parts.append(f"与{npc_name}关系变差({num})")
                     except:
                         result_parts.append(f"与{npc_name}关系变化")
                     continue
@@ -914,27 +922,78 @@ class LiveSnapshotPanel:
                     'int': '智力', 'wit': '智力', 'fame': '声望', 
                     'health': '生命', 'energy': '精力', 'kungfu': '武功',
                     'mood': '心情', 'stress': '压力', 'fatigue': '疲劳',
-                    'social': '社交'
+                    'social': '社交', 'agility': '敏捷',
+                    # 好感度相关
+                    'affinity_to_player': '好感度',
                 }
-                attr_name = attr_names.get(attr, attr)
+                
+                # 特殊处理 affinity_to_player 格式（如 1001:affinity_to_player:-10 表示NPC 1001对玩家的好感度下降）
+                if attr == 'affinity_to_player':
+                    npc_name = get_npc_name_by_id_global(actor) or f"NPC{actor}"
+                    attr_name = f"{npc_name}对玩家好感度"
+                elif attr.startswith('affinity_to_'):
+                    # 兼容旧格式 affinity_to_1026
+                    npc_id = attr.replace('affinity_to_', '')
+                    if npc_id.isdigit():
+                        npc_name = get_npc_name_by_id_global(npc_id) or f"NPC{npc_id}"
+                        attr_name = f"{npc_name}对玩家好感度"
+                    else:
+                        attr_name = attr_names.get(attr, attr)
+                else:
+                    attr_name = attr_names.get(attr, attr)
+                
+                # 获取actor的名称（PLAYER显示为"玩家"，NPC显示名字）
+                if actor == 'PLAYER':
+                    actor_name = '玩家'
+                else:
+                    actor_name = get_npc_name_by_id_global(actor)
                 
                 # 数值
                 try:
                     num = int(val)
+                    
+                    # 资源类属性特殊处理（money/金钱）
+                    is_money = attr in ('money', '金钱')
+                    
                     if is_cost:
-                        # 代价：显示为"消耗X"或"减少X"
-                        if num > 0:
-                            result_parts.append(f"消耗{num}{attr_name}")
+                        if is_money:
+                            # 资源类：花费不需要显示负号，因为"花费"已经表达了损失的意思
+                            if actor == 'PLAYER':
+                                result_parts.append(f"花费{abs(num)}{attr_name}")
+                            else:
+                                result_parts.append(f"{actor_name}花费{abs(num)}{attr_name}")
+                        elif num > 0:
+                            if actor == 'PLAYER':
+                                result_parts.append(f"消耗{num}{attr_name}")
+                            else:
+                                result_parts.append(f"{actor_name}消耗{num}{attr_name}")
                         else:
-                            result_parts.append(f"减少{abs(num)}{attr_name}")
+                            result_parts.append(f"{actor_name}减少{abs(num)}{attr_name}")
                     else:
-                        # 收益：显示为"获得X"或"增加X"
-                        if num > 0:
-                            result_parts.append(f"获得{num}{attr_name}")
+                        # 收益/效果
+                        is_affinity = attr == 'affinity_to_player'
+                        
+                        if is_money:
+                            # 资源类：收益显示正值即可，"获得"已表达增益含义
+                            if actor == 'PLAYER':
+                                result_parts.append(f"获得{abs(num)}{attr_name}")
+                            else:
+                                result_parts.append(f"{actor_name}获得{abs(num)}{attr_name}")
+                        elif is_affinity:
+                            # 好感度：直接显示"对你好感度提升/下降XX"，不需要"获得"
+                            if num > 0:
+                                result_parts.append(f"{actor_name}对你好感度提升{num}")
+                            else:
+                                result_parts.append(f"{actor_name}对你好感度下降{abs(num)}")
+                        elif num > 0:
+                            if actor == 'PLAYER':
+                                result_parts.append(f"获得{num}{attr_name}")
+                            else:
+                                result_parts.append(f"{actor_name}获得{num}{attr_name}")
                         else:
-                            result_parts.append(f"失去{abs(num)}{attr_name}")
+                            result_parts.append(f"{actor_name}失去{abs(num)}{attr_name}")
                 except:
-                    result_parts.append(f"{attr_name} {val}")
+                    result_parts.append(f"{actor_name}{attr_name}{val}")
             except:
                 continue
         
@@ -942,6 +1001,137 @@ class LiveSnapshotPanel:
             return "无"
         
         return "，".join(result_parts)
+    
+    def _parse_transfer_text(self, transfer_str: str) -> Dict[str, List[str]]:
+        """解析 transfer 字段，返回消耗和收益的文本列表
+        格式: from_actor->to_actor:attr:value，多个用分号分隔
+        返回: {'cost': [...], 'gain': [...]}，分别表示我方消耗和获得
+        """
+        if not transfer_str or transfer_str.lower() == 'null':
+            return {'cost': [], 'gain': []}
+        
+        cost_list = []
+        gain_list = []
+        
+        transfers = transfer_str.split(';')
+        
+        for transfer in transfers:
+            transfer = transfer.strip()
+            if not transfer or transfer.lower() == 'null':
+                continue
+            
+            try:
+                # 格式: from_actor->to_actor:attr:value
+                parts = transfer.split('->')
+                if len(parts) != 2:
+                    continue
+                
+                from_part = parts[0].strip()
+                to_attr_val = parts[1].split(':')
+                
+                if len(to_attr_val) != 3:
+                    continue
+                
+                to_actor = to_attr_val[0].strip()
+                attr = to_attr_val[1].strip()
+                val_str = to_attr_val[2].strip()
+                
+                try:
+                    value = int(val_str)
+                except:
+                    continue
+                
+                # 属性名映射
+                attr_names = {
+                    'money': '金钱', 'item': '物品', 'items': '物品',
+                    'gold': '黄金', 'silver': '白银', 'coin': '铜钱'
+                }
+                attr_name = attr_names.get(attr, attr)
+                
+                # 获取from和to的名称
+                if from_part == 'PLAYER':
+                    from_name = '玩家'
+                else:
+                    from_name = get_npc_name_by_id_global(from_part) or f"NPC{from_part}"
+                
+                if to_actor == 'PLAYER':
+                    to_name = '玩家'
+                else:
+                    to_name = get_npc_name_by_id_global(to_actor) or f"NPC{to_actor}"
+                
+                # 判断是消耗还是收益
+                if from_part == 'PLAYER':
+                    # 玩家付出的代价
+                    cost_list.append(f"花费{value}{attr_name}")
+                elif to_actor == 'PLAYER':
+                    # 玩家获得的收益
+                    gain_list.append(f"获得{value}{attr_name}")
+                else:
+                    # NPC之间的转移，显示为消耗和收益
+                    cost_list.append(f"{from_name}失去{value}{attr_name}")
+                    gain_list.append(f"{to_name}获得{value}{attr_name}")
+                    
+            except:
+                continue
+        
+        return {'cost': cost_list, 'gain': gain_list}
+    
+    def _format_all_effects(self, choice: dict) -> tuple:
+        """统一解析选项的所有效果，返回 (消耗文本, 收益文本)
+        
+        整合了 cost、effect 和 transfer 三个字段：
+        - cost: 非物质资源的单向损失（如名声、关系）
+        - transfer: 金钱/物品的转移（玩家给NPC是消耗，NPC给玩家是收益）
+        - effect: 能力/关系/情绪等单向变化
+        
+        注意：当transfer包含金钱时，cost中的money会自动过滤避免重复
+        """
+        cost_parts = []
+        gain_parts = []
+        
+        # 1. 解析 transfer（金钱/物品转移）
+        transfer = choice.get('transfer')
+        transfer_has_money = False
+        if transfer and str(transfer).lower() != 'null':
+            transfer_result = self._parse_transfer_text(transfer)
+            cost_parts.extend(transfer_result.get('cost', []))
+            gain_parts.extend(transfer_result.get('gain', []))
+            # 检查transfer是否包含金钱
+            if '金钱' in str(transfer_result.get('cost', [])) or 'money' in str(transfer).lower():
+                transfer_has_money = True
+        
+        # 2. 解析 cost（玩家付出的非物质代价）
+        cost = choice.get('cost')
+        if cost and str(cost).lower() != 'null':
+            # 如果transfer已经包含金钱，则过滤掉cost中的金钱项
+            if transfer_has_money:
+                cost_items = str(cost).split(';')
+                filtered_cost_items = []
+                for item in cost_items:
+                    if 'money' not in item.lower() and '金钱' not in item:
+                        filtered_cost_items.append(item)
+                if filtered_cost_items:
+                    cost = ';'.join(filtered_cost_items)
+                else:
+                    cost = None
+            
+            if cost and str(cost).lower() != 'null':
+                cost_text = self._format_effect_text(cost, is_cost=True)
+                if cost_text != "无":
+                    cost_parts.append(cost_text)
+        
+        # 3. 解析 effect（其他效果，包括NPC获得好处）
+        effect = choice.get('effect')
+        if effect and str(effect).lower() != 'null':
+            effect_text = self._format_effect_text(effect, is_cost=False)
+            if effect_text != "无":
+                gain_parts.append(effect_text)
+        
+        # 合并文本
+        cost_result = "，".join(cost_parts) if cost_parts else "无"
+        gain_result = "，".join(gain_parts) if gain_parts else "无"
+        
+        return cost_result, gain_result
     
     def _draw_choice_tooltip(self, surface: pygame.Surface):
         """绘制选项 tooltip（显示在选项右侧，不透明背景，支持文本换行）"""
@@ -1898,10 +2088,13 @@ class LiveSnapshotPanel:
                 current_y += comment_height + COMMENT_GAP
                 continue
             
-            # 评论类型图标
+             # 评论类型图标（与LLM生成的type值匹配）
             type_icons = {
+                '赞': '[赞]',
+                '踩': '[踩]', 
+                '吃瓜': '[瓜]',
                 '支持': '[赞]',
-                '反对': '[踩]', 
+                '反对': '[踩]',
                 '中立': '[围观]',
                 '搞笑': '[笑]'
             }

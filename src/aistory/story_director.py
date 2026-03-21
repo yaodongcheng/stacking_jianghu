@@ -609,6 +609,7 @@ class StoryDirector:
                 'requirement': choice.requirement,
                 'cost': choice.cost,
                 'effect': choice.effect,
+                'transfer': choice.transfer,  # 添加 transfer 字段
                 'tension_delta': choice.tension_delta,
                 'consequence_preview': choice.consequence_preview
             }
