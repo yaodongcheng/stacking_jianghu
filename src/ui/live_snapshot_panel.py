@@ -309,6 +309,16 @@ class LiveSnapshotPanel:
             
             # 点击选项 - 使用缓存的按钮位置（在draw中计算）
             if self.snapshot and self.snapshot.choices and hasattr(self, '_cached_button_rects'):
+                # 检查事件是否已完成
+                is_completed = False
+                news_item = getattr(self.snapshot, 'news_item', None)
+                if news_item:
+                    is_completed = getattr(news_item, 'is_resolved', False)
+                
+                # 如果事件已完成，禁用所有点击
+                if is_completed:
+                    return True  # 消费事件但不执行任何操作
+                
                 for i, btn_rect in enumerate(self._cached_button_rects):
                     # 将相对坐标转换为屏幕坐标
                     screen_rect = btn_rect.move(self.panel_x, self.panel_y)
@@ -651,13 +661,26 @@ class LiveSnapshotPanel:
         - 检查 requirement，不满足则置灰
         - 显示 requirement 文本在按钮下方
         - 悬停时显示 tooltip（cost/effect/consequence_preview）
+        - 如果事件已完成，高亮玩家选择的选项，其他选项置灰
         """
-        if not self.snapshot.choices:
+        # 检查事件是否已完成 - 需要在判断 choices 之前
+        is_completed = False
+        player_choice_text = ""
+        news_item = getattr(self.snapshot, 'news_item', None)
+        if news_item:
+            is_completed = getattr(news_item, 'is_resolved', False)
+            player_choice_text = getattr(news_item, 'player_choice', "") or ""
+        
+        # 如果事件已完成，使用 original_choices 来匹配玩家选择
+        # 因为 show 时会把 snapshot.choices 替换为"当面处理"/"快信处理"
+        choices_to_draw = self.original_choices if (is_completed and self.original_choices) else self.snapshot.choices
+        
+        if not choices_to_draw:
             return
         
         font = self._get_font(22)
         small_font = self._get_font(14)
-        num_choices = len(self.snapshot.choices)
+        num_choices = len(choices_to_draw)
         
         # 初始化按钮位置缓存
         self._cached_button_rects = []
@@ -670,7 +693,7 @@ class LiveSnapshotPanel:
         except:
             pass
         
-        for i, choice in enumerate(self.snapshot.choices):
+        for i, choice in enumerate(choices_to_draw):
             btn_height = 40
             btn_gap = 10
             btn_rect = pygame.Rect(30, start_y + i * (btn_height + btn_gap), self.panel_w - 60, btn_height)
@@ -678,40 +701,68 @@ class LiveSnapshotPanel:
             # 缓存按钮位置（相对坐标，用于handle_event）
             self._cached_button_rects.append(btn_rect)
             
-            # 检查 requirement
-            req_str = choice.get('requirement')
-            is_enabled = self._check_choice_requirement(player, req_str)
+            # 获取选项文本
+            choice_text = choice.get('text', f'选项{i+1}')
             
-            # 悬停检测：无论条件是否满足，只要鼠标悬停就视为hover
-            is_hover = (i == self.hovered_choice)
+            # 检查是否已完成且是玩家选择的选项
+            is_player_choice = is_completed and choice_text == player_choice_text
             
-            # 根据状态决定颜色
-            if not is_enabled:
-                # 不满足条件 - 置灰
-                btn_color = (35, 35, 40)
-                border_color = (60, 60, 70)
-                text_color = (120, 120, 130)
-            elif is_hover:
-                btn_color = (60, 60, 80)
-                border_color = (100, 100, 140)
-                text_color = (255, 255, 255)
+            # 如果事件已完成，只有玩家选择的选项可以显示
+            if is_completed:
+                if is_player_choice:
+                    # 玩家选择的选项：高亮显示
+                    btn_color = (60, 80, 60)  # 绿色背景
+                    border_color = (100, 200, 100)
+                    text_color = (255, 255, 255)
+                else:
+                    # 其他选项：置灰
+                    btn_color = (35, 35, 40)
+                    border_color = (60, 60, 70)
+                    text_color = (100, 100, 110)
+                is_enabled = False  # 已完成事件不可选择
             else:
-                btn_color = (40, 40, 60)
-                border_color = (70, 70, 90)
-                text_color = (255, 255, 255)
+                # 未完成事件：正常检查 requirement
+                req_str = choice.get('requirement')
+                is_enabled = self._check_choice_requirement(player, req_str)
+                
+                # 悬停检测
+                is_hover = (i == self.hovered_choice)
+                
+                if not is_enabled:
+                    btn_color = (35, 35, 40)
+                    border_color = (60, 60, 70)
+                    text_color = (120, 120, 130)
+                elif is_hover:
+                    btn_color = (60, 60, 80)
+                    border_color = (100, 100, 140)
+                    text_color = (255, 255, 255)
+                else:
+                    btn_color = (40, 40, 60)
+                    border_color = (70, 70, 90)
+                    text_color = (255, 255, 255)
             
             pygame.draw.rect(surface, btn_color, btn_rect, border_radius=8)
             pygame.draw.rect(surface, border_color, btn_rect, 2, border_radius=8)
             
             # 绘制选项文本
-            text = choice.get('text', f'选项{i+1}')
-            text_surf = font.render(text, True, text_color)
+            text_surf = font.render(choice_text, True, text_color)
             text_x = btn_rect.centerx - text_surf.get_width() // 2
             text_y = btn_rect.centery - text_surf.get_height() // 2
             surface.blit(text_surf, (text_x, text_y))
             
-            # 如果悬停，准备 tooltip（即使条件不满足也显示，但不满足时标红）
+            # 如果是玩家选择的选项，绘制标记
+            if is_player_choice:
+                # 绘制"【你选择了】"标记
+                tag_text = "【你选择了】"
+                tag_font = self._get_font(12)
+                tag_surf = tag_font.render(tag_text, True, (100, 255, 100))  # 绿色文字
+                tag_x = btn_rect.right - tag_surf.get_width() - 10
+                tag_y = btn_rect.y - 16
+                surface.blit(tag_surf, (tag_x, tag_y))
+            
+            # 悬停时显示 tooltip（无论事件是否已完成）
             if is_hover:
+                # 已完成事件时 is_enabled=False，但仍显示 tooltip
                 self._prepare_choice_tooltip(choice, btn_rect, is_enabled)
     
     def _format_compare_symbol(self, compare: str) -> str:

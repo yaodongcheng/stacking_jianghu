@@ -467,12 +467,7 @@ class AISystem:
                     was_in_combat = getattr(npc, 'in_combat', False)
                     has_aggro     = getattr(npc, 'aggro_target', None) is not None
                     hunters       = [n for n in npcs if getattr(n, 'aggro_target', None) is npc]
-                    log_game_event(
-                        f"[DEBUG][DOWNED] {npc.name} 进入重伤状态"
-                        f"  prev_state={npc.state}  in_combat={was_in_combat}"
-                        f"  aggro_target={'有' if has_aggro else '无'}"
-                        f"  追击者={[h.name for h in hunters] if hunters else '[!]无'}",
-                        tag="AI")
+                  #  log_game_event(                        f"[DEBUG][DOWNED] {npc.name} 进入重伤状态"                        f"  prev_state={npc.state}  in_combat={was_in_combat}"                        f"  aggro_target={'有' if has_aggro else '无'}"                        f"  追击者={[h.name for h in hunters] if hunters else '[!]无'}",                        tag="AI")
                 npc.state = new_state
                 continue
 

@@ -6,6 +6,7 @@ from src.entities import Resource
 from src.data.character_seeds import ORGANIZATIONS
 from src.item_system import ItemManager
 from src.aistory.story_director import StoryDirector
+from src.ui.live_news_panel import toggle_live_news_panel
 import asyncio
 
 class UIDialogsMixin:
@@ -2164,192 +2165,277 @@ class UIDialogsMixin:
         y += 15
         
         # ═══════════════════════════════════════════════════════════════
-        # 下半部分：内心隐秘（人生困境）带滚动条
+        # 下半部分：当前困境与四幕阶段（从StoryDirector获取）
         # ═══════════════════════════════════════════════════════════════
-        if initial_dilemma:
-            # 困境标题与"内心隐秘"标题放在同一行（居中）
-            d_title = initial_dilemma.get('title', '未名之困')
+        
+        # 尝试从StoryDirector获取当前故事弧信息
+        current_phase = None
+        current_dilemma_info = None
+        story_beats = []
+        
+        # 只在点击事件时打印调试信息
+        if click_event:
+            print(f"[NPC面板] ===== 点击内心 tab: NPC {npc.id} =====")
             
-            # 左侧：内心隐秘标题
-            secret_title = font_title.render("内心隐秘", True, (220, 180, 220))
-            # 右侧：困境标题
-            title_surf = font_title.render(f"「{d_title}」", True, (255, 200, 150))
-            
-            # 计算位置：两个标题靠在一起，整体居中
-            title_y = y
-            combined_width = secret_title.get_width() + 10 + title_surf.get_width()  # 10px间距
-            combined_start_x = content_center_x - combined_width // 2  # 居中对齐
-            
-            secret_title_x = combined_start_x
-            dilemma_title_x = combined_start_x + secret_title.get_width() + 10
-            
-            screen.blit(secret_title, (secret_title_x, title_y))
-            screen.blit(title_surf, (dilemma_title_x, title_y))
-            
-            # 【测试按钮】触发AI事件生成
-            test_btn_w = 50
-            test_btn_h = 22
-            test_btn_x = content_rect.right - test_btn_w - 20  # 靠右，留出滚动条空间
-            test_btn_y = title_y - 2
-            test_btn_rect = pygame.Rect(test_btn_x, test_btn_y, test_btn_w, test_btn_h)
-            
-            # 绘制测试按钮
-            is_test_hover = test_btn_rect.collidepoint(mx, my) if mx is not None and my is not None else False
-            test_bg_color = (100, 80, 120) if is_test_hover else (70, 55, 85)
-            test_border_color = (180, 150, 200) if is_test_hover else (120, 100, 140)
-            pygame.draw.rect(screen, test_bg_color, test_btn_rect, border_radius=4)
-            pygame.draw.rect(screen, test_border_color, test_btn_rect, 1, border_radius=4)
-            
-            test_text = font_text.render("测试", True, (220, 200, 240))
-            screen.blit(test_text, (test_btn_rect.centerx - test_text.get_width() // 2, 
-                                   test_btn_rect.centery - test_text.get_height() // 2))
-            
-            # 处理测试按钮点击
-            if click_event and is_test_hover:
-                # 触发AI事件生成
-                ctx = getattr(self, '_game_ctx', None)
-                StoryDirector.trigger_dilemma_test_event(npc, ctx)
-            
-            y += 28
-            
-            # 计算内心隐秘正文区域（标题下方）
-            secret_area_top = y
-            secret_area_bottom = content_rect.bottom - 10
-            secret_area_height = secret_area_bottom - secret_area_top
-            
-            # 准备所有文本行（每个条目内部居中）
-            all_lines = []
-            fields = [
-                ('surface', '表象', (200, 200, 200)),
-                ('core_conflict', '心结', (220, 150, 150)),
-                ('desire', '渴望', (150, 200, 150)),
-                ('block', '阻碍', (150, 150, 200))
-            ]
-            
-            # 计算最大内容宽度用于居中
-            max_content_width = content_rect.width - 50  # 留出滚动条空间
-            
-            for field_key, field_name, field_color in fields:
-                text = initial_dilemma.get(field_key, '')
-                if text:
-                    # 添加字段名行（居中）
-                    name_text = f"{field_name}:"
-                    name_width = font_text.size(name_text)[0]
-                    name_indent = (max_content_width - name_width) // 2
-                    all_lines.append(('label', name_text, field_color, name_indent))
-                    
-                    # 对心结字段特殊处理：将" vs "替换为换行
-                    if field_key == 'core_conflict' and ' vs ' in text:
-                        text = text.replace(' vs ', '\n')
-                    
-                    # 添加内容行（自动换行，左对齐）
-                    wrapped = self._wrap_text(text, font_text, max_content_width)
-                    for line in wrapped:
-                        all_lines.append(('text', line, field_color, 0))  # 左对齐，无缩进
-                    
-                    # 条目间间距（减半）
-                    all_lines.append(('half_spacer', '', None, 0))
-            
-            # 计算滚动
-            line_height = font_text.get_height() + 4
-            total_content_height = len(all_lines) * line_height
-            
-            # 初始化滚动偏移和拖动状态
-            if not hasattr(self, '_inner_heart_scroll'):
-                self._inner_heart_scroll = 0
-            if not hasattr(self, '_inner_heart_scroll_dragging'):
-                self._inner_heart_scroll_dragging = False
-            
-            # 鼠标滚轮处理（翻转方向：y>0时向上滚动）
-            mouse_pos = pygame.mouse.get_pos()
-            secret_rect = pygame.Rect(content_rect.x, secret_area_top, content_rect.width, secret_area_height)
-            
-            # 检查是否需要滚动
-            can_scroll = total_content_height > secret_area_height
-            max_scroll = max(0, total_content_height - secret_area_height)
-            
-            # 滚动条参数
-            scrollbar_x = content_rect.right - 14
-            scrollbar_width = 8
-            scrollbar_track_rect = pygame.Rect(scrollbar_x, secret_area_top, scrollbar_width, secret_area_height)
-            # 滑块高度：根据内容比例计算，最小30px
-            scrollbar_height = max(30, int(secret_area_height * secret_area_height / total_content_height)) if can_scroll else secret_area_height
-            # 可滚动距离（轨道高度减去滑块高度）
-            scroll_track_height = secret_area_height - scrollbar_height
-            
-            # 处理鼠标拖动滚动条
-            if can_scroll:
-                # 计算滑块位置：scroll=0时在顶部，scroll=max_scroll时在底部
-                visible_ratio = self._inner_heart_scroll / max_scroll if max_scroll > 0 else 0
-                scrollbar_y = secret_area_top + visible_ratio * scroll_track_height
-                scrollbar_rect = pygame.Rect(scrollbar_x, scrollbar_y, scrollbar_width, scrollbar_height)
+            try:
+                director = StoryDirector.get_instance()
+                print(f"[NPC面板] director: {director}, _initialized: {getattr(director, '_initialized', 'N/A')}")
                 
-                # 检测点击滚动条
-                if click_event and scrollbar_rect.collidepoint(mouse_pos):
-                    self._inner_heart_scroll_dragging = True
-                    self._inner_heart_scroll_drag_start_y = mouse_pos[1]
-                    self._inner_heart_scroll_drag_start_scroll = self._inner_heart_scroll
-                
-                # 检测点击轨道（跳转到该位置）
-                if click_event and scrollbar_track_rect.collidepoint(mouse_pos) and not scrollbar_rect.collidepoint(mouse_pos):
-                    click_ratio = (mouse_pos[1] - secret_area_top) / secret_area_height
-                    self._inner_heart_scroll = int(click_ratio * max_scroll)
-                    self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
-            
-            # 处理拖动中
-            if self._inner_heart_scroll_dragging:
-                if pygame.mouse.get_pressed()[0]:  # 左键按住
-                    if can_scroll:
-                        drag_delta = mouse_pos[1] - self._inner_heart_scroll_drag_start_y
-                        scroll_ratio = drag_delta / scroll_track_height
-                        self._inner_heart_scroll = self._inner_heart_scroll_drag_start_scroll + int(scroll_ratio * max_scroll)
-                        self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
+                if director and hasattr(director, 'active_arcs') and director.active_arcs:
+                    print(f"[NPC面板] active_arcs keys: {list(director.active_arcs.keys())}")
+                    arc = director.active_arcs.get(npc.id)
+                    print(f"[NPC面板] arc for {npc.id}: {arc}")
                 else:
-                    self._inner_heart_scroll_dragging = False
-            
-            # 限制滚动范围
-            self._inner_heart_scroll = max(0, min(self._inner_heart_scroll, max_scroll))
-            
-            # 绘制可见内容（每个条目内部居中）
-            text_surface = pygame.Surface((content_rect.width - 30, total_content_height), pygame.SRCALPHA)
-            text_y = 0
-            
-            for line_type, line_text, line_color, indent in all_lines:
-                if line_type == 'label':
-                    surf = font_text.render(line_text, True, line_color)
-                    text_surface.blit(surf, (indent, text_y))
-                    text_y += line_height
-                elif line_type == 'text':
-                    surf = font_text.render(line_text, True, line_color)
-                    text_surface.blit(surf, (indent, text_y))
-                    text_y += line_height
-                elif line_type == 'half_spacer':
-                    text_y += line_height // 2  # 半行间距
-            
-            # 应用滚动偏移并绘制
-            visible_y = self._inner_heart_scroll
-            screen.blit(text_surface, (content_rect.x + 10, secret_area_top), 
-                       (0, visible_y, content_rect.width - 30, secret_area_height))
-            
-            # 绘制滚动条
-            if can_scroll:
-                visible_ratio = visible_y / max_scroll if max_scroll > 0 else 0
-                scrollbar_y = secret_area_top + visible_ratio * scroll_track_height
+                    print(f"[NPC面板] director 或 active_arcs 无效")
+            except Exception as e:
+                print(f"[NPC面板] 错误: {e}")
+        
+        try:
+            director = StoryDirector.get_instance()
+            # 检查 director 是否已初始化（有 active_arcs）
+            if director and hasattr(director, 'active_arcs') and director.active_arcs:
+                arc = director.active_arcs.get(npc.id)
                 
-                # 滚动条轨道背景
-                pygame.draw.rect(screen, (50, 50, 55), 
-                               (scrollbar_x, secret_area_top, scrollbar_width, secret_area_height), 
-                               border_radius=4)
-                # 滚动条滑块（根据是否悬停或拖动改变颜色）
-                is_hover = scrollbar_rect.collidepoint(mouse_pos) if can_scroll else False
-                thumb_color = (160, 160, 180) if is_hover or self._inner_heart_scroll_dragging else (120, 120, 140)
-                pygame.draw.rect(screen, thumb_color, 
-                               (scrollbar_x, int(scrollbar_y), scrollbar_width, scrollbar_height), 
-                               border_radius=4)
+                if arc is None:
+                    pass  # 静默处理
+                elif arc.seed and hasattr(arc.seed, 'story_beats') and arc.seed.story_beats is not None:
+                    story_beats = arc.seed.story_beats
+                    # 根据story_beats数量推断当前阶段
+                    beat_count = len(story_beats)
+                    if beat_count == 0:
+                        current_phase = "未触发"
+                    elif beat_count == 1:
+                        current_phase = "起"
+                    elif beat_count == 2:
+                        current_phase = "承"
+                    elif beat_count == 3:
+                        current_phase = "转"
+                    else:
+                        current_phase = "合"
+                    # 获取最新的困境信息
+                    if story_beats:
+                        latest_beat = story_beats[-1]
+                        current_dilemma_info = {
+                            'event_summary': latest_beat.event_summary,
+                            'player_choice': latest_beat.player_choice,
+                            'dilemma_type': getattr(latest_beat, 'dilemma_type', ''),
+                            'consequence_summary': getattr(latest_beat, 'consequence_summary', '')
+                        }
+        except Exception as e:
+            # 忽略错误，保持默认值
+            pass
+        
+        # 绘制四幕阶段指示器
+        phase_title = font_title.render("故事阶段", True, (255, 215, 0))
+        screen.blit(phase_title, (content_center_x - phase_title.get_width() // 2, y))
+        y += 26
+        
+        # 四幕阶段进度条
+        phase_stages = ["起", "承", "转", "合"]
+        phase_colors = {
+            "起": (80, 180, 80),    # 绿色 - 风声渐起
+            "承": (80, 160, 220),   # 蓝色 - 矛盾升级
+            "转": (220, 160, 80),   # 橙色 - 高潮爆发
+            "合": (180, 80, 180),   # 紫色 - 尘埃落定
+            "未触发": (100, 100, 100)  # 灰色
+        }
+        
+        # 绘制阶段节点
+        phase_bar_y = y
+        phase_bar_width = content_rect.width - 60
+        phase_node_radius = 12
+        phase_node_spacing = phase_bar_width // 3
+        
+        # 绘制阶段连线
+        line_start_x = content_rect.x + 30
+        line_end_x = line_start_x + phase_bar_width
+        pygame.draw.line(screen, (60, 60, 70), (line_start_x, phase_bar_y), (line_end_x, phase_bar_y), 3)
+        
+        # 标记当前位置
+        if current_phase and current_phase != "未触发":
+            current_index = phase_stages.index(current_phase) if current_phase in phase_stages else -1
         else:
-            # 无数据时显示提示
-            no_data = font_text.render("此人心如明镜，暂无隐秘", True, (120, 120, 120))
-            screen.blit(no_data, (content_center_x - no_data.get_width() // 2, y + 20))
+            current_index = -1
+        
+        # 初始化节点点击区域列表（用于点击检测）
+        node_click_rects = []
+        
+        # 节点状态枚举
+        PHASE_COMPLETED = "completed"   # 已完成
+        PHASE_CURRENT = "current"       # 当前待处理
+        PHASE_FUTURE = "future"         # 未来未知
+        
+        # 绘制每个阶段节点
+        for i, stage in enumerate(phase_stages):
+            node_x = line_start_x + i * phase_node_spacing
+            node_color = phase_colors.get(stage, (100, 100, 100))
+            
+            # 确定节点状态
+            if current_index >= 0:
+                if i < current_index:
+                    # 已完成的阶段（过去的）
+                    phase_status = PHASE_COMPLETED
+                elif i == current_index:
+                    # 当前阶段（待处理）
+                    phase_status = PHASE_CURRENT
+                else:
+                    # 未来未知阶段
+                    phase_status = PHASE_FUTURE
+            else:
+                # 未触发任何阶段
+                phase_status = PHASE_FUTURE
+            
+            # 根据状态设置显示效果
+            if phase_status == PHASE_COMPLETED:
+                # 已完成：实心 + 白色边框 + 勾选标记
+                fill_color = node_color
+                border_color = (255, 255, 255)
+                is_clickable = True
+                status_label = "已完成"
+            elif phase_status == PHASE_CURRENT:
+                # 当前：实心 + 闪烁边框 + 脉冲效果
+                fill_color = node_color
+                border_color = (255, 220, 100)  # 金色边框
+                is_clickable = True
+                status_label = "待处理"
+            else:
+                # 未来：空心 + 灰色边框
+                fill_color = (50, 50, 60)
+                border_color = (80, 80, 90)
+                is_clickable = False
+                status_label = "未解锁"
+            
+            # 绘制节点填充
+            pygame.draw.circle(screen, fill_color, (node_x, phase_bar_y), phase_node_radius)
+            # 绘制节点边框
+            pygame.draw.circle(screen, border_color, (node_x, phase_bar_y), phase_node_radius, 2)
+            
+            # 如果是已完成或当前阶段，绘制小标记
+            if phase_status == PHASE_COMPLETED:
+                # 绘制勾选标记
+                check_size = 4
+                check_points = [
+                    (node_x - check_size, phase_bar_y),
+                    (node_x - 2, phase_bar_y + check_size),
+                    (node_x + check_size, phase_bar_y - check_size)
+                ]
+                pygame.draw.lines(screen, (255, 255, 255), False, check_points, 2)
+            elif phase_status == PHASE_CURRENT:
+                # 绘制脉冲圆环
+                import time
+                pulse = int((time.time() % 1) * 6) + 6
+                pygame.draw.circle(screen, (255, 220, 100), (node_x, phase_bar_y), phase_node_radius + pulse, 1)
+            
+            # 绘制阶段文字
+            stage_text = font_text.render(stage, True, (255, 255, 255))
+            screen.blit(stage_text, (node_x - stage_text.get_width() // 2, phase_bar_y - stage_text.get_height() // 2))
+            
+            # 存储节点点击区域
+            node_rect = pygame.Rect(node_x - phase_node_radius - 5, phase_bar_y - phase_node_radius - 5,
+                                    phase_node_radius * 2 + 10, phase_node_radius * 2 + 10)
+            node_click_rects.append({
+                'rect': node_rect,
+                'index': i,
+                'stage': stage,
+                'status': phase_status,
+                'is_clickable': is_clickable,
+                'beat_data': story_beats[i] if i < len(story_beats) else None
+            })
+            
+            # 在节点下方显示状态标签
+            status_color = {
+                PHASE_COMPLETED: (100, 200, 100),
+                PHASE_CURRENT: (255, 200, 100),
+                PHASE_FUTURE: (100, 100, 100)
+            }.get(phase_status, (100, 100, 100))
+            
+            status_text = font_text.render(status_label, True, status_color)
+            screen.blit(status_text, (node_x - status_text.get_width() // 2, phase_bar_y + phase_node_radius + 3))
+        
+        # 处理节点点击事件 - 点击任一可点击节点都跳转到大宋实况
+        if click_event and mx is not None and my is not None:
+            for node_info in node_click_rects:
+                if node_info['is_clickable'] and node_info['rect'].collidepoint(mx, my):
+                    # 无论是当前阶段还是已完成阶段，都跳转到大宋实况查看
+                    toggle_live_news_panel()
+                    break
+        
+        # 显示当前阶段名称
+        y += 30
+        phase_desc = current_phase if current_phase else "未知"
+        phase_desc_color = phase_colors.get(phase_desc, (150, 150, 150))
+        current_phase_text = font_text.render(f"当前阶段: {phase_desc}", True, phase_desc_color)
+        screen.blit(current_phase_text, (content_center_x - current_phase_text.get_width() // 2, y))
+        y += 25
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 当前困境详情
+        # ═══════════════════════════════════════════════════════════════
+        if current_dilemma_info:
+            # 困境标题
+            dilemma_header = font_title.render("当前困境", True, (220, 180, 220))
+            screen.blit(dilemma_header, (content_center_x - dilemma_header.get_width() // 2, y))
+            y += 26
+            
+            # 困境内容区域
+            max_content_width = content_rect.width - 40
+            
+            # 事件摘要
+            event_text = current_dilemma_info.get('event_summary', '暂无')
+            event_lines = self._wrap_text(event_text, font_text, max_content_width)
+            for line in event_lines[:3]:  # 最多显示3行
+                event_surf = font_text.render(line, True, (200, 200, 200))
+                screen.blit(event_surf, (content_rect.x + 20, y))
+                y += font_text.get_height() + 2
+            
+            y += 5
+            
+            # 困境类型
+            dilemma_type = current_dilemma_info.get('dilemma_type', '')
+            if dilemma_type:
+                type_label = font_text.render(f"困境类型: {dilemma_type}", True, (180, 150, 150))
+                screen.blit(type_label, (content_rect.x + 20, y))
+                y += font_text.get_height() + 2
+            
+            # 玩家选择
+            player_choice = current_dilemma_info.get('player_choice', '')
+            if player_choice:
+                choice_label = font_text.render(f"你的选择: {player_choice[:30]}", True, (150, 180, 150))
+                screen.blit(choice_label, (content_rect.x + 20, y))
+                y += font_text.get_height() + 2
+        else:
+            # 无困境时显示提示
+            no_dilemma = font_text.render("暂无触发困境事件", True, (120, 120, 120))
+            screen.blit(no_dilemma, (content_center_x - no_dilemma.get_width() // 2, y + 20))
+            
+            # 如果有initial_dilemma，提示可以查看
+            if initial_dilemma:
+                y += 50
+                hint = font_text.render("可触发困境事件查看详情", True, (100, 100, 120))
+                screen.blit(hint, (content_center_x - hint.get_width() // 2, y))
+        
+        # 【测试按钮】触发AI事件生成
+        test_btn_w = 60
+        test_btn_h = 22
+        test_btn_x = content_rect.right - test_btn_w - 20
+        test_btn_y = content_rect.bottom - test_btn_h - 15
+        test_btn_rect = pygame.Rect(test_btn_x, test_btn_y, test_btn_w, test_btn_h)
+        
+        # 绘制测试按钮
+        is_test_hover = test_btn_rect.collidepoint(mx, my) if mx is not None and my is not None else False
+        test_bg_color = (100, 80, 120) if is_test_hover else (70, 55, 85)
+        test_border_color = (180, 150, 200) if is_test_hover else (120, 100, 140)
+        pygame.draw.rect(screen, test_bg_color, test_btn_rect, border_radius=4)
+        pygame.draw.rect(screen, test_border_color, test_btn_rect, 1, border_radius=4)
+        
+        test_text = font_text.render("触发事件", True, (220, 200, 240))
+        screen.blit(test_text, (test_btn_rect.centerx - test_text.get_width() // 2, 
+                               test_btn_rect.centery - test_text.get_height() // 2))
+        
+        # 处理测试按钮点击
+        if click_event and is_test_hover:
+            ctx = getattr(self, '_game_ctx', None)
+            StoryDirector.trigger_dilemma_test_event(npc, ctx)
 
     def _get_dimension_labels(self, key):
         """获取性格维度的左右标签（用于数值映射）"""
