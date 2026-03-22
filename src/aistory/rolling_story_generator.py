@@ -429,22 +429,49 @@ actors数组中的role字段可选值：
  - NPC间转移：1003->1001:money:50（NPC之间转移）
  - 多个转移用分号分隔：PLAYER->1001:money:30;1001->1003:item: sword
  
- ### cost字段重要规则
- cost只用于无法用transfer表达的单向代价（如失去的抽象资源）：
+ ### cost字段重要规则（必须遵守！）
+ cost只用于表达玩家的"代价"和"损失"：
  - 格式：actor:attr:changevalue
- - 示例：PLAYER:fame:-10（玩家失去名声）
+ - 可用类型：
+   - PLAYER:fame:N（玩家声望变化，负数表示损失）
+   - PLAYER:strength:N、PLAYER:wit:N、PLAYER:charm:N、PLAYER:agility:N（玩家能力属性变化）
+   - NPC:affinity_to_player:N（NPC对玩家好感降低，负数）
  - ⚠️ 禁止用于金钱！金钱必须用transfer字段！
- - 仅用于：fame（名声）等非物质资源
+ - 示例：cost: "PLAYER:fame:-10"（损失名声）、cost: "1001:affinity_to_player:-5"（与NPC1好感降低）
  
  ### effect字段重要说明
- effect字段用于无法用transfer表达的单向变化：
- - 格式：actor:attr:changevalue
- - 能力变化：NPC:charm:5（NPC增加魅力）
- - 好感度变化：1001:affinity_to_player:-10（NPC 1001对玩家的好感度下降10）
- - NPC情绪：1001:emotion:HAPPY（让NPC心情变好）
- - 玩家增益：PLAYER:wit:3（玩家增加智力）
+ effect字段只用于正面收益！禁止放入任何会让玩家感觉"亏了"的效果！
+ - ✅ 正确：NPC:charm:5（NPC增加魅力）、1001:affinity_to_player:10（NPC更喜欢玩家）
+ - ✅ 正确：1001:emotion:HAPPY（NPC变得开心）、PLAYER:wit:3（玩家变聪明）
+ - ❌ 错误：1001:affinity_to_player:-10（这是代价，应该放cost！）
+ - ❌ 错误：1008:emotion:ANXIOUS（这是代价，应该放cost！）
  - ⚠️ 重要：NPC对玩家的好感度统一用 affinity_to_player！
- 金钱和物品必须用transfer，不可用effect中的money/item
+ - ⚠️ 重要：金钱和物品必须用transfer，不可用effect中的money/item
+ 
+ ### 选项设计核心规则（最重要！）
+ 1. 【每个选项必须有代价】每个选项的 cost 字段禁止为 null！
+    - 如果选项需要玩家付出代价（金钱/名声/能力下降/好感降低），必须标注
+    - 如果选项会让某个NPC对玩家好感下降，必须用cost标注
+ 2. 【正负分开】正面收益放 effect，负面代价放 cost，泾渭分明
+ 3. 【代价守恒】effect正面收益的绝对值与cost负面代价的绝对值比例不得超过 2:1
+    - 例如：cost总绝对值为10，则effect总绝对值不能超过20
+ 4. 【零成本禁止】EMERGE/ESCALATE/SETTLE阶段禁止"零成本"选项！
+    - CLIMAX阶段除外（两难选择可以代价极高）
+ 5. 【代价逻辑一致性】（重要！）代价必须与选项做法逻辑一致，禁止违背常识！
+    - ❌ 错误示例：选项"揭露恶人罪行"，cost却是"PLAYER:fame:-10"（做好事不应该扣声望）
+    - ❌ 错误示例：选项"花钱消灾"，cost却是"PLAYER:fame:-10"（花钱已经付出了，不应该再扣名声）
+    - ✅ 正确示例：选项"仗势欺人"，cost: "PLAYER:fame:-10"（仗势欺人确实会损伤名声）
+    - ✅ 正确示例：选项"揭露恶人罪行"��cost: "1026:affinity_to_player:-20"（会得罪恶人及其同伙）
+    - ✅ 正确示例：选项"花钱贿赂"，cost为null（用transfer表达金钱消耗即可）
+ 6. 【禁止重复属性】（重要！）cost 和 effect 禁止包含相同的属性！
+    - ❌ 错误示例：cost: "PLAYER:wit:-1" + effect: "PLAYER:wit:2"（互相抵消，逻辑混乱）
+    - ✅ 正确示例：只保留 effect: "PLAYER:wit:2"（没有代价时）
+    - ✅ 正确示例：cost: "1008:affinity_to_player:-5" + effect: "PLAYER:wit:2"（不同属性，各有意义）
+ 7. 【典型代价模式】
+    - 花钱类：transfer表达金钱消耗，cost可为null
+    - 消耗人情/得罪人：cost: "NPC:affinity_to_player:-N"
+    - 仗势欺人类：cost: "PLAYER:fame:-N"（会损伤名声）
+    - 损耗能力/精力：cost: "PLAYER:wit:-3"或"PLAYER:charm:-2"
  
  ### consequence_preview标签要求
  必须按顺序包含以下两个标签，用"；"分隔：
@@ -477,13 +504,13 @@ actors数组中的role字段可选值：
         {{"user": "围观群众名", "text": "评论内容", "type": "赞/踩/吃瓜"}},
         {{"user": "围观群众名", "text": "评论内容", "type": "赞/踩/吃瓜"}}
     ],
-    "choices": [
+     "choices": [
         {{
             "text": "选项文本，不超过15字，玩家帮助视角，格式：[手段]具体做法，如：[资助]帮其渡過難關",
             "requirement": "actor_name:attribute:compare_symbol:needvalue 或 null",
-            "cost": "actor:attr:changevalue 或 null，用于非物质资源的单向损失，如 PLAYER:fame:-10",
-            "effect": "actor:attr:changevalue 或 null，用于能力/关系/情绪等单向增益，如 NPC:charm:5 或 1001:relation:10",
-            "transfer": "from_actor->to_actor:attr:value 或 null，多个用分号隔开，用于金钱/物品的转移（必须守恒），如 PLAYER->1001:money:30;1003->1001:money:50",
+            "cost": "玩家必须付出的代价，禁止为null！如 PLAYER:fame:-10 或 1001:affinity_to_player:-5",
+            "effect": "玩家的正面收益，禁止放入负面效果！如 1001:affinity_to_player:10 或 PLAYER:wit:3",
+            "transfer": "from_actor->to_actor:attr:value 或 null，用于金钱/物品转移，如 PLAYER->1001:money:30",
             "tension_delta":10,
             "consequence_preview": "[即时反应]...；[埋下隐患]/[最终走向]/[长远影响]..."
         }}

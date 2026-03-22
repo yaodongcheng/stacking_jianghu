@@ -782,6 +782,12 @@ class LiveSnapshotPanel:
             
             actor, attr, compare, need_val = parts[0], parts[1], parts[2], parts[3]
             
+            # affinity_to_player 特殊处理（如 1008:affinity_to_player:>=:10 表示与NPC 1008好感度>=10）
+            if attr == 'affinity_to_player':
+                npc_name = get_npc_name_by_id_global(actor) or f"NPC{actor}"
+                compare_text = self._format_compare_symbol(compare)
+                return f"与{npc_name}好感度{compare_text}{need_val}"
+            
             # 关系属性特殊处理（如 1005:relation:>:0 表示与NPC 1005好感大于0）
             if attr == 'relation' or attr.endswith('_relation'):
                 npc_name = get_npc_name_by_id_global(actor)
@@ -790,10 +796,11 @@ class LiveSnapshotPanel:
             
             # 属性名映射
             attr_names = {
-                'money': '金钱', 'charm': '魅力', 'str': '力量',
+                'money': '金钱', 'charm': '魅力', 'str': '力量', 'strength': '力量',
                 'int': '智力', 'wit': '智力', 'fame': '声望', 
                 'health': '生命', 'energy': '精力', 'kungfu': '武功',
-                'mood': '心情', 'stress': '压力', 'fatigue': '疲劳'
+                'mood': '心情', 'stress': '压力', 'fatigue': '疲劳',
+                'agility': '敏捷'
             }
             attr_name = attr_names.get(attr, attr)
             
@@ -912,8 +919,10 @@ class LiveSnapshotPanel:
                     npc_name = get_npc_name_by_id_global(actor)
                     # 从definitions导入情绪中文映射
                     from src.definitions import EMOTION_CN
-                    emotion_text = EMOTION_CN.get(val, val)
-                    result_parts.append(f"{npc_name}变得{emotion_text}")
+                    # 只处理定义内的情绪，无效情绪直接跳过不显示
+                    if val in EMOTION_CN:
+                        emotion_text = EMOTION_CN.get(val, val)
+                        result_parts.append(f"{npc_name}变得{emotion_text}")
                     continue
                 
                 # 属性名映射（增加更多属性）
@@ -929,16 +938,11 @@ class LiveSnapshotPanel:
                 
                 # 特殊处理 affinity_to_player 格式（如 1001:affinity_to_player:-10 表示NPC 1001对玩家的好感度下降）
                 if attr == 'affinity_to_player':
-                    npc_name = get_npc_name_by_id_global(actor) or f"NPC{actor}"
-                    attr_name = f"{npc_name}对玩家好感度"
+                    # 显示为 "对你好感度"，前面会加上 NPC 名字
+                    attr_name = "对你好感度"
                 elif attr.startswith('affinity_to_'):
-                    # 兼容旧格式 affinity_to_1026
-                    npc_id = attr.replace('affinity_to_', '')
-                    if npc_id.isdigit():
-                        npc_name = get_npc_name_by_id_global(npc_id) or f"NPC{npc_id}"
-                        attr_name = f"{npc_name}对玩家好感度"
-                    else:
-                        attr_name = attr_names.get(attr, attr)
+                    # 兼容旧格式 affinity_to_1026，显示为 "对你好感度"
+                    attr_name = "对你好感度"
                 else:
                     attr_name = attr_names.get(attr, attr)
                 
