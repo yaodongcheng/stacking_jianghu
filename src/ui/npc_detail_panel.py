@@ -2182,40 +2182,8 @@ class UIDialogsMixin:
         director = StoryDirector.get_instance()
         if not director:
             print(f"[NPC面板] 无法获取 StoryDirector 实例")
-        
-        # 打印调试按钮（右上角）
-        debug_btn_w = 70
-        debug_btn_h = 22
-        debug_btn_x = content_rect.right - debug_btn_w - 10
-        debug_btn_y = content_rect.y + 8
-        debug_btn_rect = pygame.Rect(debug_btn_x, debug_btn_y, debug_btn_w, debug_btn_h)
-        is_debug_hover = self.draw_button(screen, debug_btn_rect, "打印调试", self.font_small, mx, my, (80, 80, 100))
-        if click_event and is_debug_hover:
-            print(f"[NPC面板] ===== 进入内心 tab: NPC {npc.name} (ID: {npc.id}) =====")            
-            try:
-                print(f"[NPC面板] director: {director}, _initialized: {getattr(director, '_initialized', 'N/A')} has npc_fates: {hasattr(director, 'npc_fates')}")
-                
-                if director and hasattr(director, 'npc_fates') and director.npc_fates:
-                    print(f"[NPC面板] npc_fates keys: {list(director.npc_fates.keys())}")
-                    nodes = director.npc_fates.get(npc.id, [])
-                    print(f"[NPC面板] nodes for {npc.id}: {len(nodes)} nodes")
-                    for node in nodes:
-                        print(f"  - node {node.node_id}:")
-                        print(f"      seed.phase={node.seed.phase.value if node.seed and node.seed.phase else 'N/A'}")
-                        print(f"      acts={list(node.acts.keys()) if node.acts else []}")
-                        if node.seed:
-                            print(f"      story_beats count={len(node.seed.story_beats)}")
-                else:
-                    print(f"[NPC面板] npc_fates 无效或为空 {getattr(director, 'npc_fates', 'N/A')}")
-                
-                # 打印UI状态
-                print(f"[NPC面板] ===== UI 状态 =====")
-                print(f"  current_phase: {current_phase}")
-                print(f"  story_beats count: {len(story_beats)}")
-            except Exception as e:
-                print(f"[NPC面板] 错误: {e}")
-                import traceback
-                traceback.print_exc()
+      
+       
         
         try:
             # 检查 director 是否已初始化（有 npc_fates）
@@ -2258,6 +2226,9 @@ class UIDialogsMixin:
         except Exception as e:
             # 忽略错误，保持默认值
             pass
+
+
+
         
         # 绘制四幕阶段指示器
         phase_title = font_title.render("故事阶段", True, (255, 215, 0))
@@ -2307,24 +2278,38 @@ class UIDialogsMixin:
             "合": "SETTLE"
         }
         
+        # 收集阶段状态信息（用于调试打印）
+        phase_status_info = []
+        
+        # 【修复】根据 story_beats 判断每个阶段的完成状态
+        # 收集已完成的阶段（有 beat 记录的阶段）
+        completed_phases = set()
+        if story_beats:
+            for beat in story_beats:
+                beat_phase = getattr(beat, 'phase', None)
+                if beat_phase:
+                    completed_phases.add(beat_phase.value if hasattr(beat_phase, 'value') else str(beat_phase))
+        
         # 绘制每个阶段节点
         for i, stage in enumerate(phase_stages):
             node_x = line_start_x + i * phase_node_spacing
             node_color = phase_colors.get(stage, (100, 100, 100))
             
-            # 确定节点状态
-            if current_index >= 0:
-                if i < current_index:
-                    # 已完成的阶段（过去的）
-                    phase_status = PHASE_COMPLETED
-                elif i == current_index:
-                    # 当前阶段（待处理）
-                    phase_status = PHASE_CURRENT
-                else:
-                    # 未来未知阶段
-                    phase_status = PHASE_FUTURE
+            # 获取该阶段对应的 DilemmaPhase 值
+            stage_phase_value = stage_to_phase.get(stage)
+            
+            # 【修复】确定节点状态：基于 story_beats 而不是仅基于 seed.phase
+            # 1. 该阶段有 beat 记录 → 已完成
+            # 2. 该阶段等于 seed.phase 但没有 beat 记录 → 待处理（等待生成事件）
+            # 3. 否则 → 未解锁
+            if stage_phase_value in completed_phases:
+                # 该阶段已有 beat 记录，标记为已完成
+                phase_status = PHASE_COMPLETED
+            elif current_phase == stage and stage_phase_value not in completed_phases:
+                # 当前激活的阶段，但还没有 beat 记录（等待生成事件）
+                phase_status = PHASE_CURRENT
             else:
-                # 未触发任何阶段
+                # 未解锁的阶段
                 phase_status = PHASE_FUTURE
             
             # 根据状态设置显示效果
@@ -2346,6 +2331,16 @@ class UIDialogsMixin:
                 border_color = (80, 80, 90)
                 is_clickable = False
                 status_label = "未解锁"
+            
+            # 收集状态信息用于调试
+            phase_status_info.append({
+                'stage': stage,
+                'status': phase_status,
+                'status_label': status_label,
+                'fill_color': fill_color,
+                'border_color': border_color,
+                'is_clickable': is_clickable
+            })
             
             # 绘制节点填充
             pygame.draw.circle(screen, fill_color, (node_x, phase_bar_y), phase_node_radius)
@@ -2504,14 +2499,122 @@ class UIDialogsMixin:
         else:
             # 无困境时显示提示
             no_dilemma = font_text.render("暂无触发困境事件", True, (120, 120, 120))
-            screen.blit(no_dilemma, (content_center_x - no_dilemma.get_width() // 2, y + 20))
-            
-            # 如果有initial_dilemma，提示可以查看
-            if initial_dilemma:
-                y += 50
-                hint = font_text.render("可触发困境事件查看详情", True, (100, 100, 120))
-                screen.blit(hint, (content_center_x - hint.get_width() // 2, y))
+            screen.blit(no_dilemma, (content_center_x - no_dilemma.get_width() // 2, y + 20))            
+          
+          
+        # 打印调试按钮（右上角）
+        debug_btn_w = 70
+        debug_btn_h = 22
+        debug_btn_x = content_rect.right - debug_btn_w - 10
+        debug_btn_y = content_rect.y + 8
+        debug_btn_rect = pygame.Rect(debug_btn_x, debug_btn_y, debug_btn_w, debug_btn_h)
         
+        is_debug_hover = self.draw_button(screen, debug_btn_rect, "打印调试", self.font_small, mx, my, (80, 80, 100))
+        if click_event and is_debug_hover:
+            print(f"[NPC面板] ===== 调试信息: NPC {npc.name} (ID: {npc.id}) =====")            
+            try:
+                # 1. 打印当前UI展示的信息（直接使用绘制时计算的变量）
+                print(f"\n[UI状态-困境阶段] ===== 起承转合四阶段状态 =====")
+                
+                # 界面上显示的文字：当前阶段：{phase_desc}
+                phase_desc = current_phase if current_phase else "未知"
+                phase_desc_color = phase_colors.get(phase_desc, (150, 150, 150))
+                print(f"  界面显示: 当前阶段: {phase_desc}")
+                print(f"  显示颜色: {phase_desc_color}")
+                print(f"  current_phase: {current_phase}")
+                print(f"  current_index: {current_index}")
+                print(f"  story_beats count: {len(story_beats)}")
+                
+                # 直接打印绘制时收集的阶段状态信息
+                if phase_status_info:
+                    print(f"\n  各阶段状态（来自绘制代码）:")
+                    for info in phase_status_info:
+                        stage = info['stage']
+                        status = info['status_label']
+                        fill = info['fill_color']
+                        border = info['border_color']
+                        clickable = "可点击" if info['is_clickable'] else "不可点击"
+                        print(f"    [{stage}] {status} - 填充{fill} 边框{border} ({clickable})")
+                
+                if story_beats:
+                    print(f"\n  story_beats 列表:")
+                    for i, beat in enumerate(story_beats):
+                        phase_str = beat.phase.value if beat.phase else 'N/A'
+                        print(f"    [{i+1}] 第{beat.beat_number}幕 [{phase_str}] {beat.event_summary[:40]}...")
+                
+                # 界面上显示的文字：暂无触发困境事件 / 当前困境信息
+                if current_dilemma_info:
+                    print(f"\n  界面显示: 当前困境 [{current_phase if current_phase else '未知'}]")
+                    print(f"  current_dilemma_info:")
+                    print(f"    - event_summary: {current_dilemma_info.get('event_summary', 'N/A')[:40]}...")
+                    print(f"    - player_choice: {current_dilemma_info.get('player_choice', 'N/A')[:40]}...")
+                else:
+                    print(f"\n  界面显示: 暂无触发困境事件")
+                
+                # 2. 打印 StoryDirector 原始数据
+                print(f"\n[Director状态] ===== StoryDirector 原始数据 =====")
+                print(f"  director: {director}, _initialized: {getattr(director, '_initialized', 'N/A')}")
+                
+                if director and hasattr(director, 'npc_fates') and director.npc_fates:
+                    print(f"  npc_fates keys: {list(director.npc_fates.keys())}")
+                    nodes = director.npc_fates.get(npc.id, [])
+                    print(f"  nodes for {npc.id}: {len(nodes)} nodes")
+                    
+                    # 找到最新的 node（根据 story_beats 数量）
+                    latest_node = None
+                    max_beats = -1
+                    for i, node in enumerate(nodes):
+                        beat_count = len(node.seed.story_beats) if node.seed and node.seed.story_beats else 0
+                        print(f"    - node[{i}] {node.node_id}: phase={node.seed.phase.value if node.seed and node.seed.phase else 'N/A'}, beats={beat_count}")
+                        if beat_count > max_beats:
+                            max_beats = beat_count
+                            latest_node = node
+                    
+                    # 3. 打印最新 node 的详细信息
+                    if latest_node:
+                        print(f"\n[Latest Node] ===== 最新 Node 详细信息 =====")
+                        print(f"  node_id: {latest_node.node_id}")
+                        print(f"  npc_id: {latest_node.npc_id}")
+                        if latest_node.seed:
+                            print(f"  seed.id: {latest_node.seed.id}")
+                            print(f"  seed.phase: {latest_node.seed.phase.value if latest_node.seed.phase else 'N/A'}")
+                            print(f"  seed.desire: {latest_node.seed.desire[:40] if latest_node.seed.desire else 'N/A'}...")
+                            print(f"  seed.misgiving: {latest_node.seed.misgiving[:40] if latest_node.seed.misgiving else 'N/A'}...")
+                            print(f"  seed.heat: {latest_node.seed.heat}")
+                            print(f"  seed.story_beats count: {len(latest_node.seed.story_beats)}")
+                            
+                            # 详细打印每个 story_beat
+                            if latest_node.seed.story_beats:
+                                print(f"  seed.story_beats 详细列表:")
+                                for i, beat in enumerate(latest_node.seed.story_beats):
+                                    phase_str = beat.phase.value if beat.phase else 'N/A'
+                                    print(f"    [{i+1}] ================================")
+                                    print(f"        beat_number: {beat.beat_number}")
+                                    print(f"        phase: {phase_str}")
+                                    print(f"        timestamp: {beat.timestamp}")
+                                    print(f"        event_summary: {beat.event_summary}")
+                                    print(f"        player_choice: {beat.player_choice}")
+                                    print(f"        consequence_summary: {beat.consequence_summary}")
+                                    print(f"        tension_delta: {beat.tension_delta}")
+                                    if beat.dilemma_type:
+                                        print(f"        dilemma_type: {beat.dilemma_type}")
+                                    if beat.event_theme:
+                                        print(f"        event_theme: {beat.event_theme}")
+                            else:
+                                print(f"  seed.story_beats: 空列表 []")
+                        
+                        print(f"  acts: {list(latest_node.acts.keys()) if latest_node.acts else []}")
+                        print(f"  player_choice: {latest_node.player_choice[:50] if latest_node.player_choice else 'None'}...")
+                    else:
+                        print(f"  未找到最新的 node")
+                else:
+                    print(f"  npc_fates 无效或为空: {getattr(director, 'npc_fates', 'N/A')}")
+                    
+            except Exception as e:
+                print(f"[NPC面板] 错误: {e}")
+                import traceback
+                traceback.print_exc()
+
         # 【测试按钮】触发AI事件生成
         test_btn_w = 60
         test_btn_h = 22

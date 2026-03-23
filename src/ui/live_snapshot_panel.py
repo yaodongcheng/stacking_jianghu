@@ -144,6 +144,9 @@ class LiveSnapshotPanel:
         # 回调
         self.on_choice_selected: Optional[Callable[[int, Dict], None]] = None
         self.on_close: Optional[Callable[[], None]] = None
+        
+        # 索引映射（过滤后索引 -> 原始索引）
+        self._filtered_to_original_idx: Dict[int, int] = {}
     
     def _get_font(self, size: int) -> pygame.font.Font:
         """获取缓存的字体"""
@@ -221,6 +224,9 @@ class LiveSnapshotPanel:
         self.comment_scroll_y = 0
         self.comment_max_scroll = 0
         self.comment_scrollbar_dragging = False
+        
+        # 重置索引映射
+        self._filtered_to_original_idx = {}
     
     def hide(self):
         """隐藏面板"""
@@ -362,14 +368,20 @@ class LiveSnapshotPanel:
                             elif action == 'LETTER':
                                 # 快信处理：切换到第二级选项（过滤掉需要亲自前往的选项）
                                 self.choice_level = 2
-                                # 过滤掉 START_DIALOG（需要玩家亲自前往的选项）
-                                filtered_choices = [c for c in self.original_choices if c.get('action') != 'START_DIALOG']
+                                # 过滤掉 START_DIALOG（需要玩家亲自前往的选项），并保存原始索引映射
+                                self._filtered_to_original_idx = {}  # 过滤后索引 -> 原始索引
+                                filtered_choices = []
+                                for orig_idx, c in enumerate(self.original_choices):
+                                    if c.get('action') != 'START_DIALOG':
+                                        self._filtered_to_original_idx[len(filtered_choices)] = orig_idx
+                                        filtered_choices.append(c)
                                 # ===== [调试] 打印过滤后的选项 =====
                                 print(f"[LiveSnapshotPanel] ========== 点击了【快信处理】==========")
                                 print(f"  过滤前选项数量: {len(self.original_choices)}")
                                 print(f"  过滤后选项数量: {len(filtered_choices)}")
                                 for idx, orig in enumerate(filtered_choices):
-                                    print(f"    选项{idx+1}: {orig.get('text')} (action={orig.get('action')})")
+                                    orig_idx = self._filtered_to_original_idx[idx]
+                                    print(f"    选项{idx+1}: {orig.get('text')} (action={orig.get('action')}, 原始索引: {orig_idx})")
                                     # 打印所有字段用于调试
                                     print(f"      - requirement: {orig.get('requirement')}")
                                     print(f"      - cost: {orig.get('cost')}")
@@ -402,9 +414,17 @@ class LiveSnapshotPanel:
                                 self.hovered_choice = -1
                                 return True
                             else:
-                                # 普通选项：触发回调
-                                if self.on_choice_selected:
-                                    self.on_choice_selected(i, choice)
+                                # 【修复】快信处理选项：使用原始索引直接调用 apply_choice
+                                original_idx = self._filtered_to_original_idx.get(i)
+                                if original_idx is not None and self.snapshot and self.snapshot.news_item:
+                                    from src.ui.event_notification import get_notification_manager
+                                    notif_mgr = get_notification_manager()
+                                    result = notif_mgr.apply_choice(self.snapshot.news_item, original_idx, None)
+                                    print(f"[LiveSnapshotPanel] 已处理快信选择: {choice.get('text', '未知')} (原始索引: {original_idx})")
+                                else:
+                                    # 回退到回调方式
+                                    if self.on_choice_selected:
+                                        self.on_choice_selected(i, choice)
                                 self.hide()
                                 return True
                         else:
@@ -720,6 +740,7 @@ class LiveSnapshotPanel:
                     border_color = (60, 60, 70)
                     text_color = (100, 100, 110)
                 is_enabled = False  # 已完成事件不可选择
+                is_hover = False  # 已完成事件不显示悬停效果
             else:
                 # 未完成事件：正常检查 requirement
                 req_str = choice.get('requirement')

@@ -315,19 +315,20 @@ class StoryDirector:
         npc = self.npc_data[npc_id]
         seed = self.seeds[npc_id]
         
-        # 1. 评估阶段
-        new_phase = await self.evaluator.evaluate_phase(seed, npc)
-        if new_phase != seed.phase:
-            log_game_event(f"[StoryDirector] {npc.name} 阶段变化: {seed.phase.value} -> {new_phase.value}", tag="DIRECTOR")
-            seed.phase = new_phase
-
-        log_game_event(f"[StoryDirector] 基于困境生成故事：角色: {npc.name},渴望: {seed.desire[:30] if seed.desire else '待生成'}...，顾虑: {seed.misgiving[:30] if seed.misgiving else '待生成'}..., 阶段={seed.phase}, 热度={seed.heat:.1f}", tag="DIRECTOR")
+        # 1. 评估目标阶段（但不立即推进，等到事件生成成功后再推进）
+        target_phase = await self.evaluator.evaluate_phase(seed, npc)
+        
+        log_game_event(f"[StoryDirector] 基于困境生成故事：角色: {npc.name},渴望: {seed.desire[:30] if seed.desire else '待生成'}...，顾虑: {seed.misgiving[:30] if seed.misgiving else '待生成'}..., 当前阶段={seed.phase.value}, 目标阶段={target_phase.value}, 热度={seed.heat:.1f}", tag="DIRECTOR")
         
         # 从全局 ctx 获取玩家对象       
         player = ctx.player 
         event_card = await self.generator.generate_next_beat(
             npc, seed, world_state, player
         )
+        
+        # 【修复】保存 target_phase 到 event_card，等到 _start_parallel_generation_for_dilemma 完成后再推进 seed.phase
+        if event_card:
+            event_card._target_phase = target_phase
         
         # 【关键】将 LLM 生成的 desire 和 misgiving 保存到 seed，供下一阶段使用
         if event_card and event_card.dilemma_desc:
@@ -643,12 +644,6 @@ class StoryDirector:
     
     @staticmethod
     def _handle_generated_event_static(npc, event_card, ctx):
-        """处理生成的事件卡片（静态版本）- 接入director_system的配图和扩写流程"""
-        # 将EventCard转换为LiveNewsItem并接入配图+扩写流程
-        StoryDirector._convert_and_start_generation(npc, event_card, ctx)
-    
-    @staticmethod
-    def _convert_and_start_generation(npc, event_card, ctx):
         """
         将EventCard转换为LiveNewsItem，并启动配图+对话扩写流程
         参考director_system.py的_start_parallel_generation实现
@@ -698,7 +693,8 @@ class StoryDirector:
         actor_ids = []
         actor_names = []
         for actor in event_card.actors:
-            actor_ids.append(actor.get('npc_id', ''))
+            npc_id = int(actor.get('npc_id', 0))
+            actor_ids.append(npc_id)
             actor_names.append(actor.get('npc_name', ''))
         
         # 5. 创建LiveNewsItem
@@ -878,6 +874,12 @@ class StoryDirector:
                         # 将新闻添加到FateNode的acts中
                         target_node.add_act(current_phase, news_item)
                         log_game_event(f"[DilemmaTest] 新闻已添加到FateNode {target_node.node_id} 的 {current_phase.value} 幕", tag="DILEMMA")
+                        
+                        # 【修复】事件完全生成后，才推进 seed.phase
+                        target_phase = getattr(event_card, '_target_phase', current_phase)
+                        if target_phase != target_node.seed.phase:
+                            log_game_event(f"[StoryDirector] {npc.name} 阶段推进: {target_node.seed.phase.value} -> {target_phase.value}", tag="DIRECTOR")
+                            target_node.seed.phase = target_phase
         
         # ═══════════════════════════════════════════════════════════════
         # 准备参考图（当事人头像）

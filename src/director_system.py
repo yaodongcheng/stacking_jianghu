@@ -1207,7 +1207,7 @@ class AIDirector:
             actors = decision.get('actors', [])
             
             # 获取演员ID
-            actor_ids = [a.get('npc_id', '') for a in actors]
+            actor_ids = [int(a.get('npc_id', 0)) for a in actors if a.get('npc_id')]
             actor_names = [a.get('npc_name', '') for a in actors]
             
             # 确定事件类别

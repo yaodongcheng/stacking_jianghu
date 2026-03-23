@@ -632,6 +632,11 @@ class EventNotificationManager:
         """
         直接应用选择到事件（供快照面板使用）
         
+        【起承转合四幕追踪】
+        - 记录玩家选择到 StoryBeat
+        - 更新 StoryDirector 中的 FateNode 和 NPCDilemmaSeed
+        - 推进困境阶段（EMERGE -> ESCALATE -> CLIMAX -> SETTLE）
+        
         Args:
             event: EventNotification对象
             choice_idx: 选择索引
@@ -654,6 +659,11 @@ class EventNotificationManager:
         if event in self.notifications:
             self.notifications.remove(event)
         
+        # ═══════════════════════════════════════════════════════════════
+        # 【起承转合四幕追踪】更新 StoryDirector 的故事进度
+        # ═══════════════════════════════════════════════════════════════
+        self._update_story_director_progress(event, choice, choice_idx, ctx)
+        
         # 执行效果
         effect_str = choice.get("effect", "")
         result = self._apply_effects(effect_str, event, ctx)
@@ -669,6 +679,163 @@ class EventNotificationManager:
                 )
         
         return result
+    
+    def _update_story_director_progress(self, event: EventNotification, choice: Dict, choice_idx: int, ctx=None):
+        """
+        更新 StoryDirector 的故事进度，实现起承转合四幕追踪
+        
+        流程：
+        1. 查找关联的NPC和FateNode
+        2. 创建 StoryBeat 记录玩家选择
+        3. 更新 NPCDilemmaSeed 的阶段和故事节拍
+        4. 推进困境阶段（EMERGE -> ESCALATE -> CLIMAX -> SETTLE）
+        """
+        try:
+            from src.aistory.story_director import StoryDirector
+            from src.aistory.dilemma_seed import StoryBeat, DilemmaPhase
+            from datetime import datetime
+            
+            # 获取 StoryDirector 实例
+            director = StoryDirector.get_instance()
+            if not director:
+                print("[StoryProgress] StoryDirector 未初始化，跳过故事进度更新")
+                return
+            
+            # 从 event 中获取关联的NPC（第一个演员）
+            if not event.actor_ids:
+                print("[StoryProgress] 事件没有关联的NPC，跳过故事进度更新")
+                return
+            
+            # 获取NPC ID（event.actor_ids 是 List[int]）
+            npc_id = event.actor_ids[0]
+            npc_name = event.actor_names[0] if event.actor_names else f"NPC-{npc_id}"
+            
+            # 检查NPC是否已注册（story_director 实际使用整数ID作为key）
+            if npc_id not in director.npc_data:
+                print(f"[StoryProgress] NPC {npc_name}({npc_id}) 未注册到 StoryDirector")
+                print(f"  npc_id 类型: {type(npc_id)}, 值: {repr(npc_id)}")
+                keys = list(director.npc_data.keys())
+                print(f"  npc_data keys: {keys}")
+                if keys:
+                    print(f"  第一个key类型: {type(keys[0])}, 值: {repr(keys[0])}")
+                
+                # 如果仍然未注册，跳过
+                if npc_id not in director.npc_data:
+                    return
+            
+            # 确保 seed 存在（使用整数ID作为key，与story_director保持一致）
+            if npc_id not in director.seeds:
+                from src.aistory.dilemma_seed import NPCDilemmaSeed
+                director.seeds[npc_id] = NPCDilemmaSeed(id=npc_id)
+                print(f"[StoryProgress] 已为 {npc_name} 创建新的困境种子")
+            
+            seed = director.seeds[npc_id]
+            
+            # 获取或创建 FateNode（使用整数ID作为key，与story_director保持一致）
+            if npc_id not in director.npc_fates:
+                director.npc_fates[npc_id] = []
+            
+            nodes = director.npc_fates[npc_id]
+            
+            # 查找当前活跃的 FateNode（最后一个未完成的）
+            target_node = None
+            for node in reversed(nodes):
+                if node.seed.phase != DilemmaPhase.SETTLE:
+                    target_node = node
+                    break
+            
+            # 如果没有找到，创建新的 FateNode
+            if target_node is None:
+                import time
+                node_id = f"{npc_id}_{int(time.time())}"
+                from src.aistory.story_director import FateNode
+                target_node = FateNode(
+                    node_id=node_id,
+                    npc_id=npc_id,
+                    seed=seed
+                )
+                director.npc_fates[npc_id].append(target_node)
+                print(f"[StoryProgress] 创建新的 FateNode: {node_id}")
+            
+            # 推断当前阶段（基于已有节拍数）
+            beat_count = len(seed.story_beats)
+            phase_map = {
+                0: DilemmaPhase.EMERGE,
+                1: DilemmaPhase.ESCALATE,
+                2: DilemmaPhase.CLIMAX,
+                3: DilemmaPhase.SETTLE
+            }
+            # 【方案2】current_phase 用于记录当前完成的阶段，不用于推进 seed.phase
+            current_phase = phase_map.get(beat_count, DilemmaPhase.SETTLE)
+            
+            # 【方案2】不立即推进 seed.phase，保持为当前已完成阶段
+            # 阶段推进将在新事件生成时由 story_director.py 处理
+            if seed.phase != current_phase:
+                print(f"[StoryProgress] {npc_name} 完成阶段: {current_phase.value} (seed.phase 保持为 {seed.phase.value})")
+            # 注意：不修改 seed.phase，让它保持为当前已完成的阶段
+            
+            # 创建 StoryBeat 记录玩家选择
+            beat = StoryBeat(
+                beat_number=beat_count + 1,
+                timestamp=datetime.now().isoformat(),
+                event_summary=event.title,
+                player_choice=choice.get("text", ""),
+                consequence_summary=choice.get("consequence_preview", "")[:100],
+                tension_delta=float(choice.get("tension_delta", 0)),
+                phase=current_phase,
+                # 记录困境信息（如果事件中有）
+                dilemma_type=event.dilemma_type.value if event.dilemma_type else "",
+                event_theme=getattr(event, 'event_theme', ''),
+                desire=getattr(seed, 'desire', ''),
+                misgiving=getattr(seed, 'misgiving', '')
+            )
+            
+            # 添加到 seed 的故事节拍列表
+            seed.story_beats.append(beat)
+            seed.last_updated = datetime.now().isoformat()
+            
+            # 更新 FateNode 的玩家选择
+            target_node.player_choice = choice.get("text", "")
+            
+            # 【方案2】不立即推进阶段，保持 seed.phase 为当前已完成阶段
+            # 阶段推进将在新事件生成时由 story_director.py 处理
+            phase_names = {
+                DilemmaPhase.EMERGE: "起",
+                DilemmaPhase.ESCALATE: "承",
+                DilemmaPhase.CLIMAX: "转",
+                DilemmaPhase.SETTLE: "合"
+            }
+            if beat_count < 3:
+                next_phase_name = phase_names.get(phase_map.get(beat_count + 1, DilemmaPhase.SETTLE), '?')
+                print(f"[StoryProgress] ✅ {npc_name} 的第 {beat.beat_number} 幕完成 ({phase_names.get(current_phase, '?')})")
+                print(f"[StoryProgress]    事件: {event.title[:40]}...")
+                print(f"[StoryProgress]    选择: {beat.player_choice[:40]}...")
+                print(f"[StoryProgress]    等待生成下一阶段事件: {next_phase_name}")
+            else:
+                # 已完成四幕
+                print(f"[StoryProgress] ✅ {npc_name} 已完成起承转合四幕！")
+                print(f"[StoryProgress]    当前困境已尘埃落定，下次将开启新的命运线")
+            
+            # 显示浮动文字提示
+            if ctx and hasattr(ctx, 'ft_manager') and ctx.player:
+                phase_display = {
+                    DilemmaPhase.EMERGE: "起",
+                    DilemmaPhase.ESCALATE: "承", 
+                    DilemmaPhase.CLIMAX: "转",
+                    DilemmaPhase.SETTLE: "合"
+                }
+                current_phase_name = phase_display.get(current_phase, "?")
+                ctx.ft_manager.add_text(
+                    f"[{npc_name}] 命运{current_phase_name}幕完成",
+                    ctx.player.rect.centerx,
+                    ctx.player.rect.top - 80,
+                    (255, 200, 100)
+                )
+            
+        except Exception as e:
+            print(f"[StoryProgress] 更新故事进度时出错: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _apply_effects(self, effect_str: str, event: EventNotification, ctx=None) -> Dict:
         """
@@ -737,9 +904,12 @@ class EventNotificationManager:
                     npc_name = event.actor_names[idx] if idx < len(event.actor_names) else f"NPC-{npc_id}"
                     
                     if attr == 'affinity' and ctx.player and social_manager:
-                        old_affinity = social_manager.get_affinity(ctx.player.id, npc_id)
-                        social_manager.modify_affinity(ctx.player.id, npc_id, val)
-                        new_affinity = social_manager.get_affinity(ctx.player.id, npc_id)
+                        # 确保ID类型一致（都转为字符串）
+                        player_id = str(ctx.player.id)
+                        target_npc_id = str(npc_id)
+                        old_affinity = social_manager.get_affinity(player_id, target_npc_id)
+                        social_manager.modify_affinity(player_id, target_npc_id, val)
+                        new_affinity = social_manager.get_affinity(player_id, target_npc_id)
                         changes.append(f"{npc_name}好感{'+' if val >= 0 else ''}{val}")
                         print(f"[EventNotification] {npc_name}对玩家好感: {old_affinity} -> {new_affinity}")
                     elif attr == 'hatred' and npc:
