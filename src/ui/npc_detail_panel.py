@@ -7,6 +7,7 @@ from src.data.character_seeds import ORGANIZATIONS
 from src.item_system import ItemManager
 from src.aistory.story_director import StoryDirector
 from src.ui.live_news_panel import toggle_live_news_panel
+from src.ui.live_snapshot_panel import LiveSnapshotData, get_snapshot_panel
 import asyncio
 
 class UIDialogsMixin:
@@ -23,6 +24,10 @@ class UIDialogsMixin:
           C. 中部：根据Tab显示不同内容 (可滚动区域)
           D. 底部：操作按钮栏 (固定高度 80px)
         """
+        # 标记本次界面开启，用于控制内心tab的调试打印
+        # 每次打开界面都重置，确保即使同一NPC也会打印
+        self._npc_panel_just_opened = True
+        
         is_self = (npc == player)
         panel_w, panel_h = 340, 600  # 稍微加宽加高
         panel_rect = pygame.Rect(self.screen_w - panel_w - 280, 60, panel_w, panel_h)
@@ -2172,46 +2177,74 @@ class UIDialogsMixin:
         current_phase = None
         current_dilemma_info = None
         story_beats = []
+
+
+        director = StoryDirector.get_instance()
+        if not director:
+            print(f"[NPC面板] 无法获取 StoryDirector 实例")
         
-        # 只在点击事件时打印调试信息
-        if click_event:
-            print(f"[NPC面板] ===== 点击内心 tab: NPC {npc.id} =====")
-            
+        # 打印调试按钮（右上角）
+        debug_btn_w = 70
+        debug_btn_h = 22
+        debug_btn_x = content_rect.right - debug_btn_w - 10
+        debug_btn_y = content_rect.y + 8
+        debug_btn_rect = pygame.Rect(debug_btn_x, debug_btn_y, debug_btn_w, debug_btn_h)
+        is_debug_hover = self.draw_button(screen, debug_btn_rect, "打印调试", self.font_small, mx, my, (80, 80, 100))
+        if click_event and is_debug_hover:
+            print(f"[NPC面板] ===== 进入内心 tab: NPC {npc.name} (ID: {npc.id}) =====")            
             try:
-                director = StoryDirector.get_instance()
-                print(f"[NPC面板] director: {director}, _initialized: {getattr(director, '_initialized', 'N/A')}")
+                print(f"[NPC面板] director: {director}, _initialized: {getattr(director, '_initialized', 'N/A')} has npc_fates: {hasattr(director, 'npc_fates')}")
                 
-                if director and hasattr(director, 'active_arcs') and director.active_arcs:
-                    print(f"[NPC面板] active_arcs keys: {list(director.active_arcs.keys())}")
-                    arc = director.active_arcs.get(npc.id)
-                    print(f"[NPC面板] arc for {npc.id}: {arc}")
+                if director and hasattr(director, 'npc_fates') and director.npc_fates:
+                    print(f"[NPC面板] npc_fates keys: {list(director.npc_fates.keys())}")
+                    nodes = director.npc_fates.get(npc.id, [])
+                    print(f"[NPC面板] nodes for {npc.id}: {len(nodes)} nodes")
+                    for node in nodes:
+                        print(f"  - node {node.node_id}:")
+                        print(f"      seed.phase={node.seed.phase.value if node.seed and node.seed.phase else 'N/A'}")
+                        print(f"      acts={list(node.acts.keys()) if node.acts else []}")
+                        if node.seed:
+                            print(f"      story_beats count={len(node.seed.story_beats)}")
                 else:
-                    print(f"[NPC面板] director 或 active_arcs 无效")
+                    print(f"[NPC面板] npc_fates 无效或为空 {getattr(director, 'npc_fates', 'N/A')}")
+                
+                # 打印UI状态
+                print(f"[NPC面板] ===== UI 状态 =====")
+                print(f"  current_phase: {current_phase}")
+                print(f"  story_beats count: {len(story_beats)}")
             except Exception as e:
                 print(f"[NPC面板] 错误: {e}")
+                import traceback
+                traceback.print_exc()
         
         try:
-            director = StoryDirector.get_instance()
-            # 检查 director 是否已初始化（有 active_arcs）
-            if director and hasattr(director, 'active_arcs') and director.active_arcs:
-                arc = director.active_arcs.get(npc.id)
+            # 检查 director 是否已初始化（有 npc_fates）
+            if director and hasattr(director, 'npc_fates') and director.npc_fates:
+                nodes = director.npc_fates.get(npc.id, [])
                 
-                if arc is None:
+                if not nodes:
                     pass  # 静默处理
-                elif arc.seed and hasattr(arc.seed, 'story_beats') and arc.seed.story_beats is not None:
-                    story_beats = arc.seed.story_beats
-                    # 根据story_beats数量推断当前阶段
-                    beat_count = len(story_beats)
-                    if beat_count == 0:
-                        current_phase = "未触发"
-                    elif beat_count == 1:
-                        current_phase = "起"
-                    elif beat_count == 2:
-                        current_phase = "承"
-                    elif beat_count == 3:
-                        current_phase = "转"
-                    else:
-                        current_phase = "合"
+                else:
+                    # 获取最新的FateNode（最后一个）
+                    latest_node = nodes[-1]
+                    if latest_node.seed:
+                        # 直接使用 seed.phase 判断当前阶段
+                        phase = latest_node.seed.phase
+                        phase_map = {
+                            'EMERGE': '起',
+                            'ESCALATE': '承',
+                            'CLIMAX': '转',
+                            'SETTLE': '合'
+                        }
+                        if phase:
+                            current_phase = phase_map.get(phase.value, '未触发')
+                        else:
+                            current_phase = '未触发'
+                        
+                        # 获取 story_beats 用于显示历史
+                        if hasattr(latest_node.seed, 'story_beats') and latest_node.seed.story_beats is not None:
+                            story_beats = latest_node.seed.story_beats
+                    
                     # 获取最新的困境信息
                     if story_beats:
                         latest_beat = story_beats[-1]
@@ -2219,6 +2252,7 @@ class UIDialogsMixin:
                             'event_summary': latest_beat.event_summary,
                             'player_choice': latest_beat.player_choice,
                             'dilemma_type': getattr(latest_beat, 'dilemma_type', ''),
+                            'event_theme': getattr(latest_beat, 'event_theme', ''),
                             'consequence_summary': getattr(latest_beat, 'consequence_summary', '')
                         }
         except Exception as e:
@@ -2264,6 +2298,14 @@ class UIDialogsMixin:
         PHASE_COMPLETED = "completed"   # 已完成
         PHASE_CURRENT = "current"       # 当前待处理
         PHASE_FUTURE = "future"         # 未来未知
+        
+        # 阶段名称到 DilemmaPhase 的映射
+        stage_to_phase = {
+            "起": "EMERGE",
+            "承": "ESCALATE", 
+            "转": "CLIMAX",
+            "合": "SETTLE"
+        }
         
         # 绘制每个阶段节点
         for i, stage in enumerate(phase_stages):
@@ -2333,13 +2375,26 @@ class UIDialogsMixin:
             # 存储节点点击区域
             node_rect = pygame.Rect(node_x - phase_node_radius - 5, phase_bar_y - phase_node_radius - 5,
                                     phase_node_radius * 2 + 10, phase_node_radius * 2 + 10)
+            
+            # 从 latest_node.acts 获取该阶段的新闻数据
+            beat_data = None
+            if is_clickable and latest_node and hasattr(latest_node, 'acts'):
+                phase_name = stage_to_phase.get(stage)
+                if phase_name:
+                    from src.aistory.dilemma_seed import DilemmaPhase
+                    phase_enum = DilemmaPhase[phase_name]
+                    beat_data = latest_node.acts.get(phase_enum)
+            if phase_status == PHASE_CURRENT and not beat_data:
+                pass
+                print(f"[NPC面板] 无法获取 {stage} 阶段的新闻数据 (beat_data)，可能未触发或数据结构不匹配")
+            
             node_click_rects.append({
                 'rect': node_rect,
                 'index': i,
                 'stage': stage,
                 'status': phase_status,
                 'is_clickable': is_clickable,
-                'beat_data': story_beats[i] if i < len(story_beats) else None
+                'beat_data': beat_data
             })
             
             # 在节点下方显示状态标签
@@ -2352,12 +2407,29 @@ class UIDialogsMixin:
             status_text = font_text.render(status_label, True, status_color)
             screen.blit(status_text, (node_x - status_text.get_width() // 2, phase_bar_y + phase_node_radius + 3))
         
-        # 处理节点点击事件 - 点击任一可点击节点都跳转到大宋实况
+        # 处理节点点击事件 - 点击节点显示新闻详情弹窗
         if click_event and mx is not None and my is not None:
             for node_info in node_click_rects:
                 if node_info['is_clickable'] and node_info['rect'].collidepoint(mx, my):
-                    # 无论是当前阶段还是已完成阶段，都跳转到大宋实况查看
-                    toggle_live_news_panel()
+                    # 获取该阶段对应的新闻数据
+                    beat_data = node_info.get('beat_data')
+                    if beat_data:
+                        # 检查是否有 snapshot_data
+                        snapshot_data = getattr(beat_data, 'snapshot_data', None)
+                        if snapshot_data:
+                            # 显示快照面板
+                            snapshot_panel = get_snapshot_panel()
+                            snapshot_panel.show(snapshot_data)
+                            # 切换游戏状态以显示快照面板
+                            ctx = getattr(self, '_game_ctx', None)
+                            if ctx:
+                                from src.definitions import GAME_STATE_LIVE_SNAPSHOT
+                                ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
+                            print(f"[NPC面板] 打开新闻详情: {beat_data.title}")
+                        else:
+                            print(f"[NPC面板] 该阶段暂无新闻详情: {node_info['stage']} (beat_data 存在但无 snapshot_data)")
+                    else:
+                        print(f"[NPC面板] 该阶段暂无数据: {node_info['stage']}")
                     break
         
         # 显示当前阶段名称
@@ -2372,18 +2444,30 @@ class UIDialogsMixin:
         # 当前困境详情
         # ═══════════════════════════════════════════════════════════════
         if current_dilemma_info:
-            # 困境标题
-            dilemma_header = font_title.render("当前困境", True, (220, 180, 220))
+            # 困境标题 - 显示当前阶段
+            phase_display = current_phase if current_phase else "未知"
+            dilemma_header = font_title.render(f"当前困境 [{phase_display}]", True, (220, 180, 220))
             screen.blit(dilemma_header, (content_center_x - dilemma_header.get_width() // 2, y))
             y += 26
             
             # 困境内容区域
             max_content_width = content_rect.width - 40
             
+            # 事件主题（如果有）
+            event_theme = current_dilemma_info.get('event_theme', '')
+            if event_theme:
+                theme_text = f"主题: {event_theme}"
+                theme_lines = self._wrap_text(theme_text, font_text, max_content_width)
+                for line in theme_lines[:2]:
+                    theme_surf = font_text.render(line, True, (180, 160, 140))
+                    screen.blit(theme_surf, (content_rect.x + 20, y))
+                    y += font_text.get_height() + 2
+                y += 3
+            
             # 事件摘要
             event_text = current_dilemma_info.get('event_summary', '暂无')
             event_lines = self._wrap_text(event_text, font_text, max_content_width)
-            for line in event_lines[:3]:  # 最多显示3行
+            for line in event_lines[:4]:  # 最多显示4行
                 event_surf = font_text.render(line, True, (200, 200, 200))
                 screen.blit(event_surf, (content_rect.x + 20, y))
                 y += font_text.get_height() + 2
@@ -2393,16 +2477,30 @@ class UIDialogsMixin:
             # 困境类型
             dilemma_type = current_dilemma_info.get('dilemma_type', '')
             if dilemma_type:
-                type_label = font_text.render(f"困境类型: {dilemma_type}", True, (180, 150, 150))
+                type_label = font_text.render(f"类型: {dilemma_type}", True, (180, 150, 150))
                 screen.blit(type_label, (content_rect.x + 20, y))
                 y += font_text.get_height() + 2
             
             # 玩家选择
             player_choice = current_dilemma_info.get('player_choice', '')
             if player_choice:
-                choice_label = font_text.render(f"你的选择: {player_choice[:30]}", True, (150, 180, 150))
-                screen.blit(choice_label, (content_rect.x + 20, y))
-                y += font_text.get_height() + 2
+                choice_text = f"你的选择: {player_choice[:40]}"
+                choice_lines = self._wrap_text(choice_text, font_text, max_content_width)
+                for line in choice_lines[:2]:
+                    choice_surf = font_text.render(line, True, (150, 200, 150))
+                    screen.blit(choice_surf, (content_rect.x + 20, y))
+                    y += font_text.get_height() + 2
+            
+            # 后果摘要（如果有）
+            consequence = current_dilemma_info.get('consequence_summary', '')
+            if consequence:
+                y += 3
+                cons_text = f"后果: {consequence[:40]}"
+                cons_lines = self._wrap_text(cons_text, font_text, max_content_width)
+                for line in cons_lines[:2]:
+                    cons_surf = font_text.render(line, True, (200, 180, 150))
+                    screen.blit(cons_surf, (content_rect.x + 20, y))
+                    y += font_text.get_height() + 2
         else:
             # 无困境时显示提示
             no_dilemma = font_text.render("暂无触发困境事件", True, (120, 120, 120))

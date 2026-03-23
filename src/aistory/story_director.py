@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from enum import Enum
 
 from src.ui.event_notification import LiveNewsItem
 
@@ -28,6 +29,15 @@ from .ripple_engine import RippleEngine, RippleEffect, SocialLink
 from src.utils import log_game_event
 from src.context import ctx
 
+
+class NodeType(Enum):
+    """命运节点类型 - 对应 FateNode.node_status"""
+    PAST_DECIDED = "past"       # □ 过去已决定的节点
+    CURRENT_INTERVENABLE = "current"  # ■ 当前可介入的节点
+    PLAYER_INTERVENED = "player"      # 🎮 玩家介入了此节点
+    NPC_NATURAL = "npc"               # ⚙ NPC自己选的（自然发展）
+
+
 @dataclass
 class DirectorConfig:
     """导演系统配置"""
@@ -39,13 +49,83 @@ class DirectorConfig:
 
 
 @dataclass
-class ActiveArc:
-    """活跃的故事弧"""
-    npc_id: str
-    seed: NPCDilemmaSeed
-    npc_data: NPCData
-    last_update: datetime = field(default_factory=datetime.now)
-    is_paused: bool = False
+class FateNode:
+    """命运节点 - 一个完整的起承转合故事线
+    
+    每个NPC可以有多个FateNode，串成命运线。
+    每个FateNode包含完整的起承转合四幕，每一幕都是一个新闻LiveNewsItem。
+    """
+    # 核心标识
+    node_id: str              # 唯一标识
+    npc_id: str               # 所属NPC
+    
+    # 困境核心数据
+    seed: NPCDilemmaSeed      # 困境种子（欲望、顾虑、热度、阶段）
+    acts: Dict[DilemmaPhase, 'LiveNewsItem'] = field(default_factory=dict)  # 四幕新闻
+    
+    # NPC信息（用于UI展示）
+    npc_name: str = ""        # NPC名字
+    npc_job: str = ""         # NPC职业
+    
+    # 时间信息
+    game_day: int = 1         # 游戏内天数
+    game_season: str = "春"   # 季节
+    game_year: int = 1        # 年份
+    created_at: datetime = field(default_factory=datetime.now)
+    
+    # 选择信息
+    player_choice: Optional[str] = None       # 玩家选择（如果有）
+    alternative_choices: List[str] = field(default_factory=list)  # 未选择的其他选项
+    
+    # 结果
+    consequence: str = ""     # 后果描述
+    
+    # 节点状态
+    node_status: str = "past"  # 状态: past/current/player/npc
+    is_intervenable: bool = False  # 是否可介入
+    
+    def get_current_act(self) -> Optional['LiveNewsItem']:
+        """获取当前阶段的新闻"""
+        return self.acts.get(self.seed.phase) if self.seed else None
+    
+    def add_act(self, phase: DilemmaPhase, news_item: 'LiveNewsItem'):
+        """添加一幕新闻，同时创建 snapshot_data 供UI展示"""
+        self.acts[phase] = news_item
+        
+        # 创建 LiveSnapshotData 供后续UI展示使用
+        # 此时图片已经生成完成，可以直接使用 _image_path
+        from src.ui.live_snapshot_panel import LiveSnapshotData
+        if not hasattr(news_item, 'snapshot_data') or news_item.snapshot_data is None:
+            image_url = getattr(news_item, '_image_path', None) or "placeholder"
+            news_item.snapshot_data = LiveSnapshotData(
+                title=news_item.title or "未知事件",
+                description=news_item.description or "",
+                image_url=image_url,
+                heat_score=getattr(news_item, 'heat_score', 0),
+                tags=news_item.tags if hasattr(news_item, 'tags') else [],
+                comments=news_item.comments if hasattr(news_item, 'comments') else [],
+                choices=news_item.choices if hasattr(news_item, 'choices') else [],
+                actor_names=news_item.actor_names if hasattr(news_item, 'actor_names') else [],
+                news_item=news_item
+            )
+            print(f"[FateNode] 创建 snapshot_data: {news_item.title}, image={image_url[:30]}...")
+    
+    @property
+    def current_phase(self) -> str:
+        """获取当前阶段名称"""
+        return self.seed.phase.value if self.seed else "EMERGE"
+    
+    @property
+    def dilemma_title(self) -> str:
+        """获取当前困境标题（从当前幕的新闻）"""
+        act = self.get_current_act()
+        return act.title if act else ""
+    
+    @property
+    def dilemma_desc(self) -> str:
+        """获取当前困境描述（从当前幕的新闻）"""
+        act = self.get_current_act()
+        return act.description if act else ""
 
 
 class StoryDirector:
@@ -85,7 +165,7 @@ class StoryDirector:
         
         # 状态
         self.seeds: Dict[str, NPCDilemmaSeed] = {}      # npc_id -> seed
-        self.active_arcs: Dict[str, ActiveArc] = {}     # npc_id -> arc
+        self.npc_fates: Dict[str, List[FateNode]] = {}  # npc_id -> [FateNode, ...]
         self.npc_data: Dict[str, NPCData] = {}          # npc_id -> data
         self.world_state: Optional[WorldSnapshot] = None
         
@@ -164,7 +244,7 @@ class StoryDirector:
   
     
     async def select_next_arc(self, 
-                              world_state: WorldSnapshot) -> Optional[ActiveArc]:
+                              world_state: WorldSnapshot) -> Optional[FateNode]:
         """
         选择下一个要推进的故事弧
         
@@ -174,18 +254,15 @@ class StoryDirector:
         3. 避免同时进行太多弧
         """
         # 检查是否已达上限
-        active_count = len([a for a in self.active_arcs.values() 
-                           if not a.is_paused])
+        active_count = sum(len(nodes) for nodes in self.npc_fates.values())
         if active_count >= self.config.max_concurrent_arcs:
             return None
         
         # 筛选候选NPC
         candidates = []
         for npc_id, seed in self.seeds.items():
-            # 跳过已完成或暂停的
+            # 跳过已完成的
             if seed.phase == DilemmaPhase.SETTLE:
-                continue
-            if npc_id in self.active_arcs and self.active_arcs[npc_id].is_paused:
                 continue
             
             # 检查热度阈值
@@ -208,18 +285,20 @@ class StoryDirector:
         # 选择热度最高的
         selected_id, heat, npc = candidates[0]
         
-        # 创建或获取活跃弧
-        if selected_id in self.active_arcs:
-            arc = self.active_arcs[selected_id]
-        else:
-            arc = ActiveArc(
-                npc_id=selected_id,
-                seed=self.seeds[selected_id],
-                npc_data=npc
-            )
-            self.active_arcs[selected_id] = arc
+        # 创建新的FateNode
+        node_id = f"{selected_id}_{int(time.time())}"
+        node = FateNode(
+            node_id=node_id,
+            npc_id=selected_id,
+            seed=self.seeds[selected_id]
+        )
         
-        return arc
+        # 添加到npc_fates
+        if selected_id not in self.npc_fates:
+            self.npc_fates[selected_id] = []
+        self.npc_fates[selected_id].append(node)
+        
+        return node
     
     async def try_to_generate_beat(self, 
                                   npc_id: str,
@@ -417,20 +496,13 @@ class StoryDirector:
     
     def get_all_active_stories(self) -> List[Dict]:
         """获取所有活跃故事的状态"""
-        return [
-            self.get_npc_story_status(npc_id)
-            for npc_id in self.active_arcs.keys()
-        ]
-    
-    def pause_arc(self, npc_id: str):
-        """暂停故事弧"""
-        if npc_id in self.active_arcs:
-            self.active_arcs[npc_id].is_paused = True
-    
-    def resume_arc(self, npc_id: str):
-        """恢复故事弧"""
-        if npc_id in self.active_arcs:
-            self.active_arcs[npc_id].is_paused = False
+        results = []
+        for npc_id, nodes in self.npc_fates.items():
+            for node in nodes:
+                status = self.get_npc_story_status(npc_id)
+                status['node_id'] = node.node_id
+                results.append(status)
+        return results
     
     async def tick(self, world_state: WorldSnapshot) -> List[Dict]:
         """
@@ -767,6 +839,45 @@ class StoryDirector:
                 news_mgr.add_news(news_item)
                 elapsed = time.time() - start_time
                 log_game_event(f"[DilemmaTest] 新闻已添加(图片+对话均就绪, {elapsed:.1f}秒): {news_item.title}", tag="DILEMMA")
+                
+                # 将新闻添加到对应NPC的FateNode中
+                npc = getattr(news_item, '_source_npc', None)
+                event_card = getattr(news_item, '_source_event_card', None)
+                if npc and event_card:
+                    director = StoryDirector.get_instance()
+                    if director and hasattr(director, 'npc_fates'):
+                        # 获取或创建该NPC的FateNode列表
+                        if npc.id not in director.npc_fates:
+                            director.npc_fates[npc.id] = []
+                        
+                        nodes = director.npc_fates[npc.id]
+                        
+                        # 查找是否已有匹配的FateNode（根据当前阶段）
+                        current_phase = event_card.dilemma_phase if hasattr(event_card, 'dilemma_phase') else DilemmaPhase.EMERGE
+                        
+                        # 尝试找到已有的FateNode（最后一个未完成的）
+                        target_node = None
+                        for node in reversed(nodes):
+                            if node.seed.phase != DilemmaPhase.SETTLE:
+                                target_node = node
+                                break
+                        
+                        # 如果没有找到，创建新的FateNode
+                        if target_node is None:
+                            from .dilemma_seed import NPCDilemmaSeed
+                            node_id = f"{npc.id}_{int(time.time())}"
+                            seed = director.seeds.get(npc.id, NPCDilemmaSeed(id=npc.id))
+                            target_node = FateNode(
+                                node_id=node_id,
+                                npc_id=npc.id,
+                                seed=seed
+                            )
+                            director.npc_fates[npc.id].append(target_node)
+                            log_game_event(f"[DilemmaTest] 创建新的FateNode: {node_id}", tag="DILEMMA")
+                        
+                        # 将新闻添加到FateNode的acts中
+                        target_node.add_act(current_phase, news_item)
+                        log_game_event(f"[DilemmaTest] 新闻已添加到FateNode {target_node.node_id} 的 {current_phase.value} 幕", tag="DILEMMA")
         
         # ═══════════════════════════════════════════════════════════════
         # 准备参考图（当事人头像）

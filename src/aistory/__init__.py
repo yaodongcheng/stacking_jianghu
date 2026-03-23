@@ -30,7 +30,7 @@ from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink, RippleType
 
 # 主控制器
-from .story_director import StoryDirector, DirectorConfig, ActiveArc
+from .story_director import StoryDirector, DirectorConfig, FateNode, NodeType
 
 __all__ = [
     # 共享类型
@@ -56,7 +56,8 @@ __all__ = [
     
     # 导演配置
     'DirectorConfig',
-    'ActiveArc',
+    'FateNode',
+    'NodeType',
     
     # 核心模块
     'DilemmaDeriver',

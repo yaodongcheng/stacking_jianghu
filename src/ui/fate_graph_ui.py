@@ -12,48 +12,7 @@ from enum import Enum
 
 from src.definitions import *
 from src.ui.base import UIBase
-
-
-class NodeType(Enum):
-    """命运节点类型"""
-    PAST_DECIDED = "past"       # □ 过去已决定的节点
-    CURRENT_INTERVENABLE = "current"  # ■ 当前可介入的节点
-    PLAYER_INTERVENED = "player"      # 🎮 玩家介入了此节点
-    NPC_NATURAL = "npc"               # ⚙ NPC自己选的（自然发展）
-
-
-@dataclass
-class FateNode:
-    """命运节点 - 对应一个困境事件"""
-    npc_id: str
-    npc_name: str
-    npc_job: str
-    npc_avatar: Optional[pygame.Surface] = None
-    
-    # 困境信息
-    dilemma_title: str = ""           # 困境标题
-    dilemma_desc: str = ""            # 困境描述
-    phase: str = "EMERGE"             # 阶段: EMERGE/ESCALATE/CLIMAX/SETTLE
-    
-    # 时间信息
-    game_day: int = 1                 # 游戏内天数
-    game_season: str = "春"           # 季节
-    game_year: int = 1                # 年份
-    
-    # 选择信息
-    player_choice: Optional[str] = None   # 玩家选择（如果有）
-    alternative_choices: List[str] = None # 未选择的其他选项
-    
-    # 结果
-    consequence: str = ""             # 后果描述
-    
-    # 节点状态
-    node_type: NodeType = NodeType.PAST_DECIDED
-    is_intervenable: bool = False     # 是否可介入
-    
-    def __post_init__(self):
-        if self.alternative_choices is None:
-            self.alternative_choices = []
+from src.aistory.story_director import FateNode, NodeType
 
 
 @dataclass
@@ -182,7 +141,7 @@ class FateGraphUI:
             player_choice="拒绝婚事",
             alternative_choices=["顺从高衙内"],
             consequence="与父亲决裂，独自在城东卖鱼为生",
-            node_type=NodeType.PLAYER_INTERVENED
+            node_status=NodeType.PLAYER_INTERVENED.value
         )
         
         # 节点2: 泼皮抢鱼摊 (改为NPC自然选择，只保留第一个玩家介入节点)
@@ -199,7 +158,7 @@ class FateGraphUI:
             player_choice=None,  # 改为NPC自然选择
             alternative_choices=["挺身而出", "忍气吞声"],
             consequence="大声呼救，引来街坊赶走泼皮",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         # 节点3: 黑风寨来人 (当前可介入)
@@ -214,7 +173,7 @@ class FateGraphUI:
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_type=NodeType.CURRENT_INTERVENABLE
+            node_status=NodeType.CURRENT_INTERVENABLE.value
         )
         
         timeline1.nodes = [node1_1, node1_2, node1_3]
@@ -243,7 +202,7 @@ class FateGraphUI:
             player_choice=None,
             alternative_choices=["金盆洗手"],
             consequence="投靠黑风大王，当起了泼皮",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         # 节点2: 调戏鱼西施被教训 (改为NPC自然选择，只保留一个玩家介入节点)
@@ -260,7 +219,7 @@ class FateGraphUI:
             player_choice=None,  # 改为NPC自然选择
             alternative_choices=["放他一马", "送官查办"],
             consequence="被痛打一顿，心存怨恨",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         # 节点3: 得罪高衙内 (NPC选择)
@@ -277,7 +236,7 @@ class FateGraphUI:
             player_choice=None,
             alternative_choices=["向高衙内求饶", "逃跑"],
             consequence="被高衙内追杀",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         # 节点4: 当前状态
@@ -292,7 +251,7 @@ class FateGraphUI:
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_type=NodeType.CURRENT_INTERVENABLE
+            node_status=NodeType.CURRENT_INTERVENABLE.value
         )
         
         timeline2.nodes = [node2_1, node2_2, node2_3, node2_4]
@@ -320,7 +279,7 @@ class FateGraphUI:
             player_choice=None,
             alternative_choices=["下山抢粮", "紧缩度日"],
             consequence="派手下到镇上收保护费",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         node3_2 = FateNode(
@@ -334,7 +293,7 @@ class FateGraphUI:
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_type=NodeType.CURRENT_INTERVENABLE
+            node_status=NodeType.CURRENT_INTERVENABLE.value
         )
         
         timeline3.nodes = [node3_1, node3_2]
@@ -362,7 +321,7 @@ class FateGraphUI:
             player_choice=None,
             alternative_choices=["向主公进谏", "装作不知"],
             consequence="内心挣扎，继续效忠",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         node4_2 = FateNode(
@@ -378,7 +337,7 @@ class FateGraphUI:
             player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
             alternative_choices=["违心执行", "直言进谏"],
             consequence="婉拒执行，主公对他产生嫌隙",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         timeline4.nodes = [node4_1, node4_2]
@@ -406,7 +365,7 @@ class FateGraphUI:
             player_choice=None,
             alternative_choices=["接受惩罚", "逃离寺院"],
             consequence="被罚禁闭思过",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         node5_2 = FateNode(
@@ -422,7 +381,7 @@ class FateGraphUI:
             player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
             alternative_choices=["大闹野猪林", "不插手"],
             consequence="暗中护送，与官府结仇",
-            node_type=NodeType.NPC_NATURAL
+            node_status=NodeType.NPC_NATURAL.value
         )
         
         timeline5.nodes = [node5_1, node5_2]
@@ -542,7 +501,7 @@ class FateGraphUI:
                             game_year=1 + i // 4,
                             player_choice=beat.player_choice,
                             consequence=beat.consequence_summary,
-                            node_type=NodeType.PLAYER_INTERVENED if beat.player_choice else NodeType.NPC_NATURAL
+                            node_status=NodeType.PLAYER_INTERVENED.value if beat.player_choice else NodeType.NPC_NATURAL.value
                         )
                         timeline.nodes.append(node)
                     
@@ -561,7 +520,7 @@ class FateGraphUI:
                             game_season=["春", "夏", "秋", "冬"][(current_day // 90) % 4],
                             game_year=1 + current_day // 360,
                             is_intervenable=True,
-                            node_type=NodeType.CURRENT_INTERVENABLE
+                            node_status=NodeType.CURRENT_INTERVENABLE.value
                         )
                         timeline.nodes.append(node)
             
@@ -970,7 +929,7 @@ class FateGraphUI:
             choice_text = None
             if node1.player_choice:
                 choice_text = f'"{node1.player_choice}"'
-            elif node1.node_type == NodeType.NPC_NATURAL and not node1.is_intervenable:
+            elif node1.node_status == NodeType.NPC_NATURAL.value and not node1.is_intervenable:
                 # NPC自然选择，显示后果或默认文本
                 choice_text = f'"{node1.consequence[:6]}..."' if node1.consequence else None
             
@@ -1036,13 +995,13 @@ class FateGraphUI:
     def _draw_node(self, screen: pygame.Surface, node: FateNode, x: int, y: int, mx: int, my: int):
         """绘制单个命运节点"""
         # 根据节点类型确定颜色
-        if node.node_type == NodeType.CURRENT_INTERVENABLE:
+        if node.node_status == NodeType.CURRENT_INTERVENABLE.value:
             color = self.colors['node_current']
             size = self.node_size + 4
-        elif node.node_type == NodeType.PLAYER_INTERVENED:
+        elif node.node_status == NodeType.PLAYER_INTERVENED.value:
             color = self.colors['node_player']
             size = self.node_size
-        elif node.node_type == NodeType.NPC_NATURAL:
+        elif node.node_status == NodeType.NPC_NATURAL.value:
             color = self.colors['node_npc']
             size = self.node_size - 2
         else:
@@ -1058,7 +1017,7 @@ class FateGraphUI:
             self.hover_node = node
         
         # 绘制节点
-        if node.node_type == NodeType.CURRENT_INTERVENABLE:
+        if node.node_status == NodeType.CURRENT_INTERVENABLE.value:
             # 当前节点用方形
             pygame.draw.rect(screen, color, (x - size, y - size, size * 2, size * 2), border_radius=2)
             # 闪烁效果（可介入提示）
@@ -1070,13 +1029,13 @@ class FateGraphUI:
         
         # 节点边框
         border_color = (255, 255, 255) if is_hover else (60, 60, 70)
-        if node.node_type == NodeType.CURRENT_INTERVENABLE:
+        if node.node_status == NodeType.CURRENT_INTERVENABLE.value:
             pygame.draw.rect(screen, border_color, (x - size, y - size, size * 2, size * 2), 1, border_radius=2)
         else:
             pygame.draw.circle(screen, border_color, (x, y), size, 1)
         
         # 绘制困境标题（在节点上方）
-        if is_hover or node.node_type == NodeType.CURRENT_INTERVENABLE:
+        if is_hover or node.node_status == NodeType.CURRENT_INTERVENABLE.value:
             title_surf = self.font_small.render(node.dilemma_title[:12], True, self.colors['text'])
             title_x = x - title_surf.get_width() // 2
             title_y = y - size - 20
