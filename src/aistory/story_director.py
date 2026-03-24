@@ -737,7 +737,7 @@ class StoryDirector:
         import threading
         import time
         from src.live_news_system import get_live_news_manager
-        from src.llm.event_dialog_generator import EventScriptBrief, get_event_dialog_generator
+        from src.llm.event_dialog_generator import get_event_dialog_generator
         from src.llm.doubao_image import get_image_generator
         from pathlib import Path
         
@@ -780,19 +780,9 @@ class StoryDirector:
                     dialog_done.set()
                     return
                 
-                # 从news_item构建Brief（跳过"前往处理"按钮）
+                # 跳过"前往处理"按钮
                 all_choices = news_item.choices or []
                 story_choices = [c for c in all_choices if c.get('action') != 'START_DIALOG']
-                
-                brief = EventScriptBrief(
-                    title=news_item.title,
-                    description=news_item.description,
-                    choice_a=story_choices[0].get('text', '选项A') if len(story_choices) > 0 else '介入此事',
-                    choice_b=story_choices[1].get('text', '选项B') if len(story_choices) > 1 else '静观其变',
-                    choice_c=story_choices[2].get('text', '选项C') if len(story_choices) > 2 else '离开现场',
-                    context_hint=news_item.headline or news_item.description,
-                    image_prompt=news_item.image_prompt
-                )
                 
                 # 提取效果字符串
                 effect_a = story_choices[0].get('effect', '') if len(story_choices) > 0 else ''
@@ -805,8 +795,9 @@ class StoryDirector:
                 
                 log_game_event(f"[DilemmaTest] 对话扩写开始: {npc_a_name} vs {npc_b_name}", tag="DILEMMA")
                 
+                # 直接传递 news_item，函数内部会提取所有需要的信息（包括tooltip）
                 full_script = dialog_gen.expand_to_full_script(
-                    brief=brief,
+                    news_item=news_item,
                     npc_a_name=npc_a_name,
                     npc_b_name=npc_b_name,
                     effect_a=effect_a,
@@ -817,6 +808,7 @@ class StoryDirector:
                 # 将预生成的剧本挂到news_item上
                 news_item._pregen_script = full_script
                 elapsed = time.time() - start_time
+                log_game_event(f"[DilemmaTest] 对话扩写结果：{full_script}", tag="DILEMMA")
                 log_game_event(f"[DilemmaTest] 对话扩写完成({elapsed:.1f}秒)", tag="DILEMMA")
                 
             except Exception as e:

@@ -21,22 +21,10 @@ from src.utils import log_game_event
 @dataclass
 class EventDialogLine:
     """事件对话行（与quest_system的DialogLine兼容）"""
-    speaker: str          # NARRATOR/SELF(A)/OTHER(B)/PLAYER
+    speaker: str          # NARRATOR/SELF(A)/OTHER(B)/PLAYER/CROWD
     text: str             # 对话文本
     action: str = ""      # 动作指令：SHAKE_CAMERA, SHOW_EVENT_CHOICE, PLAYER:Money:-100等
     speaker_id: Optional[int] = None  # 说话人ID（运行时填充）
-
-
-@dataclass
-class EventScriptBrief:
-    """简版事件剧本（第2步输出）"""
-    title: str                    # 事件标题
-    description: str              # 事件描述
-    choice_a: str                 # 选项A文本
-    choice_b: str                 # 选项B文本
-    choice_c: str = ""            # 选项C文本（可选）
-    context_hint: str = ""        # 上下文提示（供扩写用）
-    image_prompt: str = ""        # 豆包生图提示词（中文）
 
 
 @dataclass
@@ -64,7 +52,7 @@ class EventDialogGenerator:
     
     def expand_to_full_script(
         self,
-        brief: EventScriptBrief,
+        news_item: 'LiveNewsItem',
         npc_a_name: str,
         npc_b_name: Optional[str] = None,
         effect_a: str = "",
@@ -72,10 +60,10 @@ class EventDialogGenerator:
         effect_c: str = ""
     ) -> EventScriptFull:
         """
-        第3步：基于简版剧本，扩写完整的对话序列
+        第3步：基于LiveNewsItem，扩写完整的对话序列
         
         Args:
-            brief: 简版剧本
+            news_item: 新闻事件对象（LiveNewsItem/EventNotification）
             npc_a_name: 主角名字（用于替换{A}）
             npc_b_name: 配角名字（用于替换{B}）
             effect_a/b/c: 三个选项的效果字符串（用于生成动作指令）
@@ -83,6 +71,54 @@ class EventDialogGenerator:
         Returns:
             EventScriptFull: 完整剧本
         """
+        # 从 news_item 提取信息
+        title = news_item.title
+        description = news_item.description
+        headline = news_item.headline or description
+        location = news_item.location or "街市"
+        
+        # 提取选项信息（包括tooltip内容）
+        choices = news_item.choices or []
+        # 过滤掉"前往处理"按钮
+        story_choices = [c for c in choices if c.get('action') != 'START_DIALOG']
+        
+        choice_texts = []
+        choice_tooltips = []
+        for i, choice in enumerate(story_choices[:3]):  # 最多3个选项
+            text = choice.get('text', f'选项{i+1}')
+            choice_texts.append(text)
+            
+            # 构建tooltip内容
+            tooltip_parts = []
+            
+            # 消耗
+            cost = choice.get('cost')
+            if cost and str(cost).lower() != 'null':
+                tooltip_parts.append(f"【消耗】{cost}")
+            
+            # 效果
+            effect = choice.get('effect')
+            if effect and str(effect).lower() != 'null':
+                tooltip_parts.append(f"【影响】{effect}")
+            
+            # 后果预测
+            preview = choice.get('consequence_preview')
+            if preview and str(preview).lower() != 'null':
+                preview_clean = re.sub(r'[\r\n]+', '', preview)
+                tooltip_parts.append(f"【预测】{preview_clean}")
+            
+            # 条件
+            req = choice.get('requirement')
+            if req and str(req).lower() != 'null':
+                tooltip_parts.append(f"【条件】{req}")
+            
+            choice_tooltips.append("；".join(tooltip_parts) if tooltip_parts else "")
+        
+        # 填充缺失的选项
+        while len(choice_texts) < 3:
+            choice_texts.append(f"选项{len(choice_texts)+1}")
+            choice_tooltips.append("")
+
         system_prompt = """你是《大宋实况》的高级对话编剧，擅长金庸、古龙式的武侠江湖对话。负责将事件剧本扩写成主线任务级别的AVG对话序列。
 
 【质量标准】（对标金庸/古龙武侠小说）
@@ -91,29 +127,38 @@ class EventDialogGenerator:
    - 恶霸：狠辣、阴狠、不讲理（"今天你若不给，别怪我手下不留情！"）
    - 商人：胆怯但有骨气（"我...我实在拿不出这么多..."）
    - 侠客：义薄云天、一言九鼎（"光天化日，岂容你如此行凶！"）
+   - 围观群众：窃窃私语、指指点点、有人退缩有人起哄（"这恶霸又来欺负人了！""唉，多一事不如少一事..."）
 3. **玩家抉择要有分量**：选择前有犹豫，选择后有后果展现
 4. **情绪要细腻**：用动作、语气词、省略号表现人物心理
 
 【对话结构】（重要！）
-1. **开场对话（intro）**（6-8句，必须分散到角色）：
-   - 第1句：旁白描绘场景氛围（简短，20字内）
+1. **开场对话（intro）**（8-10句，必须分散到角色）：
+   - 第1句：旁白描绘场景氛围（简短，20字内，包含地点）
    - 第2-3句：**OTHER先开口**（恶霸威胁/挑衅）
    - 第4-5句：**SELF回应**（恐惧/愤怒/求饶）
-   - 第6-7句：**OTHER步步紧逼**（言语或动作升级）
-   - 第8句：旁白"围观的你，会怎么做？" + 动作SHOW_EVENT_CHOICE
+   - 第6句：**CROWD（围观群众）**开始窃窃私语（"这恶霸又来欺负人了！"）
+   - 第7句：**OTHER步步紧逼**（言语或动作升级）
+   - 第8句：**CROWD（围观群众）**有人后退，有人想看热闹（"唉，多一事不如少一事...""有好戏看了！"）
+   - 第9句：**NARRATOR**描写紧张氛围升级
+   - 第10句：旁白"围观的你，会怎么做？" + 动作SHOW_EVENT_CHOICE
    - **禁止**：不要把所有剧情塞进第1句旁白！旁白只描述环境！
+   - **必须**：要有CROWD（围观群众）的对话，体现群众的存在和反应！
 
-2. **选项后续对话（choice_a/b/c）**（4-6句每个）：
-   - 第1句：**PLAYER开口**（代入感强，展现性格）
-   - 第2-3句：**OTHER/SELF反应**（惊讶/愤怒/感激）
-   - 第4-5句：**对话或动作交锋**（打斗/交涉/逃跑）
+2. **选项后续对话（choice_a/b/c）**（5-7句每个）：
+   - 第1句：**PLAYER开口**（代入感强，展现性格，台词要体现选择的性质）
+   - 第2句：**CROWD反应**（群众惊讶/叫好/嘘声，"好！""这人是谁？""别多管闲事啊！"）
+   - 第3-4句：**OTHER/SELF反应**（惊讶/愤怒/感激）
+   - 第5-6句：**对话或动作交锋**（打斗/交涉/逃跑）
+   - 第7句：**CROWD议论**（事件结束后的群众反应，"真是英雄啊！""快走快走，别惹事..."）
    - 最后一句：旁白结局余韵（简短总结，留白）
+   - **必须**：每个选项后续也要有CROWD的反应，体现群众卷入！
 
 【角色代号】
 - **NARRATOR**: 旁白（环境描述、心理活动、时间流逝）
 - **SELF**: 主角NPC（事件受害者/发起者）
 - **OTHER**: 配角NPC（对手/帮手）
 - **PLAYER**: 玩家（我/你）
+- **CROWD**: 围观群众（百姓、路人、看客，必须有这个角色的台词！）
 
 【动作指令】（action字段，可用分号组合多条）
 
@@ -185,6 +230,7 @@ class EventDialogGenerator:
 - [宜] 宋代江湖对话："大爷饶命！""莫非你真当我好欺？""此恩，他日必报！"
 - [宜] 古龙式短句："他笑了。""刀，出鞘了。""血，溅在青石板上。"
 - [宜] 金庸式描写："那恶霸冷笑一声，伸手便要去抓账簿"
+- [宜] 群众台词要多样：有人义愤填膺、有人胆小怕事、有人幸灾乐祸、有人暗中叫好
 - [禁] 避免文言文："尔等休走！""吾当..."
 - [禁] 避免现代网络用语："绝绝子""yyds"
 - [宜] 善用情绪词：叹词（唉、哎呀）、语气（吧、啊、呢）、省略号
@@ -194,6 +240,7 @@ class EventDialogGenerator:
 - 用动作描写表现情绪："那恶霸猛地一拍桌子，吓得周围人纷纷后退"
 - 用环境烘托氛围："围观的百姓开始窃窃私语，有人悄悄退开"
 - **关键**：每句对话都要有"画面感"，让玩家仿佛看到武侠剧
+- **关键**：CROWD（围观群众）必须有台词，体现群众的卷入和反应！
 
 【输出格式】
 严格按照JSON格式返回：
@@ -203,13 +250,19 @@ class EventDialogGenerator:
     {"speaker": "NARRATOR", "text": "场景描绘（具体细节）", "action": ""},
     {"speaker": "OTHER", "text": "对手台词（带情绪）", "action": ""},
     {"speaker": "SELF", "text": "主角反应（恐惧/愤怒）", "action": ""},
+    {"speaker": "CROWD", "text": "围观群众窃窃私语", "action": ""},
+    {"speaker": "OTHER", "text": "对手步步紧逼", "action": ""},
+    {"speaker": "CROWD", "text": "群众后退或想看热闹", "action": ""},
     {"speaker": "NARRATOR", "text": "氛围升级描写", "action": ""},
     {"speaker": "NARRATOR", "text": "你会怎么做？", "action": "SHOW_EVENT_CHOICE"}
   ],
   "choice_a": [
     {"speaker": "PLAYER", "text": "玩家台词（展现性格）", "action": ""},
+    {"speaker": "CROWD", "text": "群众惊讶/叫好/嘘声", "action": ""},
     {"speaker": "OTHER", "text": "对方反应", "action": ""},
     {"speaker": "SELF", "text": "主角感激/惊讶", "action": ""},
+    {"speaker": "NARRATOR", "text": "动作交锋", "action": ""},
+    {"speaker": "CROWD", "text": "事件结束后群众议论", "action": ""},
     {"speaker": "NARRATOR", "text": "事件结局（有余韵）", "action": ""}
   ],
   "choice_b": [同上结构],
@@ -225,33 +278,46 @@ class EventDialogGenerator:
 ]
 ```
 
-[宜] 正确示例（江湖气韵）：
+[宜] 正确示例（江湖气韵，包含群众）：
 ```json
 "intro": [
   {"speaker": "NARRATOR", "text": "街市骤然安静。", "action": ""},
   {"speaker": "OTHER", "text": "李老板，这月的保护费，该交了吧？", "action": ""},
   {"speaker": "SELF", "text": "大爷...我、我这月生意不好，实在拿不出...", "action": ""},
+  {"speaker": "CROWD", "text": "唉，这恶霸又来欺负人了...", "action": ""},
   {"speaker": "OTHER", "text": "拿不出？", "action": ""},
   {"speaker": "NARRATOR", "text": "那恶霸猛地一掌拍在摊位上，木板应声碎裂。", "action": "SHAKE_CAMERA"},
+  {"speaker": "CROWD", "text": "（有人悄悄后退）多一事不如少一事，快走...", "action": ""},
   {"speaker": "OTHER", "text": "那就别怪我砸了你的摊子！", "action": ""},
-  {"speaker": "NARRATOR", "text": "围观的百姓纷纷后退。你，会怎么做？", "action": "SHOW_EVENT_CHOICE"}
+  {"speaker": "CROWD", "text": "（有人驻足）有好戏看了！", "action": ""},
+  {"speaker": "NARRATOR", "text": "围观的百姓神色各异。你，会怎么做？", "action": "SHOW_EVENT_CHOICE"}
 ]
 ```
 
 请根据以上标准，为玩家创造一个难忘的江湖抉择时刻。"""
 
-        user_message = f"""简版剧本：
-标题: {brief.title}
-描述: {brief.description}
-选项A: {brief.choice_a}
-选项B: {brief.choice_b}
-选项C: {brief.choice_c}
-场景氛围: {brief.context_hint}
+        user_message = f"""新闻事件：
+标题: {title}
+描述: {description}
+场景: {location}
+氛围: {headline}
 
 主角NPC: {npc_a_name}（用SELF代指）
 配角NPC: {npc_b_name or '无'}（用OTHER代指）
 
-请扩写成完整对话序列。"""
+选项A: {choice_texts[0]}
+选项A详情: {choice_tooltips[0]}
+
+选项B: {choice_texts[1]}
+选项B详情: {choice_tooltips[1]}
+
+选项C: {choice_texts[2]}
+选项C详情: {choice_tooltips[2]}
+
+请根据以上信息，扩写成包含围观群众反应的完整对话序列。注意：
+1. 开场必须有CROWD（围观群众）的台词
+2. 每个选项后续也要有CROWD的反应
+3. 玩家的选择台词要体现选项的性质和后果"""
 
         # 调用LLM（使用更高的max_tokens以确保完整的对话剧本）
         # 对话剧本通常需要 2000+ tokens
@@ -285,7 +351,7 @@ class EventDialogGenerator:
             )
         except Exception as e:
             log_game_event(f"[EventDialogGen] 解析完整剧本失败: {e}", tag="DIRECTOR")
-            return self._generate_fallback_full(brief, npc_a_name, npc_b_name)
+            return self._generate_fallback_full(news_item, npc_a_name, npc_b_name)
     
     # ═══════════════════════════════════════════════════════════════
     # 辅助方法
@@ -326,48 +392,37 @@ class EventDialogGenerator:
     # 回退方案（LLM不可用时）
     # ═══════════════════════════════════════════════════════════════
     
-    def _generate_fallback_brief(
-        self, 
-        event_id: str, 
-        template: str, 
-        npc_a: str, 
-        npc_b: Optional[str]
-    ) -> EventScriptBrief:
-        """生成回退简版剧本"""
-        return EventScriptBrief(
-            title=f"{npc_a}的遭遇",
-            description=f"{npc_a}遇到了麻烦：{template}",
-            choice_a="伸出援手（花费资源）",
-            choice_b="强力干涉（提升威望）",
-            choice_c="视而不见",
-            context_hint="街道场景"
-        )
-    
     def _generate_fallback_full(
         self,
-        brief: EventScriptBrief,
+        news_item: 'LiveNewsItem',
         npc_a: str,
         npc_b: Optional[str]
     ) -> EventScriptFull:
         """生成回退完整剧本"""
+        description = news_item.description
+        
         intro = [
-            EventDialogLine('NARRATOR', f'{brief.description}', ''),
+            EventDialogLine('NARRATOR', f'{description}', ''),
+            EventDialogLine('CROWD', '（围观群众窃窃私语）这是怎么了？', ''),
             EventDialogLine('NARRATOR', '你会怎么做？', 'SHOW_EVENT_CHOICE')
         ]
         
         choice_a = [
             EventDialogLine('PLAYER', f'让我来帮你！', ''),
+            EventDialogLine('CROWD', '（有人叫好）好样的！', ''),
             EventDialogLine('SELF', '多谢恩公！', '')
         ]
         
         choice_b = [
             EventDialogLine('PLAYER', f'我会处理这件事。', ''),
+            EventDialogLine('CROWD', '（有人议论）这人是谁？', ''),
             EventDialogLine('NARRATOR', '事态得到了控制。', '')
         ]
         
         choice_c = [
-            EventDialogLine('NARRATOR', '你选择了旁观。', ''),
-            EventDialogLine('NARRATOR', '事件自行发展。', '')
+            EventDialogLine('PLAYER', '我还是不插手了。', ''),
+            EventDialogLine('CROWD', '（有人叹息）唉，世态炎凉啊...', ''),
+            EventDialogLine('NARRATOR', '你选择了旁观。', '')
         ]
         
         return EventScriptFull(intro, choice_a, choice_b, choice_c)

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from src.live_news_system import LiveNewsItem, get_live_news_manager
 from src.llm.event_dialog_generator import (
-    EventDialogGenerator, EventScriptBrief, EventScriptFull, EventDialogLine,
+    EventDialogGenerator, EventScriptFull, EventDialogLine,
     get_event_dialog_generator
 )
 
@@ -255,28 +255,18 @@ class LiveNewsToDialogBridge:
         npc_a_name, npc_a_desc = self._get_npc_info(news, 0, ctx)
         npc_b_name, npc_b_desc = self._get_npc_info(news, 1, ctx)
         
-        # 2. 构建简版剧本
-        brief = EventScriptBrief(
-            title=news.title,
-            description=news.description,
-            choice_a=news.choices[0].get('text', '选项A') if len(news.choices) > 0 else '介入此事',
-            choice_b=news.choices[1].get('text', '选项B') if len(news.choices) > 1 else '静观其变',
-            choice_c=news.choices[2].get('text', '选项C') if len(news.choices) > 2 else '离开现场',
-            context_hint=news.headline or news.description,
-            image_prompt=getattr(news, 'image_prompt', '')
-        )
-        
-        # 3. 提取效果字符串
+        # 2. 提取效果字符串
         effect_a = news.choices[0].get('effect', '') if len(news.choices) > 0 else ''
         effect_b = news.choices[1].get('effect', '') if len(news.choices) > 1 else ''
         effect_c = news.choices[2].get('effect', '') if len(news.choices) > 2 else ''
         
-        # 4. 生成完整剧本
+        # 3. 生成完整剧本
         if use_llm and self.dialog_generator.is_available():
             print(f"[NewsDialogBridge] 使用LLM生成对话: {news.title}")
             try:
+                # 直接传递 news，函数内部会提取所有需要的信息（包括tooltip）
                 full_script = self.dialog_generator.expand_to_full_script(
-                    brief=brief,
+                    news_item=news,
                     npc_a_name=npc_a_name,
                     npc_b_name=npc_b_name,
                     effect_a=effect_a,

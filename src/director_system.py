@@ -36,7 +36,7 @@ from src.utils import log_game_event
 
 # 对话扩写系统
 from src.llm.event_dialog_generator import (
-    EventDialogGenerator, EventScriptBrief, EventScriptFull,
+    EventDialogGenerator, EventScriptFull,
     get_event_dialog_generator
 )
 
@@ -1326,20 +1326,9 @@ class AIDirector:
                     dialog_done.set()
                     return
                 
-                # 从 news_item 构建 Brief
                 # 注意：choices[0]可能是"前往处理"按钮（action=START_DIALOG），需要跳过
                 all_choices = news_item.choices or []
                 story_choices = [c for c in all_choices if c.get('action') != 'START_DIALOG']
-                
-                brief = EventScriptBrief(
-                    title=news_item.title,
-                    description=news_item.description,
-                    choice_a=story_choices[0].get('text', '选项A') if len(story_choices) > 0 else '介入此事',
-                    choice_b=story_choices[1].get('text', '选项B') if len(story_choices) > 1 else '静观其变',
-                    choice_c=story_choices[2].get('text', '选项C') if len(story_choices) > 2 else '离开现场',
-                    context_hint=news_item.headline or news_item.description,
-                    image_prompt=news_item.image_prompt
-                )
                 
                 # 提取效果字符串
                 effect_a = story_choices[0].get('effect', '') if len(story_choices) > 0 else ''
@@ -1352,8 +1341,9 @@ class AIDirector:
                 
                 log_game_event(f"[Director] 对话扩写开始: {npc_a_name} vs {npc_b_name}", tag="DIRECTOR")
                 
+                # 直接传递 news_item，函数内部会提取所有需要的信息（包括tooltip）
                 full_script = dialog_gen.expand_to_full_script(
-                    brief=brief,
+                    news_item=news_item,
                     npc_a_name=npc_a_name,
                     npc_b_name=npc_b_name,
                     effect_a=effect_a,
