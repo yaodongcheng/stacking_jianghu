@@ -808,7 +808,7 @@ class StoryDirector:
                 # 将预生成的剧本挂到news_item上
                 news_item._pregen_script = full_script
                 elapsed = time.time() - start_time
-                log_game_event(f"[DilemmaTest] 对话扩写结果：{full_script}", tag="DILEMMA")
+                #log_game_event(f"[DilemmaTest] 对话扩写结果：{full_script}", tag="DILEMMA")
                 log_game_event(f"[DilemmaTest] 对话扩写完成({elapsed:.1f}秒)", tag="DILEMMA")
                 
             except Exception as e:

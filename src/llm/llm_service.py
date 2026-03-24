@@ -304,7 +304,7 @@ class LLMService:
         debug_info = f"[LLMService] OpenAI SDK 收到响应 (id={response.id}, model={response.model})"
         if response.usage:
             debug_info += f", tokens={response.usage.total_tokens}"
-        log_game_event(debug_info)
+        #log_game_event(debug_info)
         
         # 统计token使用
         if response.usage:

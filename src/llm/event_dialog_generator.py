@@ -323,6 +323,8 @@ class EventDialogGenerator:
         # 对话剧本通常需要 2000+ tokens
         response = self.llm_service.chat(system_prompt, user_message, max_tokens=2500)
         
+        log_game_event(f"[EventDialogGen] LLM扩写响应：{response.raw_response}", tag="DIRECTOR")
+
         if not response.success:
             return None
         
@@ -351,7 +353,7 @@ class EventDialogGenerator:
             )
         except Exception as e:
             log_game_event(f"[EventDialogGen] 解析完整剧本失败: {e}", tag="DIRECTOR")
-            return self._generate_fallback_full(news_item, npc_a_name, npc_b_name)
+            return None
     
     # ═══════════════════════════════════════════════════════════════
     # 辅助方法
@@ -388,45 +390,7 @@ class EventDialogGenerator:
             actions.append(effect_str)
         return ';'.join(actions)
     
-    # ═══════════════════════════════════════════════════════════════
-    # 回退方案（LLM不可用时）
-    # ═══════════════════════════════════════════════════════════════
-    
-    def _generate_fallback_full(
-        self,
-        news_item: 'LiveNewsItem',
-        npc_a: str,
-        npc_b: Optional[str]
-    ) -> EventScriptFull:
-        """生成回退完整剧本"""
-        description = news_item.description
-        
-        intro = [
-            EventDialogLine('NARRATOR', f'{description}', ''),
-            EventDialogLine('CROWD', '（围观群众窃窃私语）这是怎么了？', ''),
-            EventDialogLine('NARRATOR', '你会怎么做？', 'SHOW_EVENT_CHOICE')
-        ]
-        
-        choice_a = [
-            EventDialogLine('PLAYER', f'让我来帮你！', ''),
-            EventDialogLine('CROWD', '（有人叫好）好样的！', ''),
-            EventDialogLine('SELF', '多谢恩公！', '')
-        ]
-        
-        choice_b = [
-            EventDialogLine('PLAYER', f'我会处理这件事。', ''),
-            EventDialogLine('CROWD', '（有人议论）这人是谁？', ''),
-            EventDialogLine('NARRATOR', '事态得到了控制。', '')
-        ]
-        
-        choice_c = [
-            EventDialogLine('PLAYER', '我还是不插手了。', ''),
-            EventDialogLine('CROWD', '（有人叹息）唉，世态炎凉啊...', ''),
-            EventDialogLine('NARRATOR', '你选择了旁观。', '')
-        ]
-        
-        return EventScriptFull(intro, choice_a, choice_b, choice_c)
-
+   
 
 # ═══════════════════════════════════════════════════════════════
 # 全局单例
