@@ -188,16 +188,42 @@ class LiveSnapshotPanel:
         self.flying_comments.clear()
         self.danmaku_timer = 0
         
+        # 检查新闻是否已完成（已解决）
+        news_item = getattr(snapshot, 'news_item', None)
+        is_resolved = getattr(news_item, 'is_resolved', False) if news_item else False
+        player_choice_idx = getattr(news_item, 'player_choice_idx', -1) if news_item else -1
+        
         # 初始化两级选择状态
         self.choice_level = 1
         if snapshot.choices:
             # 保存原始选项
             self.original_choices = snapshot.choices.copy()
-            # 设置第一级选项：当面处理 + 快信处理
-            snapshot.choices = [
-                {"text": "当面处理", "action": "FACE_TO_FACE", "_level": 1},
-                {"text": "快信处理", "action": "LETTER", "_level": 1}
-            ]
+            
+            if is_resolved:
+                # 【已完成的新闻】直接显示原始选项，并标记玩家选择
+                # 过滤掉 START_DIALOG（当面处理选项）和 BACK（返回按钮）
+                filtered_choices = []
+                selected_idx_in_filtered = -1
+                for idx, c in enumerate(self.original_choices):
+                    action = c.get('action', '')
+                    if action != 'START_DIALOG' and action != 'BACK':
+                        # 记录玩家选择在过滤后列表中的位置
+                        if idx == player_choice_idx:
+                            selected_idx_in_filtered = len(filtered_choices)
+                        filtered_choices.append(c.copy())
+                
+                # 在过滤后的列表中标记玩家选择
+                if selected_idx_in_filtered >= 0 and selected_idx_in_filtered < len(filtered_choices):
+                    filtered_choices[selected_idx_in_filtered]['_player_selected'] = True
+                
+                snapshot.choices = filtered_choices
+                self.choice_level = 2  # 直接设置为第二级，跳过第一级
+            else:
+                # 【未完成的新闻】设置第一级选项：当面处理 + 快信处理
+                snapshot.choices = [
+                    {"text": "当面处理", "action": "FACE_TO_FACE", "_level": 1},
+                    {"text": "快信处理", "action": "LETTER", "_level": 1}
+                ]
         else:
             self.original_choices = []
         
@@ -691,9 +717,9 @@ class LiveSnapshotPanel:
             is_completed = getattr(news_item, 'is_resolved', False)
             player_choice_text = getattr(news_item, 'player_choice', "") or ""
         
-        # 如果事件已完成，使用 original_choices 来匹配玩家选择
-        # 因为 show 时会把 snapshot.choices 替换为"当面处理"/"快信处理"
-        choices_to_draw = self.original_choices if (is_completed and self.original_choices) else self.snapshot.choices
+        # 如果事件已完成，使用 snapshot.choices（show 方法已设置好）
+        # 否则使用当前 choices
+        choices_to_draw = self.snapshot.choices if self.snapshot.choices else []
         
         if not choices_to_draw:
             return
@@ -716,7 +742,21 @@ class LiveSnapshotPanel:
         for i, choice in enumerate(choices_to_draw):
             btn_height = 40
             btn_gap = 10
-            btn_rect = pygame.Rect(30, start_y + i * (btn_height + btn_gap), self.panel_w - 60, btn_height)
+            tag_height = 22  # 【你选择了】标签高度
+            
+            # 计算按钮位置：如果被选择的按钮，上方预留标签空间
+            is_player_choice = choice.get('_player_selected', False)
+            extra_top = tag_height if is_player_choice else 0
+            
+            # 累积前面按钮的位置（包括它们的标签空间）
+            btn_y = start_y
+            for j in range(i):
+                prev_choice = choices_to_draw[j]
+                prev_tag = tag_height if prev_choice.get('_player_selected', False) else 0
+                btn_y += btn_height + btn_gap + prev_tag
+            
+            btn_y += extra_top
+            btn_rect = pygame.Rect(30, btn_y, self.panel_w - 60, btn_height)
             
             # 缓存按钮位置（相对坐标，用于handle_event）
             self._cached_button_rects.append(btn_rect)
@@ -724,8 +764,7 @@ class LiveSnapshotPanel:
             # 获取选项文本
             choice_text = choice.get('text', f'选项{i+1}')
             
-            # 检查是否已完成且是玩家选择的选项
-            is_player_choice = is_completed and choice_text == player_choice_text
+            # is_player_choice 已在前面计算
             
             # 如果事件已完成，只有玩家选择的选项可以显示
             if is_completed:
@@ -740,7 +779,8 @@ class LiveSnapshotPanel:
                     border_color = (60, 60, 70)
                     text_color = (100, 100, 110)
                 is_enabled = False  # 已完成事件不可选择
-                is_hover = False  # 已完成事件不显示悬停效果
+                # 已完成事件也可以悬停查看 tooltip
+                is_hover = (i == self.hovered_choice)
             else:
                 # 未完成事件：正常检查 requirement
                 req_str = choice.get('requirement')
@@ -773,12 +813,12 @@ class LiveSnapshotPanel:
             
             # 如果是玩家选择的选项，绘制标记
             if is_player_choice:
-                # 绘制"【你选择了】"标记
+                # 绘制"【你选择了】"标记（放在按钮上方）
                 tag_text = "【你选择了】"
-                tag_font = self._get_font(12)
-                tag_surf = tag_font.render(tag_text, True, (100, 255, 100))  # 绿色文字
-                tag_x = btn_rect.right - tag_surf.get_width() - 10
-                tag_y = btn_rect.y - 16
+                tag_font = self._get_font(16)  # 放大字体
+                tag_surf = tag_font.render(tag_text, True, (255, 50, 50))  # 红色文字
+                tag_x = btn_rect.centerx - tag_surf.get_width() // 2  # 居中显示
+                tag_y = btn_rect.y - 22  # 在按钮上方
                 surface.blit(tag_surf, (tag_x, tag_y))
             
             # 悬停时显示 tooltip（无论事件是否已完成）

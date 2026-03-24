@@ -93,6 +93,7 @@ class EventNotification:
     read: bool = False
     is_resolved: bool = False
     player_choice: Optional[str] = None
+    player_choice_idx: int = -1  # 玩家选择的选项索引
     auto_popup: bool = False
     
     # 小红书/抖音风格
@@ -615,6 +616,7 @@ class EventNotificationManager:
         
         choice = event.choices[choice_idx]
         event.player_choice = choice.get("text", "")
+        event.player_choice_idx = choice_idx  # 保存选择索引
         event.is_resolved = True
         event.read = True
         
@@ -653,6 +655,7 @@ class EventNotificationManager:
         
         choice = event.choices[choice_idx]
         event.player_choice = choice.get("text", "")
+        event.player_choice_idx = choice_idx  # 保存选择索引
         event.is_resolved = True
         
         # 如果在队列中，移除
