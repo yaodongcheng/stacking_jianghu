@@ -1987,12 +1987,28 @@ class UIDialogsMixin:
         """
         绘制"内心"页签：上部分性格特质，下部分内心隐秘（人生困境）
         """
-        font_title = self.font_ui
-        font_text = self.font_small
-        
         # 绘制内容区域背景
         pygame.draw.rect(screen, (30, 35, 45), content_rect, border_radius=5)
         pygame.draw.rect(screen, (80, 80, 100), content_rect, 1, border_radius=5)
+        
+        # 绘制上半部分：性格特质
+        y = self._draw_personality_traits(screen, npc, content_rect, mx, my)
+        
+        # 绘制分隔线
+        y += 5
+        pygame.draw.line(screen, (80, 80, 100), (content_rect.x + 10, y), (content_rect.right - 10, y))
+        y += 15
+        
+        # 绘制下半部分：人生困境
+        self._draw_life_dilemma(screen, npc, content_rect, mx, my, click_event, start_y=y)
+
+    def _draw_personality_traits(self, screen, npc, content_rect, mx=None, my=None):
+        """
+        绘制性格特质部分（上半部分）
+        返回绘制结束时的y坐标
+        """
+        font_title = self.font_ui
+        font_text = self.font_small
         
         # 获取personality数据
         personality_obj = getattr(npc, 'personality', None)
@@ -2003,11 +2019,6 @@ class UIDialogsMixin:
         else:
             personality = personality_obj
         
-        initial_dilemma = getattr(npc, 'initial_dilemma', {}) or {}
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 上半部分：性格特质（居中布局）
-        # ═══════════════════════════════════════════════════════════════
         content_center_x = content_rect.centerx
         y = content_rect.y + 12
         
@@ -2017,38 +2028,33 @@ class UIDialogsMixin:
         y += 28
         
         # 性格维度 - 使用拔河进度条显示（全部居中）
-        # 格式: (key, 维度名称, 左端标签(0), 右端标签(100), 左端颜色, 右端颜色)
-        # 颜色设计：左冷色 → 右暖色，中间渐变，直观显示偏向
         dimensions = [
-            ('temper', '性情', '温和', '暴躁', (80, 160, 220), (220, 80, 80)),    # 蓝 → 红
-            ('spirit', '胆量', '胆小', '勇敢', (150, 150, 180), (80, 180, 80)),    # 灰紫 → 绿
-            ('ism', '主义', '理想', '现实', (220, 180, 100), (100, 140, 200)),     # 金黄 → 蓝灰
-            ('act_style', '作风', '缜密', '豪放', (100, 160, 160), (200, 140, 80)), # 青灰 → 橙
-            ('friendship', '情义', '重情义', '不重情义', (80, 180, 120), (180, 80, 100)) # 绿 → 玫红
+            ('temper', '性情', '温和', '暴躁', (80, 160, 220), (220, 80, 80)),
+            ('spirit', '胆量', '胆小', '勇敢', (150, 150, 180), (80, 180, 80)),
+            ('ism', '主义', '理想', '现实', (220, 180, 100), (100, 140, 200)),
+            ('act_style', '作风', '缜密', '豪放', (100, 160, 160), (200, 140, 80)),
+            ('friendship', '情义', '重情义', '不重情义', (80, 180, 120), (180, 80, 100))
         ]
         
         bar_width = 100
         bar_height = 12
-        name_width = 40      # 维度名称宽度
-        label_width = 50     # 左右极端标签宽度
+        name_width = 40
+        label_width = 50
         
         for key, name, left_label, right_label, left_color, right_color in dimensions:
-            # 直接获取数值 (0-100)，新格式已经是数值化
             raw_value = personality.get(key, 50)
             if isinstance(raw_value, (int, float)):
                 value = int(raw_value)
             else:
-                # 兼容旧格式：如果是字符串，尝试转换或映射
                 try:
                     value = int(raw_value)
                 except (ValueError, TypeError):
-                    value = 50  # 默认值
+                    value = 50
             
-            # 计算总宽度用于居中: 名称 + 左标签 + 进度条 + 右标签
             total_width = name_width + label_width + bar_width + label_width
             start_x = content_center_x - total_width // 2
             
-            # 维度名称（最左侧）
+            # 维度名称
             name_surf = font_text.render(name, True, (200, 200, 200))
             screen.blit(name_surf, (start_x, y))
             
@@ -2062,9 +2068,6 @@ class UIDialogsMixin:
             bar_rect = pygame.Rect(bar_x, y + 2, bar_width, bar_height)
             pygame.draw.rect(screen, (60, 60, 60), bar_rect, border_radius=3)
             
-            # 中立滑块式设计：滑块位置直接代表倾向程度
-            # value 0-100，0=最左(左侧标签)，100=最右(右侧标签)，50=中间
-            
             # 绘制轨道背景
             track_rect = pygame.Rect(bar_x, y + 4, bar_width, bar_height - 4)
             pygame.draw.rect(screen, (60, 60, 60), track_rect, border_radius=2)
@@ -2072,22 +2075,20 @@ class UIDialogsMixin:
             # 计算滑块位置
             slider_x = bar_x + int((value / 100) * bar_width)
             slider_y = y + bar_height // 2 + 1
-            slider_radius = 4  # 改小一点
+            slider_radius = 4
             
-            # 绘制滑块（圆形，颜色根据位置渐变）
-            t = value / 100  # 0.0 ~ 1.0
+            # 绘制滑块（颜色根据位置渐变）
+            t = value / 100
             slider_color = (
                 int(left_color[0] + (right_color[0] - left_color[0]) * t),
                 int(left_color[1] + (right_color[1] - left_color[1]) * t),
                 int(left_color[2] + (right_color[2] - left_color[2]) * t)
             )
             
-            # 绘制滑块阴影（立体效果）
             pygame.draw.circle(screen, (40, 40, 40), (slider_x, slider_y + 1), slider_radius)
-            # 绘制滑块主体
             pygame.draw.circle(screen, slider_color, (slider_x, slider_y), slider_radius)
             
-            # 中心标记点（显示50%默认位置）
+            # 中心标记点
             center_x = bar_x + bar_width // 2
             pygame.draw.circle(screen, (100, 100, 100), (center_x, slider_y), 2)
             
@@ -2098,35 +2099,30 @@ class UIDialogsMixin:
             
             y += 22
         
-        # 野心（滑块式，与性格维度统一）
+        # 野心
         ambition = personality.get('ambition', 50)
         if hasattr(ambition, 'value'):
             ambition = ambition.value
         ambition_value = int(ambition) if isinstance(ambition, (int, float)) else 50
         
-        # 使用与性格维度相同的布局: 名称 + 左标签("低") + 滑块 + 右标签("高")
         total_width = name_width + label_width + bar_width + label_width
         start_x = content_center_x - total_width // 2
         
         name_surf = font_text.render("野心", True, (200, 180, 150))
         screen.blit(name_surf, (start_x, y))
         
-        # 左标签"低"
         left_label_x = start_x + name_width
         left_label_surf = font_text.render("低", True, (150, 150, 150))
         screen.blit(left_label_surf, (left_label_x, y))
         
-        # 滑块轨道
         bar_x = left_label_x + label_width
         track_rect = pygame.Rect(bar_x, y + 4, bar_width, bar_height - 4)
         pygame.draw.rect(screen, (60, 60, 60), track_rect, border_radius=2)
         
-        # 计算滑块位置
         slider_x = bar_x + int((ambition_value / 100) * bar_width)
         slider_y = y + bar_height // 2 + 1
         slider_radius = 4
         
-        # 野心滑块颜色（低=灰，高=橙黄）
         low_color = (150, 150, 150)
         high_color = (220, 160, 80)
         t = ambition_value / 100
@@ -2136,42 +2132,39 @@ class UIDialogsMixin:
             int(low_color[2] + (high_color[2] - low_color[2]) * t)
         )
         
-        # 绘制滑块
         pygame.draw.circle(screen, (40, 40, 40), (slider_x, slider_y + 1), slider_radius)
         pygame.draw.circle(screen, slider_color, (slider_x, slider_y), slider_radius)
         
-        # 右标签"高"
         right_label_x = bar_x + bar_width + 5
         right_label_surf = font_text.render("高", True, high_color)
         screen.blit(right_label_surf, (right_label_x, y))
         
         y += 22
         
-        # 渴望类型（字符串显示，与上方对齐）
+        # 渴望类型
         desire_type = personality.get('desire_type', '')
-        
         total_width = name_width + label_width + bar_width + label_width
         start_x = content_center_x - total_width // 2
         
         name_surf = font_text.render("渴望", True, (180, 160, 140))
         screen.blit(name_surf, (start_x, y))
         
-        # 渴望类型直接显示为文字
         desire_text = str(desire_type) if desire_type else "普通"
         value_surf = font_text.render(desire_text, True, (220, 180, 140))
         screen.blit(value_surf, (start_x + name_width + 10, y))
         y += 22
         
-        # ═══════════════════════════════════════════════════════════════
-        # 分隔线
-        # ═══════════════════════════════════════════════════════════════
-        y += 5
-        pygame.draw.line(screen, (80, 80, 100), (content_rect.x + 10, y), (content_rect.right - 10, y))
-        y += 15
+        return y
+
+    def _draw_life_dilemma(self, screen, npc, content_rect, mx=None, my=None, click_event=None, start_y=None):
+        """
+        绘制人生困境部分（下半部分）
+        """
+        font_title = self.font_ui
+        font_text = self.font_small
         
-        # ═══════════════════════════════════════════════════════════════
-        # 下半部分：当前困境与四幕阶段（从StoryDirector获取）
-        # ═══════════════════════════════════════════════════════════════
+        content_center_x = content_rect.centerx
+        y = start_y if start_y is not None else content_rect.y + 12
         
         # 尝试从StoryDirector获取当前故事弧信息
         current_phase = None
