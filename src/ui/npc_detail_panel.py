@@ -2197,7 +2197,8 @@ class UIDialogsMixin:
             "转": "CLIMAX",
             "合": "SETTLE"
         }
-        
+        nodes = []
+        latest_node = None  # 初始化 latest_node
         try:
             # 检查 director 是否已初始化（有 npc_fates）
             if director and hasattr(director, 'npc_fates') and director.npc_fates:
@@ -2217,6 +2218,7 @@ class UIDialogsMixin:
                         else:
                             log_game_event(f"[NPC面板] FateNode seed.phase 为空，无法确定阶段")
                             current_phase = '未触发'
+                        # 这个story_beat好像是每个阶段结束时才会生成，所以在当前阶段进行中时可能还没有对应的story_beat
                         
                         # 获取 story_beats 用于显示历史
                         if hasattr(latest_node.seed, 'story_beats') and latest_node.seed.story_beats is not None:
@@ -2272,17 +2274,7 @@ class UIDialogsMixin:
         # 收集阶段状态信息（用于调试打印）
         phase_status_info = []
         
-        # 收集已完成的阶段（有 beat 记录的阶段），这里还有点没理解
-        completed_phases = set()
-        if story_beats:
-            for beat in story_beats:
-                beat_phase = getattr(beat, 'phase', None)
-                if beat_phase:
-                    completed_phases.add(beat_phase.value if hasattr(beat_phase, 'value') else str(beat_phase))
-
-        
-        
-        # 绘制每个阶段节点
+        # 绘制每个阶段节点，起承转合4次循环
         for i, stage in enumerate(phase_stages):
             node_x = line_start_x + i * phase_node_spacing
             node_color = phase_colors.get(stage, (100, 100, 100))
@@ -2290,19 +2282,22 @@ class UIDialogsMixin:
             # 获取该阶段对应的 DilemmaPhase 值，类型为字符串（如 "EMERGE"）
             stage_phase_value = stage_to_phase.get(stage)
             
-            # 【修复】确定节点状态：基于 story_beats 而不是仅基于 seed.phase
-            # 1. 该阶段有 beat 记录 → 已完成
-            # 2. 该阶段等于 seed.phase 但没有 beat 记录 → 待处理（等待生成事件）
-            # 3. 否则 → 未解锁
-            if stage_phase_value in completed_phases:
-                # 该阶段已有 beat 记录，标记为已完成
-                phase_status = PHASE_COMPLETED
-            elif current_phase == stage and stage_phase_value not in completed_phases:
-                # 当前激活的阶段，但还没有 beat 记录（等待生成事件）
-                phase_status = PHASE_CURRENT
+            # 【提前获取 news_item】从 latest_node.acts 获取该阶段的数据
+            news_item = None
+            if latest_node and hasattr(latest_node, 'acts') and stage_phase_value:
+                from src.aistory.dilemma_seed import DilemmaPhase
+                phase_enum = DilemmaPhase[stage_phase_value]
+                news_item = latest_node.acts.get(phase_enum)
+            
+            # 【根据 news_item 确定节点状态】
+            if news_item:
+                # news_item 存在，根据 is_resolved 判断
+                is_completed = getattr(news_item, 'is_resolved', False) if news_item else False
+                phase_status = PHASE_COMPLETED if is_completed else PHASE_CURRENT
             else:
-                # 未解锁的阶段
+                # news_item 不存在，视为未激活（未来阶段）
                 phase_status = PHASE_FUTURE
+
             
             # 根据状态设置显示效果
             if phase_status == PHASE_COMPLETED:
@@ -2363,17 +2358,9 @@ class UIDialogsMixin:
             node_rect = pygame.Rect(node_x - phase_node_radius - 5, phase_bar_y - phase_node_radius - 5,
                                     phase_node_radius * 2 + 10, phase_node_radius * 2 + 10)
             
-            # 从 latest_node.acts 获取该阶段的新闻数据
-            beat_data = None
-            if is_clickable and latest_node and hasattr(latest_node, 'acts'):
-                phase_name = stage_to_phase.get(stage)
-                if phase_name:
-                    from src.aistory.dilemma_seed import DilemmaPhase
-                    phase_enum = DilemmaPhase[phase_name]
-                    beat_data = latest_node.acts.get(phase_enum)
-            if phase_status == PHASE_CURRENT and not beat_data:
-                pass
-                print(f"[NPC面板] 无法获取 {stage} 阶段的新闻数据 (beat_data)，可能未触发或数据结构不匹配")
+            # news_item 已在前面获取，这里直接使用
+            if phase_status == PHASE_CURRENT and not news_item:
+                print(f"[NPC面板] 警告: {stage} 阶段状态为CURRENT但没有news_item")
             
             node_click_rects.append({
                 'rect': node_rect,
@@ -2381,7 +2368,7 @@ class UIDialogsMixin:
                 'stage': stage,
                 'status': phase_status,
                 'is_clickable': is_clickable,
-                'beat_data': beat_data
+                'news_item': news_item
             })
             
             # 在节点下方显示状态标签
@@ -2399,10 +2386,10 @@ class UIDialogsMixin:
             for node_info in node_click_rects:
                 if node_info['is_clickable'] and node_info['rect'].collidepoint(mx, my):
                     # 获取该阶段对应的新闻数据
-                    beat_data = node_info.get('beat_data')
-                    if beat_data:
+                    news_item = node_info.get('news_item')
+                    if news_item:
                         # 检查是否有 snapshot_data
-                        snapshot_data = getattr(beat_data, 'snapshot_data', None)
+                        snapshot_data = getattr(news_item, 'snapshot_data', None)
                         if snapshot_data:
                             # 显示快照面板
                             snapshot_panel = get_snapshot_panel()
@@ -2412,9 +2399,9 @@ class UIDialogsMixin:
                             if ctx:
                                 from src.definitions import GAME_STATE_LIVE_SNAPSHOT
                                 ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
-                            print(f"[NPC面板] 打开新闻详情: {beat_data.title}")
+                            print(f"[NPC面板] 打开新闻详情: {news_item.title}")
                         else:
-                            print(f"[NPC面板] 该阶段暂无新闻详情: {node_info['stage']} (beat_data 存在但无 snapshot_data)")
+                            print(f"[NPC面板] 该阶段暂无新闻详情: {node_info['stage']} (news_item 存在但无 snapshot_data)")
                     else:
                         print(f"[NPC面板] 该阶段暂无数据: {node_info['stage']}")
                     break
@@ -2514,7 +2501,18 @@ class UIDialogsMixin:
                 print(f"  界面显示: 当前阶段: {phase_desc}")
                 print(f"  显示颜色: {phase_desc_color}")
                 print(f"  current_phase: {current_phase}")
+                print(f" phase_status: {phase_status}")
                 print(f"  current_index: {current_index}")
+                print(f"  fate nodes count: {len(nodes)}")
+
+                print(f"lastet_node: {latest_node.node_id if latest_node else 'N/A'}")
+                print(f"last_node.acts length: {len(latest_node.acts) if latest_node and hasattr(latest_node, 'acts') and latest_node.acts else 'N/A'}")
+                print(f"last_node.acts:   {latest_node.acts if latest_node and hasattr(latest_node, 'acts') else 'N/A'}")
+                print(f"last_node.seed: {latest_node.seed if latest_node and latest_node.seed else 'N/A'}")
+                print(f"  latest_node.seed.phase: {latest_node.seed.phase if latest_node and latest_node.seed else 'N/A'}")
+              #  print(f"  latest_node.seed.story_beats: {latest_node.seed.story_beats if latest_node and latest_node.seed and latest_node.seed.story_beats else 'N/A'}")
+
+
                 print(f"  story_beats count: {len(story_beats)}")
                 
                 # 直接打印绘制时收集的阶段状态信息

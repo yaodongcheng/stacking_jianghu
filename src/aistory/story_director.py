@@ -91,7 +91,7 @@ class FateNode:
     def add_act(self, phase: DilemmaPhase, news_item: 'LiveNewsItem'):
         """添加一幕新闻，同时创建 snapshot_data 供UI展示"""
         self.acts[phase] = news_item
-        
+        log_game_event(f"[FateNode] 添加一幕新闻到acts: {phase.value} - {news_item.title} 当前已有新闻数量: {len(self.acts)}", tag="DIRECTOR")
         # 创建 LiveSnapshotData 供后续UI展示使用
         # 此时图片已经生成完成，可以直接使用 _image_path
         from src.ui.live_snapshot_panel import LiveSnapshotData
@@ -869,17 +869,18 @@ class StoryDirector:
                                 seed=seed
                             )
                             director.npc_fates[npc.id].append(target_node)
-                            log_game_event(f"[DilemmaTest] 创建新的FateNode: {node_id}", tag="DILEMMA")
+                            log_game_event(f"[DilemmaTest] {npc.name} 没找到已有的FateNode，创建新的FateNode: {node_id}", tag="DILEMMA")
                         
-                        # 将新闻添加到FateNode的acts中
-                        target_node.add_act(current_phase, news_item)
-                        log_game_event(f"[DilemmaTest] 新闻已添加到FateNode {target_node.node_id} 的 {current_phase.value} 幕", tag="DILEMMA")
-                        
+     
                         # 【修复】事件完全生成后，才推进 seed.phase
                         target_phase = getattr(event_card, '_target_phase', current_phase)
                         if target_phase != target_node.seed.phase:
                             log_game_event(f"[StoryDirector] {npc.name} 阶段推进: {target_node.seed.phase.value} -> {target_phase.value}", tag="DIRECTOR")
                             target_node.seed.phase = target_phase
+                          # 将新闻添加到FateNode的acts中
+                        target_node.add_act(target_phase, news_item)
+                        log_game_event(f"[DilemmaTest] 新闻已添加到FateNode {target_node.node_id} 的 {target_phase.value} 幕", tag="DILEMMA")
+ 
         
         # ═══════════════════════════════════════════════════════════════
         # 准备参考图（当事人头像）
