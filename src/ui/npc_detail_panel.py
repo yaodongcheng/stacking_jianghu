@@ -2175,8 +2175,28 @@ class UIDialogsMixin:
         director = StoryDirector.get_instance()
         if not director:
             print(f"[NPC面板] 无法获取 StoryDirector 实例")
-      
-       
+        
+        phase_map = {
+                            'EMERGE': '起',
+                            'ESCALATE': '承',
+                            'CLIMAX': '转',
+                            'SETTLE': '合'
+                     }
+        phase_stages = ["起", "承", "转", "合"]
+        phase_colors = {
+            "起": (80, 180, 80),    # 绿色 - 风声渐起
+            "承": (80, 160, 220),   # 蓝色 - 矛盾升级
+            "转": (220, 160, 80),   # 橙色 - 高潮爆发
+            "合": (180, 80, 180),   # 紫色 - 尘埃落定
+            "未触发": (100, 100, 100)  # 灰色
+        }
+         # 阶段名称到 DilemmaPhase 的映射
+        stage_to_phase = {
+            "起": "EMERGE",
+            "承": "ESCALATE", 
+            "转": "CLIMAX",
+            "合": "SETTLE"
+        }
         
         try:
             # 检查 director 是否已初始化（有 npc_fates）
@@ -2191,15 +2211,11 @@ class UIDialogsMixin:
                     if latest_node.seed:
                         # 直接使用 seed.phase 判断当前阶段
                         phase = latest_node.seed.phase
-                        phase_map = {
-                            'EMERGE': '起',
-                            'ESCALATE': '承',
-                            'CLIMAX': '转',
-                            'SETTLE': '合'
-                        }
+                        
                         if phase:
                             current_phase = phase_map.get(phase.value, '未触发')
                         else:
+                            log_game_event(f"[NPC面板] FateNode seed.phase 为空，无法确定阶段")
                             current_phase = '未触发'
                         
                         # 获取 story_beats 用于显示历史
@@ -2219,24 +2235,12 @@ class UIDialogsMixin:
         except Exception as e:
             # 忽略错误，保持默认值
             pass
-
-
-
         
         # 绘制四幕阶段指示器
-        phase_title = font_title.render("故事阶段", True, (255, 215, 0))
-        screen.blit(phase_title, (content_center_x - phase_title.get_width() // 2, y))
         y += 26
         
         # 四幕阶段进度条
-        phase_stages = ["起", "承", "转", "合"]
-        phase_colors = {
-            "起": (80, 180, 80),    # 绿色 - 风声渐起
-            "承": (80, 160, 220),   # 蓝色 - 矛盾升级
-            "转": (220, 160, 80),   # 橙色 - 高潮爆发
-            "合": (180, 80, 180),   # 紫色 - 尘埃落定
-            "未触发": (100, 100, 100)  # 灰色
-        }
+       
         
         # 绘制阶段节点
         phase_bar_y = y
@@ -2261,34 +2265,29 @@ class UIDialogsMixin:
         # 节点状态枚举
         PHASE_COMPLETED = "completed"   # 已完成
         PHASE_CURRENT = "current"       # 当前待处理
-        PHASE_FUTURE = "future"         # 未来未知
+        PHASE_FUTURE = "future"         # 未触发
         
-        # 阶段名称到 DilemmaPhase 的映射
-        stage_to_phase = {
-            "起": "EMERGE",
-            "承": "ESCALATE", 
-            "转": "CLIMAX",
-            "合": "SETTLE"
-        }
+       
         
         # 收集阶段状态信息（用于调试打印）
         phase_status_info = []
         
-        # 【修复】根据 story_beats 判断每个阶段的完成状态
-        # 收集已完成的阶段（有 beat 记录的阶段）
+        # 收集已完成的阶段（有 beat 记录的阶段），这里还有点没理解
         completed_phases = set()
         if story_beats:
             for beat in story_beats:
                 beat_phase = getattr(beat, 'phase', None)
                 if beat_phase:
                     completed_phases.add(beat_phase.value if hasattr(beat_phase, 'value') else str(beat_phase))
+
+        
         
         # 绘制每个阶段节点
         for i, stage in enumerate(phase_stages):
             node_x = line_start_x + i * phase_node_spacing
             node_color = phase_colors.get(stage, (100, 100, 100))
             
-            # 获取该阶段对应的 DilemmaPhase 值
+            # 获取该阶段对应的 DilemmaPhase 值，类型为字符串（如 "EMERGE"）
             stage_phase_value = stage_to_phase.get(stage)
             
             # 【修复】确定节点状态：基于 story_beats 而不是仅基于 seed.phase
