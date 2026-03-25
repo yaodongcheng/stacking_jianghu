@@ -711,7 +711,7 @@ class StoryDirector:
                 news_item._image_path = "placeholder"
                 log_game_event(f"[DilemmaTest] 配图生成失败({elapsed:.1f}秒)，使用占位图", tag="DILEMMA")
             image_done.set()
-            _try_add_news()
+            _try_add_news(ctx)
         
         # ═══════════════════════════════════════════════════════════════
         # 任务2：对话扩写
@@ -759,15 +759,25 @@ class StoryDirector:
                 log_game_event(f"[DilemmaTest] 对话扩写失败: {e}", tag="DILEMMA")
             finally:
                 dialog_done.set()
-                _try_add_news()
+                _try_add_news(ctx)
         
         # ═══════════════════════════════════════════════════════════════
         # 汇合：两个任务都完成后添加新闻
         # ═══════════════════════════════════════════════════════════════
-        def _try_add_news():
+        def _try_add_news(ctx):
             """检查是否两个任务都完成了，是则添加新闻"""
             if image_done.is_set() and dialog_done.is_set() and not news_added[0]:
                 news_added[0] = True
+                
+                # ═══════════════════════════════════════════════════════════════
+                # 【自动场景布置】事件生成完成后，立即让NPC瞬移到事发地点
+                # ═══════════════════════════════════════════════════════════════
+                # 复用 director_system 中的场景布置方法
+                from src.director_system import get_director
+                director = get_director()
+                if director:
+                    director._setup_event_scene(news_item,ctx)
+                
                 news_mgr.add_news(news_item)
                 elapsed = time.time() - start_time
                 log_game_event(f"[DilemmaTest] 新闻已添加(图片+对话均就绪, {elapsed:.1f}秒): {news_item.title}", tag="DILEMMA")

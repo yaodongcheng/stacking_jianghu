@@ -673,8 +673,8 @@ class FactionWarSystem:
     
     # 战斗遭遇设置
     ENCOUNTER_RANGE = 150     # 遭遇触发距离
-    ENCOUNTER_CHANCE = 0.02   # 敌对NPC相遇时的战斗概率/帧
-    WAR_ENCOUNTER_CHANCE = 0.08  # 战争状态下的战斗概率
+    ENCOUNTER_CHANCE = 0.00   # 敌对NPC相遇时的战斗概率/帧
+    WAR_ENCOUNTER_CHANCE = 0.00  # 战争状态下的战斗概率
     
     # 组织敌对行为设置
     HOSTILITY_DECAY = 0.5     # 每日敌对值衰减

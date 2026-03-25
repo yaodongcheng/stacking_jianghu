@@ -19,6 +19,7 @@ from src.llm.event_dialog_generator import (
     EventDialogGenerator, EventScriptFull, EventDialogLine,
     get_event_dialog_generator
 )
+from src.data_loader import NPC_ID_NAME_MAP, get_npc_name_by_id_global
 
 
 def convert_effect_to_directive(effect_str: str, actor_ids: list = None) -> str:
@@ -204,20 +205,27 @@ class LiveNewsToDialogBridge:
         
         self._choice_pending = False
         
-        # 根据选择获取对应对话
+        # 根据选择获取对应对话（兼容新格式 choice_dialogues 字典）
+        choice_dialogues = getattr(self._current_script, 'choice_dialogues', {})
+        
+        # 获取选项对话列表，优先使用新格式
+        choice_0_dialogs = choice_dialogues.get('choice_0', getattr(self._current_script, 'choice_a_dialogs', []))
+        choice_1_dialogs = choice_dialogues.get('choice_1', getattr(self._current_script, 'choice_b_dialogs', []))
+        choice_2_dialogs = choice_dialogues.get('choice_2', getattr(self._current_script, 'choice_c_dialogs', []))
+        
         key_map = {
-            'A': self._current_script.choice_a_dialogs,
-            'B': self._current_script.choice_b_dialogs,
-            'C': self._current_script.choice_c_dialogs,
-            '0': self._current_script.choice_a_dialogs,
-            '1': self._current_script.choice_b_dialogs,
-            '2': self._current_script.choice_c_dialogs,
-            0: self._current_script.choice_a_dialogs,
-            1: self._current_script.choice_b_dialogs,
-            2: self._current_script.choice_c_dialogs,
+            'A': choice_0_dialogs,
+            'B': choice_1_dialogs,
+            'C': choice_2_dialogs,
+            '0': choice_0_dialogs,
+            '1': choice_1_dialogs,
+            '2': choice_2_dialogs,
+            0: choice_0_dialogs,
+            1: choice_1_dialogs,
+            2: choice_2_dialogs,
         }
         
-        choice_dialogs = key_map.get(choice_key, self._current_script.choice_a_dialogs)
+        choice_dialogs = key_map.get(choice_key, choice_0_dialogs)
         
         return self._convert_to_playable(
             choice_dialogs,
@@ -260,7 +268,7 @@ class LiveNewsToDialogBridge:
         effect_b = news.choices[1].get('effect', '') if len(news.choices) > 1 else ''
         effect_c = news.choices[2].get('effect', '') if len(news.choices) > 2 else ''
         
-        # 3. 生成完整剧本
+        # 3. 生成完整剧本（LLM不可用则不生成）
         if use_llm and self.dialog_generator.is_available():
             print(f"[NewsDialogBridge] 使用LLM生成对话: {news.title}")
             try:
@@ -276,10 +284,11 @@ class LiveNewsToDialogBridge:
                 return full_script
             except Exception as e:
                 print(f"[NewsDialogBridge] LLM生成失败: {e}")
+                return None
         
-        # 回退：使用模板生成
-        print(f"[NewsDialogBridge] 使用模板生成对话: {news.title}")
-        return self._generate_template_script(news, npc_a_name, npc_b_name)
+        # LLM不可用，不生成剧本
+        print(f"[NewsDialogBridge] LLM不可用，跳过对话生成: {news.title}")
+        return None
     
     def _get_npc_info(self, news: LiveNewsItem, index: int, ctx) -> tuple:
         """获取NPC信息"""
@@ -313,53 +322,6 @@ class LiveNewsToDialogBridge:
         
         return name, default_desc
     
-    def _generate_template_script(
-        self, 
-        news: LiveNewsItem, 
-        npc_a: str, 
-        npc_b: str
-    ) -> EventScriptFull:
-        """使用模板生成对话（LLM不可用时）"""
-        
-        # 开场对话
-        intro = [
-            EventDialogLine('NARRATOR', f'【{news.title}】', ''),
-            EventDialogLine('NARRATOR', news.description, ''),
-        ]
-        
-        if npc_b:
-            intro.append(EventDialogLine('OTHER', f'（{npc_b}正在做些什么...）', ''))
-        
-        intro.append(EventDialogLine('SELF', f'（{npc_a}看起来需要帮助）', ''))
-        intro.append(EventDialogLine('NARRATOR', '你会怎么做？', 'SHOW_EVENT_CHOICE'))
-        
-        # 选项A后续
-        choice_a_text = news.choices[0].get('text', '介入此事') if news.choices else '介入此事'
-        choice_a_effect = news.choices[0].get('effect', '') if news.choices else ''
-        choice_a = [
-            EventDialogLine('PLAYER', f'（{choice_a_text}）', choice_a_effect),
-            EventDialogLine('SELF', '多谢！', ''),
-            EventDialogLine('NARRATOR', '事态得到了解决。', '')
-        ]
-        
-        # 选项B后续
-        choice_b_text = news.choices[1].get('text', '静观其变') if len(news.choices) > 1 else '静观其变'
-        choice_b_effect = news.choices[1].get('effect', '') if len(news.choices) > 1 else ''
-        choice_b = [
-            EventDialogLine('PLAYER', f'（{choice_b_text}）', choice_b_effect),
-            EventDialogLine('NARRATOR', '你选择了另一种方式处理。', '')
-        ]
-        
-        # 选项C后续
-        choice_c_text = news.choices[2].get('text', '离开现场') if len(news.choices) > 2 else '离开现场'
-        choice_c_effect = news.choices[2].get('effect', '') if len(news.choices) > 2 else ''
-        choice_c = [
-            EventDialogLine('PLAYER', f'（{choice_c_text}）', choice_c_effect),
-            EventDialogLine('NARRATOR', '你转身离开了。', '')
-        ]
-        
-        return EventScriptFull(intro, choice_a, choice_b, choice_c)
-    
     def _convert_to_playable(
         self, 
         dialog_lines: List[EventDialogLine],
@@ -371,8 +333,18 @@ class LiveNewsToDialogBridge:
         result = []
         
         for line in dialog_lines:
-            # 替换说话者代号为实际名字
-            speaker, speaker_id = self._resolve_speaker(line.speaker, news, ctx)
+            # 新格式：使用 speaker_name 和 speaker_id
+            speaker = line.speaker_name
+            speaker_id = line.speaker_id
+            
+            # 校验：检查 id 和 name 是否匹配 NPC_ID_NAME_MAP
+            if speaker_id is not None and speaker_id > 0:
+                expected_name = get_npc_name_by_id_global(speaker_id)
+                # 如果映射表中有这个名字，且与 LLM 输出的名字不一致，使用映射表的名字
+                if expected_name and expected_name != f'NPC({speaker_id})':
+                    if speaker != expected_name:
+                        print(f"[NewsDialogBridge] 校验修正: ID={speaker_id}, '{speaker}' → '{expected_name}'")
+                        speaker = expected_name
             
             # 替换文本中的占位符
             text = self._resolve_text_placeholders(line.text, news)

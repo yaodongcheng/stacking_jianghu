@@ -294,97 +294,7 @@ def main():
     # 【调试日志】玩家点击时打印大宋实况具体内容的函数
     # 【重要】必须定义在 on_notification_click 之前，否则会 NameError
     # ═══════════════════════════════════════════════════════════════
-    def _log_snapshot_detail(snapshot_data, source: str = ""):
-        """打印大宋实况面板的具体内容（调试用）"""
-        if not snapshot_data:
-            print(f"[大宋实况] _log_snapshot_detail 收到空数据！来源: {source}")
-            return
-        
-        print(f"\n{'═'*70}")
-        print(f"[大宋实况] ╔═════════════════════════════════════════════════════════════════╗")
-        print(f"[大宋实况] ║          【玩家点击·事件详情】来源: {source:20}   ║")
-        print(f"[大宋实况] ╚═════════════════════════════════════════════════════════════════╝")
-        
-        # 标题
-        title = getattr(snapshot_data, 'title', '无标题')
-        subtitle = getattr(snapshot_data, 'subtitle', '')
-        print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-        print(f"[大宋实况] │ 📰 标题: {title[:50]:50} │")
-        if subtitle:
-            print(f"[大宋实况] │ 📝 副标: {subtitle[:50]:50} │")
-        print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 热度和标签
-        heat_score = getattr(snapshot_data, 'heat_score', 0)
-        tags = getattr(snapshot_data, 'tags', [])
-        print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-        print(f"[大宋实况] │ 🔥 热度: {heat_score:,}                                          │")
-        if tags:
-            tags_str = " ".join([f"#{t}" for t in tags[:5]])
-            print(f"[大宋实况] │ 🏷️  标签: {tags_str[:50]:50} │")
-        print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 演员
-        actor_names = getattr(snapshot_data, 'actor_names', [])
-        if actor_names:
-            print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-            print(f"[大宋实况] │ 👥 参演人物: {', '.join(actor_names[:5]):48} │")
-            print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 图片状态
-        image_url = getattr(snapshot_data, 'image_url', None)
-        print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-        if image_url == "loading":
-            print(f"[大宋实况] │ 🎨 配图状态: 生成中...                                          │")
-        elif image_url == "placeholder":
-            print(f"[大宋实况] │ 🎨 配图状态: 占位图（生成失败）                                  │")
-        elif image_url:
-            print(f"[大宋实况] │ 🎨 配图状态: 已就绪                                             │")
-            print(f"[大宋实况] │    路径: {str(image_url)[:55]:55} │")
-        else:
-            print(f"[大宋实况] │ 🎨 配图状态: 无                                                 │")
-        print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 玩家选项
-        choices = getattr(snapshot_data, 'choices', [])
-        if choices:
-            print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-            print(f"[大宋实况] │ 🎮 玩家选项:                                                    │")
-            for i, choice in enumerate(choices, 1):
-                if isinstance(choice, dict):
-                    text = choice.get('text', f'选项{i}')
-                    effect = choice.get('effect', '')
-                else:
-                    text = str(choice)
-                    effect = ''
-                print(f"[大宋实况] │   [{i}] {text[:35]:35} → {effect[:18]:18} │")
-            print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 评论
-        comments = getattr(snapshot_data, 'comments', [])
-        if comments:
-            print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-            print(f"[大宋实况] │ 💬 模拟评论 ({len(comments)}条):                                │")
-            for comment in comments[:4]:
-                if isinstance(comment, dict):
-                    user = comment.get('user', '匿名')[:8]
-                    text = comment.get('text', '')[:30]
-                    ctype = comment.get('type', '中立')
-                    print(f"[大宋实况] │   @{user:8}: {text:30} [{ctype}] │")
-            print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        # 关联的news_item信息
-        news_item = getattr(snapshot_data, 'news_item', None)
-        if news_item:
-            print(f"[大宋实况] ┌─────────────────────────────────────────────────────────────────┐")
-            print(f"[大宋实况] │ 📋 关联新闻条目:                                                │")
-            news_id = str(getattr(news_item, 'news_id', '?'))[:30]
-            headline = getattr(news_item, 'headline', '')[:50]
-            print(f"[大宋实况] │    ID: {news_id:30}                      │")
-            print(f"[大宋实况] │    标题: {headline:50} │")
-            print(f"[大宋实况] └─────────────────────────────────────────────────────────────────┘")
-        
-        print(f"{'═'*70}\n")
+   
     
     # 设置通知点击回调：点击后直接显示事件面板
     def on_notification_click(notification):
@@ -412,10 +322,6 @@ def main():
         ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
         log_game_event(f"[大宋实况] 玩家点击事件: {notification.title[:20]}...", tag="LIVE")
         
-        # ═══════════════════════════════════════════════════════════════
-        # 【调试日志】打印大宋实况具体内容
-        # ═══════════════════════════════════════════════════════════════
-        _log_snapshot_detail(snapshot_data, "右侧通知点击")
     
     ctx.event_notification.on_notification_click = on_notification_click
     
@@ -452,17 +358,17 @@ def main():
         【任务引导式】启动事件处理流程
         
         流程：
-        1. 确定事发地点（NPC当前位置或随机建筑）
-        2. 相关NPC快速移动到事发地点（加速移动、状态保护）
-        3. 玩家自动移动到事件地点
-        4. 所有人到达后自动触发对话
+        1. 确定事发地点（NPC当前位置）
+        2. 玩家瞬移到事件地点
+        3. 触发对话
+        
+        注：NPC已经被 _setup_event_scene 瞬移并保护好了，这里不需要再处理NPC移动
         
         Returns:
             bool: 是否成功启动
         """
         import math
-        from src.entities import NPC, Building
-        from src.definitions import STATE_EVENT
+        from src.entities import NPC
         
         try:
             print(f"[大宋实况·任务] ║        启动任务引导模式: {news_item.title}  ║")
@@ -491,157 +397,52 @@ def main():
             print(f"[大宋实况·任务] 找到 {len(event_npcs)} 个关联NPC: {[n.name for n in event_npcs]}")
             
             # ═══════════════════════════════════════════════════════════════
-            # 2. 确定事发地点（选择第一个NPC的位置或附近建筑）
+            # 2. 确定事发地点（使用第一个NPC的位置）
             # ═══════════════════════════════════════════════════════════════
+            # NPC已经被 _setup_event_scene 瞬移好了，直接使用他们的位置
             main_npc = event_npcs[0]
             event_x = main_npc.rect.centerx
             event_y = main_npc.rect.centery
             
-            # 尝试找到附近的建筑作为集合点（更自然）
-            buildings = [c for c in ctx.all_cards if isinstance(c, Building)]
-            nearest_building = None
-            nearest_dist = 9999
-            for b in buildings:
-                dist = math.hypot(b.rect.centerx - event_x, b.rect.centery - event_y)
-                if dist < nearest_dist and dist < 400:  # 400像素范围内
-                    nearest_dist = dist
-                    nearest_building = b
-            
-            if nearest_building:
-                # 使用建筑位置作为集合点
-                event_x = nearest_building.rect.centerx
-                event_y = nearest_building.rect.centery + 50  # 建筑前方
-                event_location_name = getattr(nearest_building, 'name', '附近')
-                print(f"[大宋实况·任务] 集合地点: {event_location_name} ({event_x}, {event_y})")
-            else:
-                event_location_name = "事发现场"
-                print(f"[大宋实况·任务] 集合地点: NPC当前位置 ({event_x}, {event_y})")
+            print(f"[大宋实况·任务] 事件地点: ({event_x}, {event_y})，NPC已就位")
             
             # ═══════════════════════════════════════════════════════════════
-            # 3. 让相关 NPC 移动到事发地点（加速移动 + 状态保护）
+            # 3. 【玩家瞬移】直接传送到事件地点并触发对话
             # ═══════════════════════════════════════════════════════════════
-            for i, npc in enumerate(event_npcs):
-                # ═══════════════════════════════════════════════════════════════
-                # 【演出状态恢复】确保NPC能够参与演出
-                # ═══════════════════════════════════════════════════════════════
-                from src.definitions import SAFETY_NORMAL, SAFETY_DOWNED, STATE_COMBAT, STATE_DOWNED
-                
-                # 保存原始状态信息（用于调试和恢复）
-                original_safety = getattr(npc, 'safety', SAFETY_NORMAL)
-                original_state = getattr(npc, 'state', 'IDLE')
-                original_hp = getattr(npc, 'hp', 100)
-                max_hp = getattr(npc, 'max_hp', 100)
-                
-                # 【战斗脱离】如果NPC正在战斗中，强制结束战斗
-                if getattr(npc, 'aggro_target', None) is not None:
-                    print(f"[大宋实况·任务] NPC {npc.name} 正在战斗，强制脱离战斗")
-                    npc.aggro_target = None
-                if getattr(npc, 'in_combat', False):
-                    npc.in_combat = False
-                # 清空仇恨列表，防止被其他NPC追击
-                if hasattr(npc, 'hatred'):
-                    npc.hatred.clear()
-                
-                # 【重伤恢复】如果NPC处于DOWNED状态，恢复其行动能力
-                if original_safety == SAFETY_DOWNED or original_state == STATE_DOWNED or original_state == 'DOWNED':
-                    # 恢复安全状态
-                    npc.safety = SAFETY_NORMAL
-                    print(f"[大宋实况·任务] NPC {npc.name} 从重伤状态恢复 (safety: {original_safety} -> NORMAL)")
-                    
-                    # 如果血量为0或过低，恢复10%血量
-                    if original_hp <= 0 and max_hp > 0:
-                        heal_amount = int(max_hp * 0.1)
-                        npc.hp = heal_amount
-                        print(f"[大宋实况·任务] NPC {npc.name} 血量恢复: {original_hp} -> {npc.hp}/{max_hp} (+10%)")
-                    elif original_hp < max_hp * 0.1 and max_hp > 0:
-                        # 血量过低也恢复到10%
-                        heal_amount = int(max_hp * 0.1)
-                        npc.hp = max(npc.hp, heal_amount)
-                        print(f"[大宋实况·任务] NPC {npc.name} 血量补充: {original_hp} -> {npc.hp}/{max_hp}")
-                
-                # 【负面状态清除】清除可能导致晕倒的状态
-                # 恢复饥饿值和温度（防止立即再次晕倒）
-                if hasattr(npc, 'hunger'):
-                    if npc.hunger <= 10:  # 饥饿过度
-                        npc.hunger = 30  # 恢复到安全值
-                        print(f"[大宋实况·任务] NPC {npc.name} 饥饿恢复: -> {npc.hunger}")
-                if hasattr(npc, 'temperature'):
-                    if npc.temperature <= 10:  # 体温过低
-                        npc.temperature = 30  # 恢复到安全值
-                        print(f"[大宋实况·任务] NPC {npc.name} 体温恢复: -> {npc.temperature}")
-                
-                # 【清除被背负状态】如果NPC正在被背着，放下来
-                if hasattr(npc, 'stack_parent') and npc.stack_parent:
-                    carrier = npc.stack_parent
-                    npc.stack_parent = None
-                    if hasattr(carrier, 'dragging') and carrier.dragging == npc:
-                        carrier.dragging = None
-                    print(f"[大宋实况·任务] NPC {npc.name} 从 {getattr(carrier, 'name', '某人')} 身上放下")
-                
-                # 保存原始移动速度（用于事件结束后恢复）
-                original_speed = getattr(npc, 'move_speed', 80.0)
-                if not hasattr(npc, '_event_original_speed'):
-                    npc._event_original_speed = original_speed
-                
-                # 【加速移动】事件期间NPC移动速度提升为2倍
-                npc.move_speed = original_speed * 2.0
-                print(f"[大宋实况·任务] NPC {npc.name} 移动速度: {original_speed} -> {npc.move_speed}")
-                
-                # 【状态保护】设置为事件状态（暂停AI，防止被攻击等中断）
-                npc.state = STATE_EVENT
-                npc.ai_reason = f"参与事件: {news_item.title[:15]}..."
-                
-                # 【事件保护标记】防止战斗系统/其他系统干扰
-                npc._event_protected = True
-                npc._event_news_id = getattr(news_item, 'news_id', None)
-                
-                # 设置移动目标（分散站位，避免重叠）
-                # 卡牌宽度70px，相邻NPC中心点距离至少80px（70+10间隔）
-                offset_x = (i % 3 - 1) * 80  # -80, 0, +80
-                offset_y = (i // 3) * 100   # 0, 100, 200（Y轴间隔更大）
-                npc.set_movement_target(event_x + offset_x, event_y + offset_y, reason="前往事件地点")
-                
-                print(f"[大宋实况·任务] NPC {npc.name} 开始快速移动到事件地点（状态保护已启用）")
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 4. 【玩家自动移动】强制控制玩家前往事件地点
-            # ═══════════════════════════════════════════════════════════════
-            # 保存待处理的事件信息
-            ctx._pending_event_news = news_item
-            ctx._pending_event_choice_idx = choice_idx
-            ctx._pending_event_location = (event_x, event_y)
-            ctx._pending_event_npcs = event_npcs
-            ctx._pending_event_location_name = event_location_name
-            ctx._pending_event_active = True
-            ctx._pending_event_start_time = time.time()  # 记录开始时间
-            
-            # 【玩家自动移动】强制设置玩家移动目标
-            player_dist = math.hypot(ctx.player.rect.centerx - event_x, ctx.player.rect.centery - event_y)
-            print(f"[大宋实况·任务] 玩家当前距离事件地点: {player_dist:.0f}px")
-            
-            # 计算玩家的目标位置（在NPC集合点附近，但稍微偏移）
             player_target_x = event_x
-            player_target_y = event_y - 30  # 玩家站在NPC前面一点
+            player_target_y = event_y - 30
             
-            # 强制设置玩家移动目标
-            ctx.player.set_movement_target(player_target_x, player_target_y, reason="前往事件地点")
-            print(f"[大宋实况·任务] 玩家自动移动目标: ({player_target_x}, {player_target_y})")
+            # 玩家瞬移到目标位置
+            ctx.player.set_pos(player_target_x, player_target_y)
+            print(f"[大宋实况·任务] 玩家瞬移到: ({player_target_x}, {player_target_y})")
             
-            # 显示浮动提示
-            ctx.ft_manager.add_text(f"📍 正在前往{event_location_name}...", 
-                                   ctx.player.rect.centerx, ctx.player.rect.top - 60, 
-                                   (255, 220, 100))
-            
-            # 如果摄像机支持，聚焦到事件地点
+            # 摄像机聚焦
             if camera:
                 camera.start_event_focus(event_x, event_y, duration=45)
             
-            # 关闭事件面板，恢复游戏状态（但玩家会自动移动）
+            # 关闭面板并立即触发对话
             ctx.snapshot_panel.hide()
-            ctx.current_state = GAME_STATE_PLAYING
             
-            print(f"[大宋实况·任务] 任务引导模式已启动，玩家和NPC正在移动...")
-            print(f"{'='*70}\n")
+            # 使用 live_news_to_dialog 系统启动对话
+            try:
+                from src.live_news_to_dialog import get_news_dialog_bridge
+                
+                bridge = get_news_dialog_bridge()
+                dialogs = bridge.convert_news_to_dialogs(news_item, ctx)
+                
+                if dialogs:
+                    # 直接传递对话对象列表给 story_ui
+                    ctx.story_ui.start_dialog(dialogs)
+                    ctx.ft_manager.add_text("🎬 事件开始！", event_x, event_y - 40, (100, 255, 100))
+                    print(f"[大宋实况·任务] 对话演绎已启动，共{len(dialogs)}句")
+                else:
+                    print(f"[大宋实况·任务] 警告: 没有可用的对话数据")
+                    ctx.current_state = GAME_STATE_PLAYING
+            except Exception as e:
+                print(f"[大宋实况·任务] 启动对话失败: {e}")
+                import traceback
+                traceback.print_exc()
+                ctx.current_state = GAME_STATE_PLAYING
             return True
             
         except Exception as e:
@@ -649,226 +450,6 @@ def main():
             import traceback
             traceback.print_exc()
             return False
-    
-    
-    
-    def _check_event_arrival_and_trigger():
-        """
-        【主循环调用】检测玩家是否到达事件地点，所有演员是否就位
-        返回 True 表示应该触发对话
-        """
-        import math
-        from src.definitions import STATE_IDLE
-        
-        if not getattr(ctx, '_pending_event_active', False):
-            return False
-        
-        event_x, event_y = ctx._pending_event_location
-        event_npcs = ctx._pending_event_npcs
-        event_location_name = getattr(ctx, '_pending_event_location_name', '事件地点')
-        start_time = getattr(ctx, '_pending_event_start_time', time.time())
-        
-        # 检查玩家是否到达
-        player_dist = math.hypot(
-            ctx.player.rect.centerx - event_x,
-            ctx.player.rect.centery - event_y
-        )
-        
-        # 【调试】定期打印状态
-        debug_timer = getattr(ctx, '_event_arrival_debug_timer', 0) + 1
-        ctx._event_arrival_debug_timer = debug_timer
-        elapsed = time.time() - start_time
-        
-        # 【超时保护】如果超过60秒还没到达，强制开始
-        timeout_reached = elapsed > 60.0
-        
-        if debug_timer % 60 == 0:  # 每秒打印一次
-            # 只打印不满足要求的玩家和NPC
-            issues_found = False
-            
-            if player_dist > 120 and not timeout_reached:
-                print(f"[任务引导·检测] 已经过{elapsed:.1f}秒 | ⚠️ 玩家未到达: 距离{event_location_name} {player_dist:.0f}px (需<120)")
-                print(f"    玩家位置: ({ctx.player.rect.centerx}, {ctx.player.rect.centery})")
-                player_target_x = getattr(ctx.player, '_target_x', None)
-                player_target_y = getattr(ctx.player, '_target_y', None)
-                print(f"    玩家目标: ({player_target_x}, {player_target_y})")
-                issues_found = True
-            
-            for npc in event_npcs:
-                npc_dist = math.hypot(npc.rect.centerx - event_x, npc.rect.centery - event_y)
-                if npc_dist > 80 and not timeout_reached:
-                    npc_speed = getattr(npc, 'move_speed', '?')
-                    npc_target_x = getattr(npc, '_target_x', None)
-                    npc_target_y = getattr(npc, '_target_y', None)
-                    npc_cooldown = getattr(npc, '_grid_adjust_cooldown', 0)
-                    print(f"  - ⚠️ {npc.name}: 距离={npc_dist:.0f}px (需<80), state={npc.state}, speed={npc_speed}")
-                    print(f"      当前位置: ({npc.rect.centerx}, {npc.rect.centery})")
-                    print(f"      目标位置: ({npc_target_x}, {npc_target_y})")
-                    if npc_cooldown > 0:
-                        print(f"      ⚠️ 网格调整冷却中: {npc_cooldown}帧")
-                    issues_found = True
-            
-            if not issues_found and not timeout_reached:
-                print(f"[任务引导·检测] 已经过{elapsed:.1f}秒 | 所有人已就位，等待触发对话")
-        
-        if timeout_reached:
-            print(f"[任务引导·检测] 超时60秒，强制开始事件！")
-        
-        # 【关键修复】检查玩家是否有移动目标，如果没有则重新设置
-        player_target_x = getattr(ctx.player, '_target_x', None)
-        player_target_y = getattr(ctx.player, '_target_y', None)
-        player_cooldown = getattr(ctx.player, '_grid_adjust_cooldown', 0)
-        
-        # 如果冷却期结束且没有移动目标，重新设置目标
-        if player_cooldown <= 0 and (player_target_x is None or player_target_y is None) and player_dist > 120:
-            player_target_x = event_x
-            player_target_y = event_y - 30  # 玩家站在NPC前面一点
-            ctx.player.set_movement_target(player_target_x, player_target_y, reason="冷却结束，重新前往事件地点")
-            print(f"[任务引导·检测] 玩家冷却结束，重新设置移动目标")
-        
-        if player_dist > 120 and not timeout_reached:  # 玩家还没到
-            return False
-        
-        # 检查所有 NPC 是否到达，同时恢复DOWNED状态的NPC
-        from src.definitions import SAFETY_NORMAL, SAFETY_DOWNED, STATE_DOWNED
-        
-        all_arrived = True
-        for npc in event_npcs:
-            npc_state = getattr(npc, 'state', None)
-            npc_safety = getattr(npc, 'safety', SAFETY_NORMAL)
-            
-            # 【实时恢复】如果NPC在移动过程中进入DOWNED状态，立即恢复
-            if npc_state == 'DOWNED' or npc_state == STATE_DOWNED or npc_safety == SAFETY_DOWNED:
-                # 恢复安全状态
-                npc.safety = SAFETY_NORMAL
-                npc.state = STATE_EVENT
-                
-                # 恢复血量（如果为0，恢复10%）
-                max_hp = getattr(npc, 'max_hp', 100)
-                if npc.hp <= 0 and max_hp > 0:
-                    npc.hp = int(max_hp * 0.1)
-                    print(f"[任务引导·检测] NPC {npc.name} 演出恢复: 血量 0 -> {npc.hp}")
-                
-                # 恢复饥饿和体温
-                if hasattr(npc, 'hunger') and npc.hunger <= 10:
-                    npc.hunger = 30
-                if hasattr(npc, 'temperature') and npc.temperature <= 10:
-                    npc.temperature = 30
-                
-                # 清除战斗状态
-                if getattr(npc, 'aggro_target', None) is not None:
-                    npc.aggro_target = None
-                if getattr(npc, 'in_combat', False):
-                    npc.in_combat = False
-                
-                print(f"[任务引导·检测] NPC {npc.name} 从重伤状态恢复，继续前往事件地点")
-                
-                # 重新设置移动目标（使用与初始设置相同的offset计算）
-                npc_idx = event_npcs.index(npc)
-                offset_x = (npc_idx % 3 - 1) * 80  # -80, 0, +80
-                offset_y = (npc_idx // 3) * 100   # 0, 100, 200
-                npc.set_movement_target(event_x + offset_x, event_y + offset_y, reason="前往事件地点")
-            
-            # 【关键修复】检查NPC是否有移动目标，如果没有则重新设置
-            npc_target_x = getattr(npc, '_target_x', None)
-            npc_target_y = getattr(npc, '_target_y', None)
-            npc_cooldown = getattr(npc, '_grid_adjust_cooldown', 0)
-            
-            # 如果冷却期结束且没有移动目标，重新设置目标
-            if npc_cooldown <= 0 and (npc_target_x is None or npc_target_y is None):
-                npc_idx = event_npcs.index(npc)
-                offset_x = (npc_idx % 3 - 1) * 80  # -80, 0, +80
-                offset_y = (npc_idx // 3) * 100   # 0, 100, 200
-                npc.set_movement_target(event_x + offset_x, event_y + offset_y, reason="冷却结束，重新前往事件地点")
-                print(f"[任务引导·检测] NPC {npc.name} 冷却结束，重新设置移动目标")
-            
-            # 检查NPC距离
-            npc_dist = math.hypot(
-                npc.rect.centerx - event_x,
-                npc.rect.centery - event_y
-            )
-            # 【放宽到达距离】从80px增加到120px，避免网格系统防重叠机制导致NPC无法到达
-            if npc_dist > 120 and not timeout_reached:
-                all_arrived = False
-        
-        if not all_arrived:
-            return False
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 所有人就位（或超时），触发对话！
-        # ═══════════════════════════════════════════════════════════════
-        print(f"\n{'='*70}")
-        print(f"[大宋实况·任务] ╔════════════════════════════════════════════════════════╗")
-        print(f"[大宋实况·任务] ║              所有人就位，触发对话演绎！                  ║")
-        print(f"[大宋实况·任务] ╚════════════════════════════════════════════════════════╝")
-        print(f"[大宋实况·任务] 等待时间: {elapsed:.1f}秒")
-        print(f"{'='*70}\n")
-        
-        ctx._pending_event_active = False
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【事件结束准备】注册清理回调
-        # 对话结束后会恢复NPC速度、移除保护标记
-        # ═══════════════════════════════════════════════════════════════
-        def _cleanup_event_npcs():
-            """对话结束后清理事件NPC状态"""
-            print(f"[大宋实况·任务] 清理事件NPC状态...")
-            for npc in event_npcs:
-                # 恢复原始移动速度
-                if hasattr(npc, '_event_original_speed'):
-                    npc.move_speed = npc._event_original_speed
-                    print(f"  - {npc.name} 速度恢复: {npc.move_speed}")
-                    del npc._event_original_speed
-                
-                # 移除保护标记
-                if hasattr(npc, '_event_protected'):
-                    del npc._event_protected
-                if hasattr(npc, '_event_news_id'):
-                    del npc._event_news_id
-                
-                # 恢复状态为IDLE（如果还在EVENT状态）
-                if npc.state == STATE_EVENT:
-                    npc.state = STATE_IDLE
-                    npc.ai_reason = "事件结束，恢复正常"
-                    print(f"  - {npc.name} 状态恢复: EVENT -> IDLE")
-            
-            print(f"[大宋实况·任务] 事件NPC清理完成！")
-        
-        # 保存清理函数到ctx，供剧情结束时调用
-        ctx._pending_event_cleanup = _cleanup_event_npcs
-        
-        # 启动对话
-        news_item = ctx._pending_event_news
-        try:
-            from src.live_news_to_dialog import get_news_dialog_bridge
-            
-            bridge = get_news_dialog_bridge()
-            dialogs = bridge.convert_news_to_dialogs(news_item, ctx)
-            
-            if dialogs:
-                # 直接传递 DialogLine 对象列表，不转换为字典
-                ctx.story_ui.start_dialog(dialogs)
-                ctx.ft_manager.add_text("🎬 事件开始！", event_x, event_y - 40, (100, 255, 100))
-                
-                # 【音效】播放事件开始音效
-                try:
-                    from src.audio.sound_manager import get_sound_manager
-                    get_sound_manager().play_confirm()
-                except Exception:
-                    pass
-                
-                return True
-        except Exception as e:
-            print(f"[大宋实况·任务] 触发对话失败: {e}")
-            import traceback
-            traceback.print_exc()
-            # 即使对话失败也要清理
-            _cleanup_event_npcs()
-        
-        return False
-    
-    # 保存检测函数到 ctx，供主循环调用
-    ctx._check_event_arrival = _check_event_arrival_and_trigger
     
     ctx.snapshot_panel.on_choice_selected = on_snapshot_choice
     ctx.snapshot_panel.on_close = lambda: setattr(ctx, 'current_state', GAME_STATE_PLAYING)
@@ -1355,13 +936,7 @@ def main():
                 # 更新控制点状态
                 ctx.faction_war.update_control_points(ctx.all_cards)
                 # 检测敌对组织遭遇战斗（传入ft_manager和ai_system）
-                ctx.faction_war.check_hostile_encounters(ctx.all_cards, ctx.combat_manager, ctx.ft_manager, ctx.ai_system)
-            
-            # ══════════════════════════════════════════════════════════════
-            # 【大宋实况·任务模式】检测玩家是否到达事件地点
-            # ══════════════════════════════════════════════════════════════
-            if hasattr(ctx, '_check_event_arrival') and ctx._check_event_arrival:
-                ctx._check_event_arrival()  # 检测并触发对话
+             #   ctx.faction_war.check_hostile_encounters(ctx.all_cards, ctx.combat_manager, ctx.ft_manager, ctx.ai_system)
             
             # ══════════════════════════════════════════════════════════════════════
             # 【大宋实况】导演系统 + 新闻事件生成

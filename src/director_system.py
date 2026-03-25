@@ -1377,6 +1377,12 @@ class AIDirector:
             """检查是否两个任务都完成了，是则添加新闻"""
             if image_done.is_set() and dialog_done.is_set() and not news_added[0]:
                 news_added[0] = True
+                
+                # ═══════════════════════════════════════════════════════════════
+                # 【自动场景布置】事件生成完成后，立即让NPC瞬移到事发地点
+                # ═══════════════════════════════════════════════════════════════
+                self._setup_event_scene(news_item)
+                
                 news_mgr.add_news(news_item)
                 elapsed = time.time() - start_time
                 log_game_event(f"[Director] 新闻已添加(图片+对话均就绪, {elapsed:.1f}秒): {news_item.title}", tag="DIRECTOR")
@@ -1449,6 +1455,208 @@ class AIDirector:
         
         # 超时配置已在 definition 中处理，此处不再重复设置超时
     
+    
+    
+    def _setup_event_scene(self, news_item: LiveNewsItem,ctx):
+        """
+        【自动场景布置】事件生成完成后，立即让NPC瞬移到事发地点并进入剧情保护状态
+        
+        这样玩家只需要走到事发地点，就能直接开始剧情演绎，无需点击"前往处理"
+        """
+        import math
+        from src.entities import NPC, Building
+        from src.definitions import STATE_EVENT, SAFETY_NORMAL
+        
+        try:
+           
+            
+            # 1. 查找相关 NPC
+            actor_ids = getattr(news_item, 'actor_ids', [])
+            actor_names = getattr(news_item, 'actor_names', [])
+            
+            event_npcs = []
+            for card in ctx.all_cards:
+                if not isinstance(card, NPC):
+                    continue
+                card_id = getattr(card, 'id', None)
+                card_name = getattr(card, 'name', '')
+                # 通过 ID 或名字匹配
+                if (card_id and str(card_id) in [str(a) for a in actor_ids]) or \
+                   (card_name and card_name in actor_names):
+                    event_npcs.append(card)
+            
+            if not event_npcs:
+                print(f"[Director·场景布置] 警告: 未找到关联NPC")
+                return
+            
+            print(f"\n{'='*70}")
+            print(f"[Director·场景布置] ╔════════════════════════════════════════════════════════╗")
+            print(f"[Director·场景布置] ║           自动布置事件场景: {news_item.title[:20]}...           ║")
+            print(f"[Director·场景布置] ╚════════════════════════════════════════════════════════╝")
+            print(f"[Director·场景布置] 关联NPC: {[n.name for n in event_npcs]}")
+            
+            # 2. 确定事发地点（选择第一个NPC的位置或附近建筑）
+            main_npc = event_npcs[0]
+            event_x = main_npc.rect.centerx
+            event_y = main_npc.rect.centery
+            
+            # 尝试找到附近的建筑作为集合点
+            buildings = [c for c in ctx.all_cards if isinstance(c, Building)]
+            nearest_building = None
+            nearest_dist = 9999
+            for b in buildings:
+                dist = math.hypot(b.rect.centerx - event_x, b.rect.centery - event_y)
+                if dist < nearest_dist and dist < 400:
+                    nearest_dist = dist
+                    nearest_building = b
+            
+            if nearest_building:
+                event_x = nearest_building.rect.centerx
+                event_y = nearest_building.rect.centery + 50
+                event_location_name = getattr(nearest_building, 'name', '附近')
+                print(f"[Director·场景布置] 集合地点: {event_location_name} ({event_x}, {event_y})")
+            else:
+                event_location_name = "事发现场"
+                print(f"[Director·场景布置] 集合地点: NPC当前位置 ({event_x}, {event_y})")
+            
+            # 3. 【瞬移+保护】让所有相关NPC瞬移到事发地点并进入剧情保护状态
+            for i, npc in enumerate(event_npcs):
+                # 【演出状态恢复】确保NPC能够参与演出
+                from src.definitions import SAFETY_DOWNED, STATE_DOWNED, STATE_COMBAT
+                
+                # 【战斗脱离】如果NPC正在战斗中，强制结束战斗
+                if getattr(npc, 'aggro_target', None) is not None:
+                    npc.aggro_target = None
+                if getattr(npc, 'in_combat', False):
+                    npc.in_combat = False
+                if hasattr(npc, 'hatred'):
+                    npc.hatred.clear()
+                
+                # 【重伤恢复】如果NPC处于DOWNED状态，恢复其行动能力
+                original_safety = getattr(npc, 'safety', SAFETY_NORMAL)
+                original_state = getattr(npc, 'state', 'IDLE')
+                if original_safety == SAFETY_DOWNED or original_state == STATE_DOWNED:
+                    npc.safety = SAFETY_NORMAL
+                    max_hp = getattr(npc, 'max_hp', 100)
+                    if npc.hp <= 0 and max_hp > 0:
+                        npc.hp = int(max_hp * 0.1)
+                        print(f"[Director·场景布置] NPC {npc.name} 从重伤恢复，血量: {npc.hp}")
+                
+                # 【负面状态清除】
+                if hasattr(npc, 'hunger') and npc.hunger <= 10:
+                    npc.hunger = 30
+                if hasattr(npc, 'temperature') and npc.temperature <= 10:
+                    npc.temperature = 30
+                
+                # 【清除被背负状态】
+                if hasattr(npc, 'stack_parent') and npc.stack_parent:
+                    carrier = npc.stack_parent
+                    npc.stack_parent = None
+                    if hasattr(carrier, 'dragging') and carrier.dragging == npc:
+                        carrier.dragging = None
+                
+                # 【瞬移】使用 set_pos 设置NPC位置（分散站位）
+                offset_x = (i % 3 - 1) * 80  # -80, 0, +80
+                offset_y = (i // 3) * 100   # 0, 100, 200
+                target_x = event_x + offset_x
+                target_y = event_y + offset_y
+                
+                # 使用 set_pos 方法设置位置（传入中心点坐标）
+                npc.set_pos(target_x, target_y, reason=f"事件场景布置: {news_item.title[:15]}")
+                
+                # 【状态保护】设置为事件状态（暂停AI，防止被攻击等中断）
+                npc.state = STATE_EVENT
+                npc.ai_reason = f"等待演绎: {news_item.title[:15]}..."
+                
+                # 【事件保护标记】防止战斗系统/其他系统干扰
+                npc._event_protected = True
+                npc._event_news_id = getattr(news_item, 'news_id', None)
+                
+                print(f"[Director·场景布置] ✓ {npc.name} 已瞬移到 ({target_x}, {target_y}) 并进入剧情保护")
+            
+            # 4. 【保存事件信息】供后续玩家到达检测使用
+            ctx._pending_event_news = news_item
+            ctx._pending_event_location = (event_x, event_y)
+            ctx._pending_event_npcs = event_npcs
+            ctx._pending_event_location_name = event_location_name
+            ctx._pending_event_active = True
+            ctx._pending_event_start_time = time.time()
+            
+            # 5. 【添加围观群众】从 comments 中提取围观者并瞬移到周围
+            self._spawn_spectators_from_comments(ctx, event_x, event_y, event_npcs, news_item)
+            
+            print(f"[Director·场景布置] 场景布置完成！等待玩家前往...")
+            print(f"{'='*70}\n")
+            
+        except Exception as e:
+            print(f"[Director·场景布置] 错误: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    
+    def _spawn_spectators_from_comments(self, ctx, event_x: int, event_y: int, event_npcs: list, news_item: LiveNewsItem):
+        """
+        从 news_item.comments 中提取围观群众并瞬移到事件周围
+        
+        Args:
+            ctx: 游戏上下文
+            event_x, event_y: 事件中心坐标
+            event_npcs: 已参与事件的NPC列表（避免重复）
+            news_item: 新闻事件对象
+        """
+        from src.entities import NPC
+        import random
+        import math
+        
+        # 获取评论列表
+        comments = getattr(news_item, 'comments', [])
+        if not comments:
+            return
+        
+        # 从 comments 中提取 user 名字
+        spectator_names = []
+        for comment in comments:
+            user_name = comment.get('user', '')
+            if user_name and user_name not in spectator_names:
+                spectator_names.append(user_name)
+        
+        if not spectator_names:
+            return
+        
+        # 获取事件NPC的名字集合（避免重复）
+        event_npc_names = {npc.name for npc in event_npcs}
+        
+        # 在 all_cards 中查找匹配的NPC
+        spectators = []
+        for card in ctx.all_cards:
+            if not isinstance(card, NPC):
+                continue
+            card_name = getattr(card, 'name', '')
+            # 如果评论者的名字匹配某个NPC，且该NPC不在事件中
+            if card_name in spectator_names and card_name not in event_npc_names:
+                spectators.append(card)
+        
+        if not spectators:
+            print(f"[Director·场景布置] 未找到评论中提到的围观NPC")
+            return
+        
+        print(f"[Director·场景布置] 从评论中找到 {len(spectators)} 位围观群众: {[n.name for n in spectators]}")
+        
+        # 瞬移围观群众到事件周围
+        for i, npc in enumerate(spectators):
+            # 在事件周围随机位置（距离150-280像素）
+            angle = random.uniform(0, 3.14159 * 2)
+            distance = random.uniform(150, 280)
+            spectator_x = int(event_x + math.cos(angle) * distance)
+            spectator_y = int(event_y + math.sin(angle) * distance)
+            
+            # 瞬移到围观位置（使用 set_pos）
+            npc.set_pos(spectator_x, spectator_y, reason=f"围观事件: {news_item.title[:10]}")
+            
+            # 设置为围观状态
+            npc.ai_reason = "围观事件..."
+            
+            print(f"[Director·场景布置]   👥 {npc.name} 作为围观群众出现在 ({spectator_x}, {spectator_y})")
     
     
     def get_pending_news_item(self) -> Optional[LiveNewsItem]:

@@ -250,6 +250,9 @@ class NPC(CardBase):
             self.aggro_threshold = 15   # 护卫/士兵：低阈值（警惕性高）
         else:
             self.aggro_threshold = 25   # 普通人：中等阈值（从40降低到25）
+        
+        self.aggro_threshold = 10000 # 测试阶段：暂时关闭仇恨系统
+        
         # 仇恨衰减计时器（错开初始值，避免所有NPC同帧计算）
         self.hatred_decay_timer = random.randint(0, 180)
         

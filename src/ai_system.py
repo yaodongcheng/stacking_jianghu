@@ -355,63 +355,11 @@ class AISystem:
             
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             # 情况4: 【阶层系统】护卫看到低阶层人物靠近被保护者 → 拦截盘问
+            # 【已禁用】此功能暂时关闭，避免干扰事件演出
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            # 触发条件：
-            #   1. 本NPC是护卫（org_role == 'BODYGUARD'）
-            #   2. 被观察者是玩家
-            #   3. 玩家的社会等级 < 被保护者的社会等级（阶层差距）
-            #   4. 玩家在拦截距离内且正在靠近被保护者
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            my_org_role = getattr(npc, 'org_role', None)
-            if my_org_role == 'BODYGUARD' and other.job == 'PLAYER':
-                # 找到护卫的领导者
-                leader = self._find_bodyguard_leader(npc, all_npcs)
-                if leader:
-                    leader_level = getattr(leader, 'social_level', 1)
-                    player_level = getattr(other, 'social_level', 1)
-                    
-                    # 只有等级差距 >= 2 时才触发拦截（高官不会被拦住，平民会）
-                    if leader_level >= 3 and player_level < leader_level - 1:
-                        # 检查玩家到领导者的距离
-                        player_dist_to_leader = math.hypot(
-                            other.rect.centerx - leader.rect.centerx,
-                            other.rect.centery - leader.rect.centery
-                        )
-                        
-                        INTERCEPT_RANGE = 180  # 拦截触发距离
-                        if player_dist_to_leader < INTERCEPT_RANGE:
-                            # 检查拦截冷却（避免反复触发）
-                            intercept_cooldowns = getattr(self, '_guard_intercept_cooldowns', {})
-                            if not hasattr(self, '_guard_intercept_cooldowns'):
-                                self._guard_intercept_cooldowns = {}
-                                intercept_cooldowns = self._guard_intercept_cooldowns
-                            
-                            import time
-                            current_time = time.time()
-                            cooldown_key = f"intercept_{leader.id}"
-                            last_intercept = intercept_cooldowns.get(cooldown_key, 0)
-                            
-                            INTERCEPT_COOLDOWN = 30  # 30秒冷却
-                            if current_time - last_intercept >= INTERCEPT_COOLDOWN:
-                                # 更新冷却
-                                intercept_cooldowns[cooldown_key] = current_time
-                                
-                                # 护卫拦截：设置拦截状态（交给对话系统处理）
-                                npc.intercept_target = other  # 记录拦截目标
-                                npc.intercept_leader = leader  # 记录被保护者
-                                npc.state = STATE_EVENT
-                                npc.action_queue.clear()
-                                npc.ai_reason = f"盘问可疑人员"
-                                
-                                # 标记玩家被拦截（供UI读取）
-                                other._intercepted_by = npc
-                                other._intercept_leader = leader
-                                
-                                log_game_event(
-                                    f"[SEE] [卫] {npc.name}(护卫) 拦截 {other.name} 靠近 {leader.name} (玩家等级{player_level} < 领导等级{leader_level})",
-                                    tag="SEE_AGGRO"
-                                )
-                                return True  # 打断当前行为
+            # my_org_role = getattr(npc, 'org_role', None)
+            # if my_org_role == 'BODYGUARD' and other.job == 'PLAYER':
+            #     ... (拦截逻辑已禁用)
         
         return False
 
