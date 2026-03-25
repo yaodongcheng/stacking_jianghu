@@ -107,6 +107,33 @@ class EventNotification:
     _image_path: str = field(default="", repr=False)
     _pregen_script: object = field(default=None, repr=False)
     
+    # === 事件扩写相关字段（来自EventCard，避免重复转换）===
+    # 困境描述
+    dilemma_desc_summary: str = ""           # 困境总体描述
+    dilemma_desc_desire: str = ""            # 内心渴望
+    dilemma_desc_misgiving: str = ""         # 内心顾虑
+    
+    # 演员列表
+    actors: List[Dict] = field(default_factory=list)  # [{role, npc_name, npc_id}, ...]
+    
+    # 自动恶化（无人介入时的自然发展）
+    auto_decay_next_phase: str = ""          # 下一阶段预览
+    auto_decay_auto_effect: str = ""         # 自动效果
+    auto_decay_auto_transfer: str = ""       # 自动资源流转
+    auto_decay_auto_tension_delta: int = 0   # 自动张力变化
+    
+    # 起承转合阶段
+    chain_phase: str = ""                    # EMERGE/ESCALATE/CLIMAX/SETTLE
+    event_theme: str = ""                    # 事件主题
+    emotion_tone: str = ""                   # 情绪基调
+    
+    # 困境主角ID（明确标识谁是MAINNPC，避免角色定位错误）
+    target_npc_id: str = ""                  # 困境主角的NPC ID
+    target_npc_name: str = ""                # 困境主角的NPC名字
+    
+    # 原始JSON（用于对话扩写）
+    raw_json: Dict = field(default_factory=dict, repr=False)
+    
     # === UI动画状态 ===
     icon: str = "[报]"
     snapshot_data: Any = None

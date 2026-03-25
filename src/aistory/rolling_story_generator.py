@@ -23,6 +23,15 @@ from typing import Any
 NPCData = Any
 from .shared_types import WorldSnapshot
 
+# 导入LiveNewsItem（避免EventCard和LiveNewsItem之间的重复转换）
+try:
+    from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
+except ImportError:
+    # 如果导入失败，使用占位符
+    LiveNewsItem = Any
+    NewsCategory = Any
+    DilemmaType = Any
+
 # 导入日志函数
 try:
     from src.utils import log_game_event
@@ -127,6 +136,7 @@ class EventCard:
     
     npc_id: str = ""                             # 主要NPC
     emotion_tone: str = ""                       # 情绪基调
+    raw_json: Dict = field(default_factory=dict, repr=False)  # 原始JSON数据（用于对话扩写）
     
     def to_dict(self) -> Dict:
         return {
@@ -214,6 +224,8 @@ class RollingStoryGenerator:
         
         # 获取主角属性
         name = getattr(npc, 'name', '未知')
+        protagonist_id = getattr(npc, 'id', '未知')
+        protagonist_name = name
         gender = getattr(npc, 'gender', '未知')
         age = getattr(npc, 'age', 30)
         job = getattr(npc, 'job', '平民')
@@ -226,68 +238,76 @@ class RollingStoryGenerator:
 
         # 构建世界状态
         world_state = []
+        # ====== 完整演员池（所有可用NPC） ======
         if snapshot.all_available_npcs:
-            world_state.append("【可用演员池】（请从这些人物中挑选演员）")
+            world_state.append("【可用演员池】（请从这些人物中挑选演员，主角已固定）")
+            # 按组织分组显示
             npcs_by_org = {}
-            for npc_data in snapshot.all_available_npcs:
-                org = npc_data.get('org_id', '无组织') or '无组织'
+            for npc in snapshot.all_available_npcs:
+                org = npc.get('org', '无组织') or '无组织'
                 if org not in npcs_by_org:
                     npcs_by_org[org] = []
-                npcs_by_org[org].append(npc_data)
+                npcs_by_org[org].append(npc)
             
             for org, npcs in npcs_by_org.items():
-                world_state.append(f"\n  [{org}]")
-                for npc_data in npcs[:15]:
+                world_state.append(f"\n  [{org}] ({len(npcs)}人)")
+                for npc in npcs:  # 显示该组织所有NPC
+                    npc_id = npc.get('id')
+                    npc_name = npc.get('name', '')
+                    
+                    # 判断是否是主角，添加特殊标记
+                    is_protagonist = (str(npc_id) == str(protagonist_id))
+                    protagonist_mark = " ⭐【本事件绝对主角】" if is_protagonist else ""
+                    
+                    # 格式：ID=123 姓名(职业/身份) 状态
                     status_tags = []
-                    if npc_data.get('hunger', 0) > 60:
+                    if npc.get('emotion', 50) < 30:
+                        status_tags.append("情绪低")
+                    if npc.get('hunger', 0) > 60:
                         status_tags.append("饥饿")
-                    if npc_data.get('wealth', 100) > 200:
+                    if npc.get('wealth', 100) > 200:
                         status_tags.append("富有")
-                    elif npc_data.get('wealth', 100) < 30:
+                    elif npc.get('wealth', 100) < 30:
                         status_tags.append("贫穷")
-                    if npc_data.get('status') == '重伤':
+                    if npc.get('status') == '重伤':
                         status_tags.append("重伤")
                     
-                    npc_tags = npc_data.get('tags', [])
+                    # 【优化】添加NPC标签
+                    npc_tags = npc.get('tags', [])
                     if npc_tags:
-                        status_tags.extend(npc_tags[:3])
+                        status_tags.extend(npc_tags[:3])  # 最多3个标签
                     
                     status_str = f" [{','.join(status_tags)}]" if status_tags else ""
-                    npc_line = f"    ID={npc_data['id']} {npc_data['name']}({npc_data.get('power_type','民')}/{npc_data.get('job','')}){status_str}"
+                    
+                    # 基本信息行
+                    npc_line = f"    ID={npc_id} {npc_name}({npc.get('power_type','民')}/{npc.get('job','')}){status_str}{protagonist_mark}"
                     world_state.append(npc_line)
                     
-                    desc_short = npc_data.get('desc', '')
-                    if desc_short:
-                        desc_short = desc_short[:35] + '...' if len(desc_short) > 35 else desc_short
+                    # 【优化】显示NPC人设描述（desc）
+                    desc = npc.get('desc', '')
+                    if desc:
+                        # 截取前30字，避免过长
+                        desc_short = desc[:35] + '...' if len(desc) > 35 else desc
                         world_state.append(f"        人设: {desc_short}")
+                        
+                        # 如果是主角，额外强调身份
+                        if is_protagonist:
+                            world_state.append(f"        ⚠️ 注意：以上人设描述属于本事件主角{protagonist_name}，困境必须围绕TA展开！")
                     
-                    relations = npc_data.get('relations', [])
+                    # 【优化】如果NPC有重要关系，显示在下一行
+                    relations = npc.get('relations', [])
                     if relations:
-                        # 处理不同格式的relations
-                        if isinstance(relations, dict):
-                            # 字典格式，取前3个键
-                            rel_items = list(relations.items())[:3]
-                            rel_strs = []
-                            for rel_name, rel_val in rel_items:
-                                if isinstance(rel_val, (int, float)):
-                                    rel_strs.append(f"{rel_name}({int(rel_val)})")
-                                elif isinstance(rel_val, dict):
-                                    rel_strs.append(f"{rel_name}")
-                                else:
-                                    rel_strs.append(f"{rel_name}")
-                            rel_str = ", ".join(rel_strs)
-                        elif isinstance(relations, list):
-                            # 列表格式
-                            rel_str = ", ".join(str(r) for r in relations[:3])
-                        else:
-                            rel_str = str(relations)
+                        rel_str = ", ".join(relations[:3])  # 最多3个关系
                         world_state.append(f"        关系: {rel_str}")
                     
-                    memories = npc_data.get('recent_memories', [])
+                    # 【优化】如果NPC有重要记忆，显示最关键的一条
+                    memories = npc.get('recent_memories', [])
                     if memories:
+                        # 只显示第一条最重要的记忆
                         world_state.append(f"        近期: {memories[0]}")
             
             world_state.append(f"\n  （共{len(snapshot.all_available_npcs)}名可用演员）")
+            world_state.append(f"  ⚠️ 主角锁定：ID={protagonist_id} 的 {protagonist_name} 是本事件唯一主角！")
         
         world_state_text = "\n".join(world_state)
 
@@ -297,13 +317,13 @@ class RollingStoryGenerator:
         # 构建相关NPC信息
         related_npcs = self._build_related_npcs(npc, snapshot)
 
-        # System Prompt
-        system_prompt = """你是一个资深的游戏叙事总监，担任宋代武侠/市井世界的「事件导演」，负责为NPC生成充满戏剧张力的人生困境事件。
+        # System Prompt - 使用f-string而不是.format()避免冲突
+        system_prompt = f"""你是一个资深的游戏叙事总监，担任宋代武侠/市井世界的「事件导演」，负责为NPC生成充满戏剧张力的人生困境事件。
 
 ## 你的核心职责
 基于NPC的人设、性格、当前状态和周围人际关系，生成一个有血有肉的困境事件，并将其包装成游戏世界内的「报纸新闻」供玩家发现和参与。
 
-## 当前阶段：{phase}{phase_name}
+## 当前阶段：{current_phase.value}{self._get_phase_chinese_name(current_phase)}
 {phase_instruction}
 
 ## 困境类型-填入Json中的dilemma_type
@@ -320,10 +340,18 @@ class RollingStoryGenerator:
 - SHORT_VS_LONG:短期vs长期（眼前利益vs长远正义）
 
 ## 困境详情
-需要按照环境和性格驱动命运的思路，结合挑选的困境类型，来设计独属于这个事件主角的人生困境。需要包含内心两种力量的 invester，这种 invester可以是经济、伦理、道德、责任等各个层面：
-- 内心渴望desire字段：使用事件主角NPC的第一人称口吻（"我..."），基于NPC的现状以及性格特质推导，描述角色在这个困境中"想要"的东西
-- 内心顾虑misgiving字段：使用事件主角NPC的第一人称口吻（"我..."），基于NPC的现状以及性格特质推导，描述角色在这个困境中"害怕"或者"担心失去"的东西
-- 示例：desire="我想帮弟弟还清赌债，让他重新做人"，misgiving="我怕拿出全部积蓄后，自己连房租都付不起"
+
+### 📝 设计前确认（必须完成）
+在开始设计困境前，请确认以下三点：
+1. 本事件主角是【{{protagonist_name}}(ID={{protagonist_id}})】，不是其他NPC
+2. 困境必须是{{protagonist_name}}作为直接受害者（被威胁/被逼迫/被欺负），不能是旁观者
+3. desire和misgiving必须是{{protagonist_name}}的第一人称内心独白
+
+### 困境设计规范
+需要按照环境和性格驱动命运的思路，结合挑选的困境类型，来设计独属于这个事件主角的人生困境。需要包含内心两种力量的拉扯，这种拉扯可以是经济、伦理、道德、责任等各个层面：
+- 内心渴望desire字段：使用事件主角NPC的第一人称口吻（"我，{{protagonist_name}}..."），基于{{protagonist_name}}的现状以及性格特质推导，描述角色在这个困境中"想要"的东西
+- 内心顾虑misgiving字段：使用事件主角NPC的第一人称口吻（"我，{{protagonist_name}}..."），基于{{protagonist_name}}的现状以及性格特质推导，描述角色在这个困境中"害怕"或者"担心失去"的东西        
+- 示例：desire="我，{{protagonist_name}}，想帮弟弟还清赌债，让他重新做人"，misgiving="我，{{protagonist_name}}，怕拿出全部积蓄后，自己连房租都付不起"
 将desire和misgiving填入Json中的dilemma_desc
 
 ## 事件主题说明-填入Json中的event_theme
@@ -356,24 +384,29 @@ actors数组中的role字段可选值：
 - "信任方"：信任主角的NPC
 - "对立方"：与主角对立的NPC
 - "旁观者"：围观或评论的NPC
-""".format(
-            phase=current_phase.value,
-            phase_name=self._get_phase_chinese_name(current_phase),
-            phase_instruction=phase_instruction
-        )
+"""
 
-        # User Prompt
+        # User Prompt - 增加主角锁定和身份澄清
         user_prompt = f"""## 任务
 请为以下NPC生成{current_phase.value}阶段的困境事件。{self._get_task_description(current_phase)}
 
-## 事件主角NPC信息
-- 姓名: {name}
-- id = {getattr(npc, 'id', '未知')}
+## 🔒 【主角锁定 - 严格使用以下NPC】🔒
+- 姓名: {protagonist_name}
+- ID: {protagonist_id}
 - 人设: {age}岁，{gender}，{job}。{desc}
 - 性格特质: {self._get_personality_profile(npc)}
 - 当前状态: {{"money": {money}, "emotion": {emotion}, "health": {health}%}}
 - 职业: {job}
 - 所属组织: {org_id}
+
+⚠️ 警告：困境主角必须是【{protagonist_name}(ID={protagonist_id})】，禁止更换为其他NPC！
+⚠️ 警告：其他所有NPC只能作为配角/对手/旁观者出现！
+
+## 【主角身份澄清 - 必读】
+在设计困境前，请仔细分析{protagonist_name}的背景：
+- 如果{protagonist_name}有伪装身份/冒名顶替：困境是{protagonist_name}本人的困境（伪装被揭穿的危机，或被迫继续伪装的挣扎）
+- 如果{protagonist_name}是某人的亲属/下属：困境是{protagonist_name}的困境（被亲属牵连，或在组织中进退两难）
+- 如果{protagonist_name}的背景提到"像XXX""被称为XXX"：那只是比喻/外号，{protagonist_name}仍是独立个体
 
 ## 已有困境记录
 {dilemma_history}
@@ -395,11 +428,18 @@ actors数组中的role字段可选值：
 ## 字段格式详细说明
 
 ### 内容要求
-1. 标题要有爆点，像小红书热门标题
-2. 评论要模拟真实网友风格（支持、反对、调侃都要有），网友不能是虚构，必须来自于完整演员池（所有可用NPC，但是剔除当事人）
-3. effect格式：角色:属性:增减值，多个用分号隔开
-4. 角色可以是 A/B/C（对应actors顺序）或 PLAYER5、
-5. tags数组中的标签只写纯文字，如 ["职场霸凌", "废柴集合"]等吸引人注目的标签
+1. 【核心原则】困境主角必须是事件的直接受害者或利益相关方，不能是旁观者！
+   - 正确示例：无情被方承意和高衙内用朝堂关系威逼（无情是受害者）
+   - 错误示例：无情看着鱼西施被高衙内骚扰（无情是旁观者，鱼西施是受害者）
+   - 标题要体现困境主角的两难处境（如"两难！无情遭方承意威逼，神侯府颜面何存？"）
+   - 描述要重点描写困境主角作为受害者的内心挣扎（dilemma_desc中的desire与misgiving的拉扯）
+2. 标题要有爆点，像小红书热门标题
+3. 评论要模拟真实网友风格（支持、反对、调侃都要有），网友不能是虚构，必须来自于完整演员池（所有可用NPC，但是剔除当事人）
+4. effect格式：角色:属性:增减值，多个用分号隔开
+5. 角色可以是 A/B/C（对应actors顺序）或 PLAYER5、
+6. tags数组中的标签只写纯文字，如 ["职场霸凌", "废柴集合"]等吸引人注目的标签
+7. 故事中涉及的所有人物，都必须来自于当前的完整演员池，禁止编造不存在的NPC禁止编造不存在的NPC禁止编造不存在的NPC
+8. 
 
  ### requirement字段格式
  格式: `actor_name:attribute:compare_symbol:needvalue`
@@ -481,22 +521,36 @@ actors数组中的role字段可选值：
 
 ## 输出格式
 严格输出下方JSON结构，不要输出任何JSON以外的内容。字段不可缺省。
+
+### 🔍 输出前强制验证清单
+在生成JSON前，请逐项检查：
+- [ ] actors[0].npc_id 是否为 "{protagonist_id}"？
+- [ ] actors[0].npc_name 是否为 "{protagonist_name}"？
+- [ ] dilemma_desc.desire 是否以"我，{protagonist_name}..."开头？
+- [ ] 困境是否围绕{protagonist_name}作为受害者展开？
+- [ ] 所有引用的NPC是否都来自【可用演员池】？
+
+只有以上检查全部通过，才能输出JSON。
+
 ```json
 {{
   "chain_phase": "{current_phase.value}",
   "dilemma_type": "困境类型枚举值",
   "event_theme": "事件主题",
-   "dilemma_desc":
+  "_protagonist_confirmation": "{protagonist_name}(ID={protagonist_id})",
+    "dilemma_desc":
     {{
-        "summary":"事件主角的困境描述，包含渴望与忧虑的拉扯" ,
-        "desire":"基于状况和性格推导的内心渴望（第一人称口吻）",
-        "misgiving":"基于状况和性格推导的内心顾虑（第一人称口吻）"
+        "summary":"事件主角【{protagonist_name}】作为直接受害者面临的困境描述，包含渴望与忧虑的拉扯。必须是{protagonist_name}自己被欺负/被威胁/被逼迫，不能是{protagonist_name}看着别人受害" ,
+        "desire":"我，{protagonist_name}，想...（基于{protagonist_name}的处境推导）",
+        "misgiving":"我，{protagonist_name}，怕...（基于{protagonist_name}的处境推导）"
     }},
     "actors": [
-        {{"role": "角色定位", "npc_name": "NPC名字", "npc_id": "NPC的ID"}}
+        {{"role": "困境主角（必须是受害者，被欺负/被威胁/被逼迫）", "npc_name": "{protagonist_name}", "npc_id": "{protagonist_id}"}},
+        {{"role": "压力来源（欺负/威胁困境主角的人）", "npc_name": "NPC名字", "npc_id": "NPC的ID"}},
+        {{"role": "其他相关方", "npc_name": "NPC名字", "npc_id": "NPC的ID"}}
     ],
-     "title": "报纸标题，15字以内，八卦试探语气",
-    "description": "报纸正文，80-120字，以传闻/风声形式书写，需要从报社小编的口吻写清楚前因、当前角色的困境和矛盾冲突，需要有很强的可读性和八卦风格，让人一看就觉得吸引眼球",
+     "title": "报纸标题，15字以内，八卦试探语气，必须以'{protagonist_name}'为核心视角，标题要体现{protagonist_name}的两难处境",
+    "description": "报纸正文，80-120字，以传闻/风声形式书写。必须从'困境主角'的视角出发，重点描写他面临的 dilemma_desc 中的渴望与顾虑的拉扯，而非仅描述表面事件。要有很强的可读性和八卦风格，让人一看就觉得吸引眼球。故事中禁止出现不存在完整演员池的NPC，禁止编造不存在的NPC，禁止编造不存在的NPC！必须使用完整演员池中的NPC来构建故事角色和事件。",
     "image_prompt": "严格按四层结构写入的文生图描述，总长300-500字",
     "tags": ["标签1", "标签2", "标签3"],
     "comments": [
@@ -506,7 +560,7 @@ actors数组中的role字段可选值：
     ],
      "choices": [
         {{
-            "text": "选项文本，不超过15字，玩家帮助视角，格式：[手段]具体做法，如：[资助]帮其渡過難關",
+            "text": "选项文本，不超过15字，玩家帮助视角，格式：[手段]具体做法，如：[资助]帮其渡过难关。禁止提到不存在的NPC，必须使用完整演员池中的NPC来设计选项",
             "requirement": "actor_name:attribute:compare_symbol:needvalue 或 null",
             "cost": "玩家必须付出的代价，禁止为null！如 PLAYER:fame:-10 或 1001:affinity_to_player:-5",
             "effect": "玩家的正面收益，禁止放入负面效果！如 1001:affinity_to_player:10 或 PLAYER:wit:3",
@@ -522,10 +576,8 @@ actors数组中的role字段可选值：
     "auto_tension_delta":15
   }}
    }}
- ```
- """
-        # 格式化system_prompt中的动态变量
-        system_prompt = system_prompt.format(EMOTION_OPTIONS=EMOTION_OPTIONS)
+  ```
+  """
         return system_prompt, user_prompt
 
     def _infer_current_phase(self, seed: NPCDilemmaSeed) -> StoryPhase:
@@ -559,12 +611,18 @@ actors数组中的role字段可选值：
         
         # 通用的手段标签说明
         means_tags = """
-## 选项设计（玩家帮助视角）
-选项必须从"玩家作为第三者帮助事件主角"的角度来写，而不是事件主角自己的行动。
-- 正确示例："[ Zür Rabbit] 出双倍价钱让钱掌柜宽限三日"、"[调解]找郁预防针预支工钱应急"
-- 错误示例："[恳求]向掌柜求情宽限"（这是主角自己的行动，不是玩家帮助）
+## 选项设计（围绕困境主角）
+选项必须围绕"困境主角的两难抉择"来设计，帮助主角解决 dilemma_desc 中的 desire 与 misgiving 的冲突。
+- 正确示例："[匿名警告]写匿名信给高衙内，假称神侯府已盯上他"（帮助无情既保护百姓又避免直接冲突）
+- 正确示例："[私下调解]请与双方都有交情的第三方出面说和"（帮助无情找到折中办法）
+- 错误示例："[威胁]恐吓高衙内让他收手"（这是玩家替无情做决定，不是帮助无情）
 - 格式要求：[手段]具体做法，15-20字
-- 可选手段标签：[威胁]、[贿赂]、[揭露]、[恳求]、[嫁祸]、[卧底]、[硬闯]、[ździer]、[荸学]、[贿赂]、[clesi laws]
+- 可选手段标签：[匿名警告]、[私下调解]、[迂回保护]、[暗中调查]、[借力施压]、[拖延时间]、[转移视线]、[制造障碍]
+
+【重要】选项必须体现对困境主角 dilemma_desc 的回应：
+- 选项1：帮助主角实现 desire（想做但不敢做的事）
+- 选项2：帮助主角化解 misgiving（担心但不得不面对的事）
+- 选项3：折中方案，平衡 desire 和 misgiving
 """
         
         instructions = {
@@ -1042,7 +1100,7 @@ actors数组中的role字段可选值：
                                   npc: NPCData,
                                   seed: NPCDilemmaSeed,
                                   worldsnapshot: WorldSnapshot,
-                                  player: NPCData) -> EventCard:
+                                  player: NPCData) -> LiveNewsItem:
         """
         生成下一个故事节拍（起承转合四阶段）
         
@@ -1075,16 +1133,28 @@ actors数组中的role字段可选值：
             )
             log_game_event(f"[RollingStoryGenerator] LLM响应: {response.raw_response}", tag="LLM_RESPONSE")
             
-            # 解析返回的JSON
-            event_card = self._parse_event_card(response.raw_response, str(getattr(npc, 'id', 'unknown')))
-            return event_card
+            # 解析返回的JSON，直接创建LiveNewsItem
+            npc_id_str = str(getattr(npc, 'id', 'unknown'))
+            npc_name_str = str(getattr(npc, 'name', '未知'))
+            news_item = self._parse_event_card(
+                response.raw_response, 
+                npc_id_str,
+                npc_name_str
+            )
+            return news_item
             
         except Exception as e:
             log_game_event(f"[RollingStoryGenerator] 生成失败: {e}", tag="ERROR")
             raise
 
-    def _parse_event_card(self, response: str, npc_id: str) -> EventCard:
-        """解析LLM返回的事件卡JSON - 起承转合规范"""
+    def _parse_event_card(self, response: str, npc_id: str, npc_name: str = "") -> LiveNewsItem:
+        """解析LLM返回的事件卡JSON - 直接创建LiveNewsItem，避免中间转换
+        
+        Args:
+            response: LLM返回的JSON字符串
+            npc_id: 困境主角NPC的ID（生成事件的核心NPC）
+            npc_name: 困境主角NPC的名字
+        """
         
         try:
             # 提取JSON
@@ -1096,62 +1166,81 @@ actors数组中的role字段可选值：
             
             # 解析困境描述
             dilemma_desc_data = data.get('dilemma_desc', {})
-            dilemma_desc = DilemmaDesc(
-                summary=dilemma_desc_data.get('summary', ''),
-                desire=dilemma_desc_data.get('desire', ''),
-                misgiving=dilemma_desc_data.get('misgiving', '')
-            )
             
             # 解析自动恶化
             auto_decay_data = data.get('auto_decay', {})
-            auto_decay = AutoDecay(
-                next_phase_preview=auto_decay_data.get('next_phase_preview', ''),
-                auto_effect=auto_decay_data.get('auto_effect'),
-                auto_transfer=auto_decay_data.get('auto_transfer'),  # 添加 auto_transfer
-                auto_tension_delta=auto_decay_data.get('auto_tension_delta', 0)
-            )
             
-            # 创建事件卡
-            card = EventCard(
+            # 解析选项（转换为LiveNewsItem的choices格式）
+            choices = []
+            for choice_data in data.get('choices', []):
+                choice = {
+                    "text": choice_data.get('text', ''),
+                    "requirement": choice_data.get('requirement'),
+                    "cost": choice_data.get('cost'),
+                    "effect": choice_data.get('effect'),
+                    "transfer": choice_data.get('transfer'),
+                    "tension_delta": choice_data.get('tension_delta', 0),
+                    "consequence_preview": choice_data.get('consequence_preview', ''),
+                    "hidden": choice_data.get('hidden', False),
+                    "unlock_condition": choice_data.get('unlock_condition')
+                }
+                # 过滤掉None值
+                choice = {k: v for k, v in choice.items() if v is not None}
+                choices.append(choice)
+            
+            # 从actors中提取actor_ids和actor_names
+            actors = data.get('actors', [])
+            actor_ids = []
+            actor_names = []
+            for actor in actors:
+                npc_id_val = actor.get('npc_id')
+                if npc_id_val:
+                    try:
+                        actor_ids.append(int(npc_id_val))
+                    except (ValueError, TypeError):
+                        pass
+                actor_names.append(actor.get('npc_name', ''))
+            
+            # 创建LiveNewsItem（直接创建，避免EventCard中间转换）
+            news_item = LiveNewsItem(
                 id=f"beat_{npc_id}_{data.get('chain_phase', 'EMERGE')}_{hash(response) % 10000}",
-                chain_phase=StoryPhase(data.get('chain_phase', 'EMERGE')),
-                dilemma_type=DilemmaType(data.get('dilemma_type', 'MORAL_GREY')),
-                event_theme=data.get('event_theme', ''),
-                dilemma_desc=dilemma_desc,
                 title=data.get('title', '未命名事件'),
+                subtitle=data.get('event_theme', ''),
+                headline=data.get('description', '')[:100],  # 取前100字作为headline
                 description=data.get('description', ''),
-                image_prompt=data.get('image_prompt', ''),
+                category=NewsCategory.SOCIAL,  # 默认社会类
+                dilemma_type=DilemmaType(data.get('dilemma_type', 'MORAL_GREY')) if DilemmaType else None,
+                actor_ids=actor_ids,
+                actor_names=actor_names,
+                location="街市",  # 默认地点
+                choices=choices,
                 tags=data.get('tags', []),
                 comments=data.get('comments', []),
-                actors=data.get('actors', []),
-                auto_decay=auto_decay,
-                npc_id=npc_id,
-                emotion_tone=data.get('emotion_tone', '中性')
+                image_prompt=data.get('image_prompt', ''),
+                # 事件扩写相关字段
+                dilemma_desc_summary=dilemma_desc_data.get('summary', ''),
+                dilemma_desc_desire=dilemma_desc_data.get('desire', ''),
+                dilemma_desc_misgiving=dilemma_desc_data.get('misgiving', ''),
+                actors=actors,
+                auto_decay_next_phase=auto_decay_data.get('next_phase_preview', ''),
+                auto_decay_auto_effect=auto_decay_data.get('auto_effect', ''),
+                auto_decay_auto_transfer=auto_decay_data.get('auto_transfer', ''),
+                auto_decay_auto_tension_delta=auto_decay_data.get('auto_tension_delta', 0),
+                chain_phase=data.get('chain_phase', 'EMERGE'),
+                event_theme=data.get('event_theme', ''),
+                emotion_tone=data.get('emotion_tone', '中性'),
+                target_npc_id=npc_id,  # 困境主角ID
+                target_npc_name=npc_name,  # 困境主角名字
+                raw_json=data  # 保存原始JSON用于对话扩写
             )
             
-            # 解析选项
-            for choice_data in data.get('choices', []):
-                choice = EventChoice(
-                    text=choice_data.get('text', ''),
-                    requirement=choice_data.get('requirement'),
-                    cost=choice_data.get('cost'),
-                    effect=choice_data.get('effect'),
-                    transfer=choice_data.get('transfer'),  # 添加 transfer 字段解析
-                    tension_delta=choice_data.get('tension_delta', 0),
-                    consequence_preview=choice_data.get('consequence_preview', ''),
-                    hidden=choice_data.get('hidden', False),
-                    unlock_condition=choice_data.get('unlock_condition')
-                )
-                card.choices.append(choice)
-            
-            return card
+            return news_item
             
         except Exception as e:
             log_game_event(f"[RollingStoryGenerator] 解析事件卡失败: {e}", tag="ERROR")
-            # 返回一个默认的事件卡
-            return EventCard(
+            # 返回一个默认的LiveNewsItem
+            return LiveNewsItem(
                 id=f"beat_{npc_id}_ERROR_{hash(response) % 10000}",
                 title="事件生成中...",
-                description="请稍后再试",
-                npc_id=npc_id
+                description="请稍后再试"
             )

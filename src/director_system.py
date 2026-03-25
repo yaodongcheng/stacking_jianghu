@@ -955,8 +955,8 @@ class AIDirector:
                 npcs_by_org[org].append(npc)
             
             for org, npcs in npcs_by_org.items():
-                world_state.append(f"\n  [{org}]")
-                for npc in npcs[:15]:  # 每个组织最多显示15人
+                world_state.append(f"\n  [{org}] ({len(npcs)}人)")
+                for npc in npcs:  # 显示该组织所有NPC
                     # 格式：ID=123 姓名(职业/身份) 状态
                     status_tags = []
                     if npc.get('emotion', 50) < 30:
@@ -1140,6 +1140,13 @@ class AIDirector:
 - 必须提供 2-3 个选项，不要更多
 - 每个选项要有明确的效果（effect 字段）
 - 选项要体现不同的处理思路（激进/保守/中立）
+- **【关键约束】选项中只能引用以下人物：**
+  1. **actors列表中的NPC**（困境主角、压力来源、潜在受害者等）
+  2. **comments列表中的NPC**（作为评论者被提及）
+  3. **玩家自己（PLAYER）**
+  **禁止引用不存在的人物！** 
+  **如果需要一个中间人/关系人，必须从完整演员池中选择一个真实存在的NPC加入actors或comments，禁止虚构！**
+- **【自查要求】生成选项后，检查每个选项提到的所有人物名称，确认他们都在actors或comments中，否则重新设计该选项。**
 
 【格式要求】[!] 严格遵守
 1. 必须返回合法的JSON格式，所有字符串必须用双引号包裹

@@ -21,19 +21,19 @@ from src.utils import log_game_event
 @dataclass
 class EventDialogLine:
     """事件对话行（与quest_system的DialogLine兼容）"""
-    speaker: str          # NARRATOR/SELF(A)/OTHER(B)/PLAYER/CROWD
+    speaker_type: str     # NARRATOR/MAINNPC/MINORNPC/PLAYER/CROWD
+    speaker_name: str     # 说话人名字
     text: str             # 对话文本
-    action: str = ""      # 动作指令：SHAKE_CAMERA, SHOW_EVENT_CHOICE, PLAYER:Money:-100等
-    speaker_id: Optional[int] = None  # 说话人ID（运行时填充）
+    action: str = ""      # 动作指令
+    speaker_id: int = 0   # 说话人ID（旁白和玩家为0）
 
 
 @dataclass
 class EventScriptFull:
     """完整事件剧本（第3步输出）"""
-    intro_dialogs: List[EventDialogLine]      # 开场对话序列
-    choice_a_dialogs: List[EventDialogLine]   # 选项A后续对话
-    choice_b_dialogs: List[EventDialogLine]   # 选项B后续对话
-    choice_c_dialogs: List[EventDialogLine]   # 选项C后续对话
+    intro_dialogs: List[EventDialogLine]           # 开场对话序列
+    choice_dialogues: Dict[str, List[EventDialogLine]]  # 选项后续对话 {choice_0: [...], ...}
+    ignore_dialogue: List[EventDialogLine]         # 冷眼旁观对话
 
 
 class EventDialogGenerator:
@@ -64,266 +64,203 @@ class EventDialogGenerator:
         
         Args:
             news_item: 新闻事件对象（LiveNewsItem/EventNotification）
-            npc_a_name: 主角名字（用于替换{A}）
-            npc_b_name: 配角名字（用于替换{B}）
+            npc_a_name: 主角名字（困境主角）
+            npc_b_name: 配角名字（压力来源/求助对象等）
             effect_a/b/c: 三个选项的效果字符串（用于生成动作指令）
             
         Returns:
             EventScriptFull: 完整剧本
         """
-        # 从 news_item 提取信息
-        title = news_item.title
-        description = news_item.description
-        headline = news_item.headline or description
-        location = news_item.location or "街市"
+        # 直接使用news_item中保存的原始JSON
+        import json
+        if hasattr(news_item, 'raw_json') and news_item.raw_json:
+            event_json = json.dumps(news_item.raw_json, ensure_ascii=False, indent=2)
+        else:
+            # 兼容旧代码：如果没有raw_json，返回None
+            log_game_event("[EventDialogGen] news_item缺少raw_json，无法扩写对话", tag="DIRECTOR")
+            return None
         
-        # 提取选项信息（包括tooltip内容）
-        choices = news_item.choices or []
-        # 过滤掉"前往处理"按钮
-        story_choices = [c for c in choices if c.get('action') != 'START_DIALOG']
-        
-        choice_texts = []
-        choice_tooltips = []
-        for i, choice in enumerate(story_choices[:3]):  # 最多3个选项
-            text = choice.get('text', f'选项{i+1}')
-            choice_texts.append(text)
-            
-            # 构建tooltip内容
-            tooltip_parts = []
-            
-            # 消耗
-            cost = choice.get('cost')
-            if cost and str(cost).lower() != 'null':
-                tooltip_parts.append(f"【消耗】{cost}")
-            
-            # 效果
-            effect = choice.get('effect')
-            if effect and str(effect).lower() != 'null':
-                tooltip_parts.append(f"【影响】{effect}")
-            
-            # 后果预测
-            preview = choice.get('consequence_preview')
-            if preview and str(preview).lower() != 'null':
-                preview_clean = re.sub(r'[\r\n]+', '', preview)
-                tooltip_parts.append(f"【预测】{preview_clean}")
-            
-            # 条件
-            req = choice.get('requirement')
-            if req and str(req).lower() != 'null':
-                tooltip_parts.append(f"【条件】{req}")
-            
-            choice_tooltips.append("；".join(tooltip_parts) if tooltip_parts else "")
-        
-        # 填充缺失的选项
-        while len(choice_texts) < 3:
-            choice_texts.append(f"选项{len(choice_texts)+1}")
-            choice_tooltips.append("")
-
         system_prompt = """你是《大宋实况》的高级对话编剧，擅长金庸、古龙式的武侠江湖对话。负责将事件剧本扩写成主线任务级别的AVG对话序列。
 
-【质量标准】（对标金庸/古龙武侠小说）
-1. **对话要有层次感**：从平静 → 紧张 → 爆发 → 余韵（参考《天龙八部》酒楼冲突、《多情剑客无情剑》街头对峙）
-2. **角色要有个性**：
-   - 恶霸：狠辣、阴狠、不讲理（"今天你若不给，别怪我手下不留情！"）
-   - 商人：胆怯但有骨气（"我...我实在拿不出这么多..."）
-   - 侠客：义薄云天、一言九鼎（"光天化日，岂容你如此行凶！"）
-   - 围观群众：窃窃私语、指指点点、有人退缩有人起哄（"这恶霸又来欺负人了！""唉，多一事不如少一事..."）
-3. **玩家抉择要有分量**：选择前有犹豫，选择后有后果展现
-4. **情绪要细腻**：用动作、语气词、省略号表现人物心理
+## 核心原则
 
-【对话结构】（重要！）
-1. **开场对话（intro）**（8-10句，必须分散到角色）：
-   - 第1句：旁白描绘场景氛围（简短，20字内，包含地点）
-   - 第2-3句：**OTHER先开口**（恶霸威胁/挑衅）
-   - 第4-5句：**SELF回应**（恐惧/愤怒/求饶）
-   - 第6句：**CROWD（围观群众）**开始窃窃私语（"这恶霸又来欺负人了！"）
-   - 第7句：**OTHER步步紧逼**（言语或动作升级）
-   - 第8句：**CROWD（围观群众）**有人后退，有人想看热闹（"唉，多一事不如少一事...""有好戏看了！"）
-   - 第9句：**NARRATOR**描写紧张氛围升级
-   - 第10句：旁白"围观的你，会怎么做？" + 动作SHOW_EVENT_CHOICE
-   - **禁止**：不要把所有剧情塞进第1句旁白！旁白只描述环境！
-   - **必须**：要有CROWD（围观群众）的对话，体现群众的存在和反应！
+- **你只写对话**：你的产出是"现场演绎对话"，以及相关的action剧情演出
+- **剧情必须忠于输入**：每个 choice 对应的对话分支，其剧情走向、角色反应、情感结局必须与输入 JSON 中该 choice 的各字段保持一致
+- **角色必须忠于输入**：对话中出现的角色名字和ID必须来自输入 JSON 的 actors 和 comments
+- **时间必须即时**：所有对话发生在**同一现场、短时间内**（几分钟到几小时内），**禁止出现"几日后""三天后""数日后"等时间跳跃**！后续发展只留暗示，不要直接写出。
 
-2. **选项后续对话（choice_a/b/c）**（5-7句每个）：
-   - 第1句：**PLAYER开口**（代入感强，展现性格，台词要体现选择的性质）
-   - 第2句：**CROWD反应**（群众惊讶/叫好/嘘声，"好！""这人是谁？""别多管闲事啊！"）
-   - 第3-4句：**OTHER/SELF反应**（惊讶/愤怒/感激）
-   - 第5-6句：**对话或动作交锋**（打斗/交涉/逃跑）
-   - 第7句：**CROWD议论**（事件结束后的群众反应，"真是英雄啊！""快走快走，别惹事..."）
-   - 最后一句：旁白结局余韵（简短总结，留白）
-   - **必须**：每个选项后续也要有CROWD的反应，体现群众卷入！
+## 输入数据格式
 
-【角色代号】
-- **NARRATOR**: 旁白（环境描述、心理活动、时间流逝）
-- **SELF**: 主角NPC（事件受害者/发起者）
-- **OTHER**: 配角NPC（对手/帮手）
-- **PLAYER**: 玩家（我/你）
-- **CROWD**: 围观群众（百姓、路人、看客，必须有这个角色的台词！）
+你将收到一个完整的事件 JSON，重点关注以下字段：
+- **actors**：角色列表（npc_name / npc_id / role），用于确定对话中的说话人
+- **title / description**：新闻标题和正文，用于理解事件背景
+- **dilemma_desc**：困境描述（summary / desire / misgiving），用于把握情感基调
+- **choices**：玩家选项数组，每个选项的以下字段共同构成该分支对话的剧情指南：
+  - `text`：玩家采取的行动（决定对话中"玩家做了什么"）
+  - `cost`：玩家付出的代价（决定对话中玩家的"肉疼感"或"慷慨感"）
+  - `effect`：对各NPC的影响（决定NPC的态度变化和情绪反应）
+  - `transfer`：资源流转关系（决定"谁得到了好处、谁吃了亏"）
+  - `consequence_preview`：短期影响应该直接表现出来，长期影响只需要留有暗示
+- **comments**：街坊评论，其中的 NPC 可作为围观群众出场
+- **auto_decay**：无人介入时的自然发展，作为"玩家旁观不介入"分支的剧情指南
 
-【动作指令】（action字段，可用分号组合多条）
+## 输入中的机制字段参考说明
 
-**演出效果**（视觉反馈）：
-- `SHAKE_CAMERA:强度` - 震动镜头（打斗5/冲击10/爆炸15）
-- `FLASH_WHITE:毫秒` - 白屏闪烁（被击中效果，通常100ms）
-- `FADE_TO_BLACK:毫秒` - 黑屏渐入（时间流逝、昏迷，通常500ms）
-- `FADE_FROM_BLACK:毫秒` - 黑屏渐出（苏醒、场景转换）
+以下说明帮助你理解 cost/effect/transfer/auto_effect 字段的含义，以便准确地将其转化为对话剧情和 action 指令。你不需要在输出中原样复制这些字段值。
 
-**NPC状态 - 基础**（言行一致：对话提到什么就改什么）：
-- `SET_AFFINITY:NPC名:±数值` - 好感度变化（感激+30/厌恶-20）
-- `SET_MONEY:NPC名:±数值` - 金钱变化（被抢-50/收到+100）
-- `SET_EMOTION:NPC名:情绪` - 表情（ANGRY/SCARED/HAPPY/SAD）
-- `SET_HP:NPC名:数值` - 设置生命值（受伤后）
-- `SET_HUNGER:NPC名:数值` - 饥饿度（0-100，饥饿状态用）
+### cost/effect/auto_effect 字段格式
+- 格式: `actor_id:attribute:changevalue`（多个用分号隔开）
+- `actor_id`: NPC的纯数字ID（如1001、1013）或PLAYER
+- `attribute`: 属性名（如 money、fame、strength、wit、charm、agility，或关系属性如 affinity_to_player）
+- `changevalue`: 变化数值（负数代表损失，正数代表收益）
+- NPC情绪变化格式: `actor_id:emotion:EMOTION值`
+- 情绪枚举: NORMAL(平静), HAPPY(开心), SAD(悲伤), ANGRY(愤怒), DEPRESSED(沮丧), DESPAIR(绝望), ANXIOUS(焦虑), CONFUSED(困惑)
 
-**NPC组织与势力**（人生重大转折）：
-- `SET_ORG:NPC名:组织ID` - 加入组织（如beggar_gang/heifeng_zhai/kaifeng_fu）
-- `SET_ORG:NPC名:NONE` - 离开当前组织
-- `SET_ORG_RANK:NPC名:±数值` - 组织内升降级（+1晋升/-1降级）
-- `SET_ORG_ROLE:NPC名:角色` - 组织角色（LEADER/ELDER/MEMBER/BODYGUARD）
-- `SET_JOB:NPC名:职业` - 转换职业（BANDIT/MERCHANT/GUARD/BEGGAR等）
-- `SET_POWER_TYPE:NPC名:势力` - 势力阵营（士/农/工/商/学/兵/游/匪/民）
+### transfer 字段格式
+- 金钱/物品的转移，格式：`from_actor->to_actor:attr:value`
+- 示例：`PLAYER->1001:money:30`（玩家给NPC 30金钱）
+- NPC间转移：`1003->1001:money:50`
 
-**NPC社会地位**（阶层变动）：
-- `SET_SOCIAL_LEVEL:NPC名:±数值` - 社会等级（1贱民~5权贵）
-- `SET_WEALTH_LEVEL:NPC名:±数值` - 财富等级（1赤贫~5富豪）
-- `SET_INFLUENCE:NPC名:±数值` - 影响力等级（1无名~5权倾一方）
-- `SET_FREEDOM:NPC名:状态` - 自由度（FREE_FULL/FREE_HALF/FREE_NONE）
+### choice对对话的影响
+- **cost（代价）**：通过玩家对话中的犹豫、肉疼感，或NPC对玩家付出的反应来体现
+- **effect（收益）**：通过NPC态度的明显转变、情绪变化来体现（如从冷漠变感激、从愤怒变开心）
+- **transfer（资源流转）**：通过具体的给钱、交付物品等动作场景来体现
+- **consequence_preview（影响预测）**：短期影响应该直接表现出来，长期影响只需要留有暗示
 
-**NPC标签与身份**（特殊标记）：
-- `ADD_TAG:NPC名:标签` - 添加标签（CRIMINAL罪犯/HERO英雄/WANTED通缉/OUTLAW法外之徒）
-- `REMOVE_TAG:NPC名:标签` - 移除标签
-- `SET_REFUGEE:NPC名:0或1` - 流民状态（1变成流民/0安定）
-- `SET_FOLLOWER:NPC名:0或1` - 门客状态（1成为门客）
+## 对话行数据结构
 
-**NPC关系网络**：
-- `SET_RELATION:NPCA:NPCB:±数值` - NPC之间好感度
-- `SET_HATRED:NPC名:目标:±数值` - 仇恨值（超过30会攻击）
-- `SET_KNOWS_PLAYER:NPC名:1` - 标记NPC认识玩家
-
-**NPC行为**（让角色动起来）：
-- `NPC_FLEE:NPC名` - 逃跑（恶霸被吓退、小偷逃跑）
-- `NPC_ATTACK:攻击者:目标` - 发动攻击（冲突升级）
-- `NPC_SAY:NPC名:台词` - 额外气泡（场外喊话）
-- `NPC_FOLLOW:NPC名:目标` - 跟随某人
-- `NPC_MOVE:NPC名:x:y` - 移动到位置
-
-**玩家状态**（选择后果）：
-- `PLAYER_MONEY:±数值` - 玩家金钱（花钱-30/得钱+50）
-- `PLAYER_FAME:±数值` - 玩家声望（行侠仗义+10/见死不救-5）
-- `PLAYER_HP:±数值` - 玩家生命（被打伤-20）
-- `PLAYER_KNOCKOUT` - 玩家昏迷（战斗失败）
-
-**世界状态**：
-- `DESPAWN_NPC:NPC名` - 移除NPC（死亡/离开）
-- `ADVANCE_TIME:小时` - 时间推进（剧情需要）
-
-**系统控制**（必须使用）：
-- `SHOW_EVENT_CHOICE` - 显示选择界面（开场末尾**必须有**）
-
-**示例组合**：
-- 恶霸拍桌威胁：`"action": "SHAKE_CAMERA:5;SET_EMOTION:李四:SCARED"`
-- 玩家出手相助：`"action": "PLAYER_FAME:+10;SET_AFFINITY:鱼西施:+30"`
-- 恶霸被吓跑：`"action": "NPC_FLEE:恶霸;SET_AFFINITY:受害者:+20"`
-- 玩家被打伤：`"action": "FLASH_WHITE:100;PLAYER_HP:-15;SHAKE_CAMERA:8"`
-
-【语言风格】（江湖气韵）
-- [宜] 宋代江湖对话："大爷饶命！""莫非你真当我好欺？""此恩，他日必报！"
-- [宜] 古龙式短句："他笑了。""刀，出鞘了。""血，溅在青石板上。"
-- [宜] 金庸式描写："那恶霸冷笑一声，伸手便要去抓账簿"
-- [宜] 群众台词要多样：有人义愤填膺、有人胆小怕事、有人幸灾乐祸、有人暗中叫好
-- [禁] 避免文言文："尔等休走！""吾当..."
-- [禁] 避免现代网络用语："绝绝子""yyds"
-- [宜] 善用情绪词：叹词（唉、哎呀）、语气（吧、啊、呢）、省略号
-
-【细节技巧】
-- 用"..."表示沉默/犹豫："他低下头，不再言语..."
-- 用动作描写表现情绪："那恶霸猛地一拍桌子，吓得周围人纷纷后退"
-- 用环境烘托氛围："围观的百姓开始窃窃私语，有人悄悄退开"
-- **关键**：每句对话都要有"画面感"，让玩家仿佛看到武侠剧
-- **关键**：CROWD（围观群众）必须有台词，体现群众的卷入和反应！
-
-【输出格式】
-严格按照JSON格式返回：
+每句对话是一个 JSON 对象：
 ```json
 {
-  "intro": [
-    {"speaker": "NARRATOR", "text": "场景描绘（具体细节）", "action": ""},
-    {"speaker": "OTHER", "text": "对手台词（带情绪）", "action": ""},
-    {"speaker": "SELF", "text": "主角反应（恐惧/愤怒）", "action": ""},
-    {"speaker": "CROWD", "text": "围观群众窃窃私语", "action": ""},
-    {"speaker": "OTHER", "text": "对手步步紧逼", "action": ""},
-    {"speaker": "CROWD", "text": "群众后退或想看热闹", "action": ""},
-    {"speaker": "NARRATOR", "text": "氛围升级描写", "action": ""},
-    {"speaker": "NARRATOR", "text": "你会怎么做？", "action": "SHOW_EVENT_CHOICE"}
-  ],
-  "choice_a": [
-    {"speaker": "PLAYER", "text": "玩家台词（展现性格）", "action": ""},
-    {"speaker": "CROWD", "text": "群众惊讶/叫好/嘘声", "action": ""},
-    {"speaker": "OTHER", "text": "对方反应", "action": ""},
-    {"speaker": "SELF", "text": "主角感激/惊讶", "action": ""},
-    {"speaker": "NARRATOR", "text": "动作交锋", "action": ""},
-    {"speaker": "CROWD", "text": "事件结束后群众议论", "action": ""},
-    {"speaker": "NARRATOR", "text": "事件结局（有余韵）", "action": ""}
-  ],
-  "choice_b": [同上结构],
-  "choice_c": [同上结构]
+  "speaker_type": "MAINNPC",
+  "speaker_name": "阿禅",
+  "speaker_id": 1015,
+  "text": "各位...各位行行好，我真的不是有意欠账...",
+  "action": "NPC_GOTO:阿禅:玩家"
 }
 ```
 
-【示例参考】（武侠小说质量）
-[禁] 错误示例（干瘪无味）：
+### 字段说明
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| speaker_type | string | ✅ | 说话人类型，枚举值见下表 |
+| speaker_name | string | ✅ | 说话人名字 |
+| speaker_id | int | ✅ | 说话人NPC ID（旁白和玩家为0） |
+| text | string | ✅ | 对话文本或旁白描写 |
+| action | string | ❌ | NPC表演行动指令，无行动时填空字符串 "" |
+
+### speaker_type 枚举值
+| speaker_type | 适用场景 | speaker_name 规则 | speaker_id 来源 |
+|---|---|---|---|
+| NARRATOR | 环境描写、心理活动、场景转换 | 固定 "旁白" | 0 |
+| MAINNPC | 当事NPC说话（困境主角） | 从 actors 中 role="困境主角" 取 npc_name | 对应 npc_id |
+| MINORNPC | 配角NPC说话（压力来源/求助对象等） | 从 actors 中其他 role 取 npc_name | 对应 npc_id |
+| PLAYER | 玩家角色说话 | 玩家游戏名 | 0 |
+| CROWD | 围观NPC说话 | 从 comments 中取 user 字段 | 对应NPC的ID（如无法确定则填0） |
+
+## action 字段规则（重要！严格遵守）
+
+### action 的本质
+action 字段是游戏引擎可解析的表演指令，用于驱动角色在场景中的实际动作。**禁止**填写纯文学描写（如"（他捏紧了手）""（眼中含泪）"），这些情感通过 text 对话文本本身来传达。
+
+### 可用的 action 指令
+| 指令格式 | 含义 | 使用场景示例 |
+|---|---|---|
+| NPC_FLEE:NPC名 | 该NPC逃跑离场 | 恶霸被吓退、小偷逃跑、懦夫溜走，某NPC在剧情中离开/逃跑/被赶走时使用 |
+| NPC_ATTACK:攻击者名:目标名 | 攻击者对目标发动攻击 | 冲突升级打斗、恶霸动手、玩家出拳，只有明确的暴力冲突才使用，不要滥用 |
+| NPC_GOTO:NPC名:目标名 | NPC走到目标附近 | 走上前对话、上前拦住、凑近耳语 |
+| SHOW_EVENT_CHOICE | 弹出玩家选择界面 | 固定出现在 intro 最后一句的 action 中 |
+
+## 对话编排结构（重要！严格遵守）
+
+### 1. 开场对话（intro）：8-10 句
+| 阶段 | 句数 | speaker_type | 内容要求 |
+|---|---|---|---|
+| 场景开幕 | 第1句 | NARRATOR | 描绘场景氛围，简短20字内，包含地点 |
+| 冲突展示 | 第2-3句 | MINORNPC | 对立方先开口，展示威胁/挑衅/施压 |
+| 当事人回应 | 第4-5句 | MAINNPC | 当事NPC回应，体现困境中的情绪（恐惧/愤怒/求饶/挣扎） |
+| 群众反应 | 第6句 | CROWD | 围观群众窃窃私语，体现旁观者视角 |
+| 冲突升级 | 第7句 | MINORNPC | 步步紧逼，言语或动作升级 |
+| 群众或当事人反应 | 第8句 | MAINNPC/CROWD | 有人退缩、有人看热闹，体现众生相 |
+| 氛围收紧 | 第9句 | NARRATOR | 描写紧张氛围升级到临界点 |
+| 交给玩家 | 第10句 | NARRATOR | "围观的你，会怎么做？"，action 字段填 "SHOW_EVENT_CHOICE" |
+
+> **禁止**：不要把所有剧情塞进第1句旁白！旁白只描述环境！
+> **必须**：CROWD 至少出现 2 次，体现群众存在感！
+
+### 2. 选项后续对话（choice_dialogues）：每个分支 5-7 句
+对 choices 数组中的每个 choice，编写一个分支。编写时必须综合参考该 choice 的 text、cost、effect、transfer、consequence_preview。
+
+| 阶段 | 句数 | speaker_type | 内容要求 |
+|---|---|---|---|
+| 玩家登场 | 第1句 | PLAYER | 代入感强，台词体现选择的性质和性格 |
+| 群众惊讶 | 第2句 | CROWD | 群众对玩家介入的即时反应（惊讶/叫好/质疑） |
+| 各方反应 | 第3-4句 | MINORNPC/MAINNPC | 对立方和主角对玩家行动的反应（惊讶/愤怒/感激） |
+| 交锋推进 | 第5-6句 | 混合 | 对话或动作交锋，推进到结果 |
+| 群众议论 | 第7句（可选） | CROWD | 事件落幕后群众的评价和议论 |
+| 余韵收尾 | 最后一句 | NARRATOR | 简短结局余韵，留白暗示后续发展 |
+
+### 3. 冷眼旁观对话（ignore_dialogue）：5-8 句
+剧情走向必须符合输入 JSON 中 auto_decay 的描述。
+| 阶段 | 句数 | speaker_type | 内容要求 |
+|---|---|---|---|
+| 旁观描写 | 第1句 | NARRATOR | 描写玩家驻足旁观、未出手的状态 |
+| 事态恶化 | 第2-3句 | MINORNPC/MAINNPC | 无人介入，冲突按自然方向发展 |
+| 群众冷漠 | 第4句 | CROWD | 群众摇头散去或冷眼旁观 |
+| 结局落定 | 第5-6句 | MINORNPC/MAINNPC | 事件按 auto_decay 描述的方向收场 |
+| 余韵收尾 | 最后一句 | NARRATOR | 体现"无人帮助"的唏嘘感，暗示后续恶化 |
+
+## 对话风格要求
+- **文白相间**：七分白话三分文言，如"你这厮好大的胆子"而非"你胆子很大"
+- **性格鲜明**：恶霸要横、书生要酸、商人要精、百姓要怂，每个角色说话有辨识度
+- **台词简短**：每句 text 控制在 15-30 字，不要长篇大论
+- **CROWD 要活**：群众台词要有市井烟火气，展现围观百姓的真实反应
+- **情感靠台词传达**：角色的情感、神态、语气通过 text 的措辞和语气词来体现，不要依赖 action 来描写表情神态
+
+## 输出格式
+
+严格输出以下 JSON，不要输出任何 JSON 以外的内容：
+
 ```json
-"intro": [
-  {"speaker": "NARRATOR", "text": "张三勒索李四，李四很害怕，你会怎么做？", "action": "SHOW_EVENT_CHOICE"}
-]
-```
+{
+  "intro": [
+    {"speaker_type": "NARRATOR", "speaker_name": "旁白", "speaker_id": 0, "text": "...", "action": ""},
+    ...
+  ],
+  "choice_dialogues": {
+    "choice_0": [
+      {"speaker_type": "PLAYER", "speaker_name": "玩家", "speaker_id": 0, "text": "...", "action": ""},
+      ...
+    ],
+    "choice_1": [...],
+    "choice_2": [...]
+  },
+  "ignore_dialogue": [
+    {"speaker_type": "NARRATOR", "speaker_name": "旁白", "speaker_id": 0, "text": "...", "action": ""},
+    ...
+  ]
+}
+```"""
 
-[宜] 正确示例（江湖气韵，包含群众）：
-```json
-"intro": [
-  {"speaker": "NARRATOR", "text": "街市骤然安静。", "action": ""},
-  {"speaker": "OTHER", "text": "李老板，这月的保护费，该交了吧？", "action": ""},
-  {"speaker": "SELF", "text": "大爷...我、我这月生意不好，实在拿不出...", "action": ""},
-  {"speaker": "CROWD", "text": "唉，这恶霸又来欺负人了...", "action": ""},
-  {"speaker": "OTHER", "text": "拿不出？", "action": ""},
-  {"speaker": "NARRATOR", "text": "那恶霸猛地一掌拍在摊位上，木板应声碎裂。", "action": "SHAKE_CAMERA"},
-  {"speaker": "CROWD", "text": "（有人悄悄后退）多一事不如少一事，快走...", "action": ""},
-  {"speaker": "OTHER", "text": "那就别怪我砸了你的摊子！", "action": ""},
-  {"speaker": "CROWD", "text": "（有人驻足）有好戏看了！", "action": ""},
-  {"speaker": "NARRATOR", "text": "围观的百姓神色各异。你，会怎么做？", "action": "SHOW_EVENT_CHOICE"}
-]
-```
+        # 获取困境主角信息
+        target_npc_name = getattr(news_item, 'target_npc_name', '')
+        target_npc_id = getattr(news_item, 'target_npc_id', '')
+        
+        user_message = f"""请根据以下事件 JSON 扩写完整的 AVG 对话序列。
+严格遵守 System Prompt 中的对话编排结构和数据格式要求，只输出 JSON。
 
-请根据以上标准，为玩家创造一个难忘的江湖抉择时刻。"""
+【重要提示】
+- 困境主角（MAINNPC）是：{target_npc_name} (ID: {target_npc_id})
+- 开场对话中，MAINNPC 必须出现并有台词，展现其内心挣扎
+- 不要将被欺负的受害者或作恶的反派误认为 MAINNPC
 
-        user_message = f"""新闻事件：
-标题: {title}
-描述: {description}
-场景: {location}
-氛围: {headline}
-
-主角NPC: {npc_a_name}（用SELF代指）
-配角NPC: {npc_b_name or '无'}（用OTHER代指）
-
-选项A: {choice_texts[0]}
-选项A详情: {choice_tooltips[0]}
-
-选项B: {choice_texts[1]}
-选项B详情: {choice_tooltips[1]}
-
-选项C: {choice_texts[2]}
-选项C详情: {choice_tooltips[2]}
-
-请根据以上信息，扩写成包含围观群众反应的完整对话序列。注意：
-1. 开场必须有CROWD（围观群众）的台词
-2. 每个选项后续也要有CROWD的反应
-3. 玩家的选择台词要体现选项的性质和后果"""
+{event_json}"""
 
         # 调用LLM（使用更高的max_tokens以确保完整的对话剧本）
-        # 对话剧本通常需要 2000+ tokens
-        response = self.llm_service.chat(system_prompt, user_message, max_tokens=2500)
+        # 对话剧本通常需要 3000+ tokens（包含ignore_dialogue）
+        response = self.llm_service.chat(system_prompt, user_message, max_tokens=3500)
         
-        log_game_event(f"[EventDialogGen] LLM扩写响应：{response.raw_response}", tag="DIRECTOR")
+        log_game_event(f"[EventDialogGen] LLM扩写响应：{response.raw_response}...", tag="DIRECTOR")
 
         if not response.success:
             return None
@@ -332,24 +269,31 @@ class EventDialogGenerator:
         try:
             data = self._extract_json(response.raw_response)
             
+            # 解析intro
             intro = [self._parse_dialog_line(d) for d in data.get('intro', [])]
-            choice_a = [self._parse_dialog_line(d) for d in data.get('choice_a', [])]
-            choice_b = [self._parse_dialog_line(d) for d in data.get('choice_b', [])]
-            choice_c = [self._parse_dialog_line(d) for d in data.get('choice_c', [])]
+            
+            # 解析choice_dialogues（新格式）
+            choice_dialogues = {}
+            choice_data = data.get('choice_dialogues', {})
+            for key in ['choice_0', 'choice_1', 'choice_2']:
+                if key in choice_data:
+                    choice_dialogues[key] = [self._parse_dialog_line(d) for d in choice_data[key]]
+            
+            # 解析ignore_dialogue
+            ignore_dialogue = [self._parse_dialog_line(d) for d in data.get('ignore_dialogue', [])]
             
             # 自动注入效果指令到对应选项的首句
-            if effect_a and choice_a:
-                choice_a[0].action = self._merge_actions(choice_a[0].action, effect_a)
-            if effect_b and choice_b:
-                choice_b[0].action = self._merge_actions(choice_b[0].action, effect_b)
-            if effect_c and choice_c:
-                choice_c[0].action = self._merge_actions(choice_c[0].action, effect_c)
+            effects = [effect_a, effect_b, effect_c]
+            for i, key in enumerate(['choice_0', 'choice_1', 'choice_2']):
+                if key in choice_dialogues and effects[i] and choice_dialogues[key]:
+                    choice_dialogues[key][0].action = self._merge_actions(
+                        choice_dialogues[key][0].action, effects[i]
+                    )
             
             return EventScriptFull(
                 intro_dialogs=intro,
-                choice_a_dialogs=choice_a,
-                choice_b_dialogs=choice_b,
-                choice_c_dialogs=choice_c
+                choice_dialogues=choice_dialogues,
+                ignore_dialogue=ignore_dialogue
             )
         except Exception as e:
             log_game_event(f"[EventDialogGen] 解析完整剧本失败: {e}", tag="DIRECTOR")
@@ -374,11 +318,34 @@ class EventDialogGenerator:
         raise ValueError("未找到有效JSON")
     
     def _parse_dialog_line(self, data: Dict) -> EventDialogLine:
-        """解析单条对话"""
+        """解析单条对话（支持新格式）"""
+        # 新格式：speaker_type, speaker_name, speaker_id
+        speaker_type = data.get('speaker_type', data.get('speaker', 'NARRATOR'))
+        speaker_name = data.get('speaker_name', '旁白')
+        speaker_id = data.get('speaker_id', 0)
+        
+        # 兼容旧格式：如果只有speaker字段，尝试推断
+        if 'speaker' in data and 'speaker_type' not in data:
+            speaker = data['speaker']
+            if speaker == 'NARRATOR':
+                speaker_type = 'NARRATOR'
+                speaker_name = '旁白'
+            elif speaker == 'SELF':
+                speaker_type = 'MAINNPC'
+            elif speaker == 'OTHER':
+                speaker_type = 'MINORNPC'
+            elif speaker == 'PLAYER':
+                speaker_type = 'PLAYER'
+                speaker_name = '玩家'
+            elif speaker == 'CROWD':
+                speaker_type = 'CROWD'
+        
         return EventDialogLine(
-            speaker=data.get('speaker', 'NARRATOR'),
+            speaker_type=speaker_type,
+            speaker_name=speaker_name,
             text=data.get('text', '...'),
-            action=data.get('action', '')
+            action=data.get('action', ''),
+            speaker_id=speaker_id
         )
     
     def _merge_actions(self, ai_action: str, effect_str: str) -> str:

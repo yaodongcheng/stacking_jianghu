@@ -25,7 +25,7 @@ NPCData = Any
 
 # 核心模块
 from .dilemma_deriver import DilemmaDeriver
-from .rolling_story_generator import RollingStoryGenerator, EventCard, EventChoice
+from .rolling_story_generator import RollingStoryGenerator
 from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink, RippleType
 
@@ -44,10 +44,6 @@ __all__ = [
     'Tension',
     'TensionType',
     'NPCData',
-    
-    # 事件生成
-    'EventCard',
-    'EventChoice',
     
     # 涟漪系统
     'RippleEffect',

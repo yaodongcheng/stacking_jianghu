@@ -22,7 +22,7 @@ from .shared_types import WorldSnapshot
 # 类型别名
 from typing import Any
 NPCData = Any  # NPC对象或字典
-from .rolling_story_generator import RollingStoryGenerator, EventCard, EventChoice
+from .rolling_story_generator import RollingStoryGenerator
 # PlayerData 已移除，直接使用 Player NPC 对象
 from .phase_evaluator import PhaseEvaluator
 from .ripple_engine import RippleEngine, RippleEffect, SocialLink
@@ -302,7 +302,7 @@ class StoryDirector:
     
     async def try_to_generate_beat(self, 
                                   npc_id: str,
-                                  world_state: WorldSnapshot) -> Optional[EventCard]:
+                                  world_state: WorldSnapshot) -> Optional[LiveNewsItem]:
         """
         为指定NPC生成下一个故事节拍
         
@@ -322,28 +322,29 @@ class StoryDirector:
         
         # 从全局 ctx 获取玩家对象       
         player = ctx.player 
-        event_card = await self.generator.generate_next_beat(
+        news_item = await self.generator.generate_next_beat(
             npc, seed, world_state, player
         )
         
-        # 【修复】保存 target_phase 到 event_card，等到 _start_parallel_generation_for_dilemma 完成后再推进 seed.phase
-        if event_card:
-            event_card._target_phase = target_phase
+        # 【修复】保存 target_phase 到 news_item，等到 _start_parallel_generation_for_dilemma 完成后再推进 seed.phase
+        if news_item:
+            news_item._target_phase = target_phase
         
         # 【关键】将 LLM 生成的 desire 和 misgiving 保存到 seed，供下一阶段使用
-        if event_card and event_card.dilemma_desc:
-            if event_card.dilemma_desc.desire:
-                seed.desire = event_card.dilemma_desc.desire
-            if event_card.dilemma_desc.misgiving:
-                seed.misgiving = event_card.dilemma_desc.misgiving
-            log_game_event(f"[StoryDirector] 已保存困境描述: desire={seed.desire[:30]}..., misgiving={seed.misgiving[:30]}...", tag="DIRECTOR")
+        # LiveNewsItem使用dilemma_desc_desire/misgiving而不是dilemma_desc对象
+        if news_item:
+            if news_item.dilemma_desc_desire:
+                seed.desire = news_item.dilemma_desc_desire
+            if news_item.dilemma_desc_misgiving:
+                seed.misgiving = news_item.dilemma_desc_misgiving
+            log_game_event(f"[StoryDirector] 已保存困境描述: desire={seed.desire[:30] if seed.desire else 'None'}..., misgiving={seed.misgiving[:30] if seed.misgiving else 'None'}...", tag="DIRECTOR")
         
         # 将事件保存为待处理事件，供 process_player_choice 使用
-        if event_card:
-            seed.pending_event = event_card
-            log_game_event(f"[StoryDirector] 事件已生成并设置为待处理: {event_card.title[:30]}...", tag="DIRECTOR")
+        if news_item:
+            seed.pending_event = news_item
+            log_game_event(f"[StoryDirector] 事件已生成并设置为待处理: {news_item.title[:30]}...", tag="DIRECTOR")
         
-        return event_card
+        return news_item
        
     
     async def process_player_choice(self,
@@ -451,15 +452,17 @@ class StoryDirector:
             "new_phase": seed.phase.value
         }
     
-    def _apply_direct_consequences(self, npc: NPCData, choice: EventChoice):
+    def _apply_direct_consequences(self, npc: NPCData, choice: Dict):
         """应用选择的直接后果到NPC"""
         # 解析effect字符串（简单实现）
         # 格式示例: "emotion:-10,wealth:-50"
-        if not choice.effect:
+        # 注意：choice 现在是字典（来自 LiveNewsItem.choices）
+        effect = choice.get('effect', '')
+        if not effect:
             return
         
         try:
-            for part in choice.effect.split(','):
+            for part in effect.split(','):
                 if ':' in part:
                     stat, val = part.split(':')
                     stat = stat.strip()
@@ -589,16 +592,16 @@ class StoryDirector:
                             world_state.player = ctx.player
                         
                         # 生成故事节拍
-                        event_card = await director.try_to_generate_beat(npc_id, world_state)
-                        return event_card
+                        news_item = await director.try_to_generate_beat(npc_id, world_state)
+                        return news_item
                     
                     # 运行异步函数
-                    event_card = loop.run_until_complete(_async_trigger())
+                    news_item = loop.run_until_complete(_async_trigger())
                     
                     # 处理结果（需要在主线程回调）
                     def on_result():
-                        if event_card:
-                            StoryDirector._handle_generated_event_static(npc, event_card, ctx)
+                        if news_item:
+                            StoryDirector._handle_generated_event_static(npc, news_item, ctx)
                         else:
                             print(f"[DilemmaTest] 未能生成事件")
                             if hasattr(ctx, 'ft_manager') and ctx.ft_manager:
@@ -643,89 +646,30 @@ class StoryDirector:
             traceback.print_exc()
     
     @staticmethod
-    def _handle_generated_event_static(npc, event_card, ctx):
+    def _handle_generated_event_static(npc, news_item: LiveNewsItem, ctx):
         """
-        将EventCard转换为LiveNewsItem，并启动配图+对话扩写流程
-        参考director_system.py的_start_parallel_generation实现
+        处理生成的LiveNewsItem，启动配图+对话扩写流程
+        现在generate_next_beat直接返回LiveNewsItem，不再需要转换
         """
-        from src.live_news_system import LiveNewsItem, NewsCategory, DilemmaType
-        from src.director_system import AIDirector, get_director
+        print(f"[DilemmaTest] 处理LiveNewsItem: {news_item.title}")
         
-        print(f"[DilemmaTest] 转换EventCard为LiveNewsItem: {event_card.title}")
+        # 1. 添加"前往处理"按钮作为第一个选项（如果还没有的话）
+        choices = news_item.choices or []
+        has_start_dialog = any(c.get('action') == 'START_DIALOG' for c in choices)
+        if not has_start_dialog:
+            choices.insert(0, {
+                'text': '前往处理',
+                'action': 'START_DIALOG',
+                'effect': ''
+            })
+            news_item.choices = choices
         
-        # 1. 转换困境类型（与 event_notification.py 中的 DilemmaType 保持一致）
-        dilemma_map = {
-            'SACRIFICE': DilemmaType.SACRIFICE,
-            'BETRAY': DilemmaType.BETRAY,
-            'COMPROMISE': DilemmaType.COMPROMISE,
-            'DESTRUCTION': DilemmaType.DESTRUCTION,
-            'BIAS': DilemmaType.BIAS,
-            'MORAL_GREY': DilemmaType.MORAL_GREY,
-            'SHORT_VS_LONG': DilemmaType.SHORT_VS_LONG
-        }
-        dilemma_type = dilemma_map.get(
-            event_card.dilemma_type.value if event_card.dilemma_type else '',
-            DilemmaType.MORAL_GREY
-        )
-        
-        # 2. 转换选项格式
-        choices = []
-        for choice in event_card.choices:
-            choice_dict = {
-                'text': choice.text,
-                'requirement': choice.requirement,
-                'cost': choice.cost,
-                'effect': choice.effect,
-                'transfer': choice.transfer,  # 添加 transfer 字段
-                'tension_delta': choice.tension_delta,
-                'consequence_preview': choice.consequence_preview
-            }
-            choices.append(choice_dict)
-        
-        # 3. 添加"前往处理"按钮作为第一个选项
-        choices.insert(0, {
-            'text': '前往处理',
-            'action': 'START_DIALOG',
-            'effect': ''
-        })
-        
-        # 4. 提取演员信息
-        actor_ids = []
-        actor_names = []
-        for actor in event_card.actors:
-            npc_id = int(actor.get('npc_id', 0))
-            actor_ids.append(npc_id)
-            actor_names.append(actor.get('npc_name', ''))
-        
-        # 5. 创建LiveNewsItem
-        news_item = LiveNewsItem(
-            id=f"dilemma_{npc.id}_{int(time.time())}",
-            title=event_card.title,
-            headline=event_card.description[:50] + '...' if len(event_card.description) > 50 else event_card.description,
-            description=event_card.description,
-            category=NewsCategory.SOCIAL,
-            dilemma_type=dilemma_type,
-            actor_ids=actor_ids,
-            actor_names=actor_names,
-            image_prompt=event_card.image_prompt,
-            tags=event_card.tags,
-            comments=event_card.comments,
-            choices=choices,
-            created_at=time.time()
-        )
-        
-        # 6. 保存关联的NPC、EventCard和auto_decay信息供后续使用
+        # 2. 保存关联的NPC信息供后续使用
         news_item._source_npc = npc
-        news_item._source_event_card = event_card
-        news_item._auto_decay = {
-            'next_phase_preview': event_card.auto_decay.next_phase_preview if event_card.auto_decay else '',
-            'auto_effect': event_card.auto_decay.auto_effect if event_card.auto_decay else '',
-            'auto_tension_delta': event_card.auto_decay.auto_tension_delta if event_card.auto_decay else 0
-        } if event_card.auto_decay else None
         
-        print(f"[DilemmaTest] LiveNewsItem创建成功，启动配图+扩写流程")
+        print(f"[DilemmaTest] LiveNewsItem处理完成，启动配图+扩写流程")
         
-        # 7. 启动并行生成流程（配图+对话扩写）
+        # 3. 启动并行生成流程（配图+对话扩写）
         StoryDirector._start_parallel_generation_for_dilemma(news_item, ctx)
     
     @staticmethod
@@ -830,8 +774,7 @@ class StoryDirector:
                 
                 # 将新闻添加到对应NPC的FateNode中
                 npc = getattr(news_item, '_source_npc', None)
-                event_card = getattr(news_item, '_source_event_card', None)
-                if npc and event_card:
+                if npc:
                     director = StoryDirector.get_instance()
                     if director and hasattr(director, 'npc_fates'):
                         # 获取或创建该NPC的FateNode列表
@@ -840,8 +783,13 @@ class StoryDirector:
                         
                         nodes = director.npc_fates[npc.id]
                         
-                        # 查找是否已有匹配的FateNode（根据当前阶段）
-                        current_phase = event_card.dilemma_phase if hasattr(event_card, 'dilemma_phase') else DilemmaPhase.EMERGE
+                        # 从news_item获取当前阶段
+                        chain_phase = getattr(news_item, 'chain_phase', 'EMERGE')
+                        current_phase = DilemmaPhase.EMERGE
+                        try:
+                            current_phase = DilemmaPhase(chain_phase)
+                        except ValueError:
+                            pass
                         
                         # 尝试找到已有的FateNode（最后一个未完成的）
                         target_node = None
@@ -863,13 +811,12 @@ class StoryDirector:
                             director.npc_fates[npc.id].append(target_node)
                             log_game_event(f"[DilemmaTest] {npc.name} 没找到已有的FateNode，创建新的FateNode: {node_id}", tag="DILEMMA")
                         
-     
                         # 【修复】事件完全生成后，才推进 seed.phase
-                        target_phase = getattr(event_card, '_target_phase', current_phase)
+                        target_phase = getattr(news_item, '_target_phase', current_phase)
                         if target_phase != target_node.seed.phase:
                             log_game_event(f"[StoryDirector] {npc.name} 阶段推进: {target_node.seed.phase.value} -> {target_phase.value}", tag="DIRECTOR")
                             target_node.seed.phase = target_phase
-                          # 将新闻添加到FateNode的acts中
+                        # 将新闻添加到FateNode的acts中
                         target_node.add_act(target_phase, news_item)
                         log_game_event(f"[DilemmaTest] 新闻已添加到FateNode {target_node.node_id} 的 {target_phase.value} 幕", tag="DILEMMA")
  
@@ -937,42 +884,39 @@ class StoryDirector:
             # 失败时直接添加新闻（无配图）
             news_mgr.add_news(news_item)
     
-    def _show_dilemma_event_dialog_static(npc, event_card):
+    def _show_dilemma_event_dialog_static(npc, news_item: LiveNewsItem):
         """
         显示困境事件对话框（静态版本）
         
         Args:
             npc: NPC对象
-            event_card: EventCard事件卡片
+            news_item: LiveNewsItem新闻事件
         """
-        print(f"[DilemmaTest] 准备显示事件对话框: {event_card.title}")
+        print(f"[DilemmaTest] 准备显示事件对话框: {news_item.title}")
         
-        # 将EventCard转换为游戏内事件格式
-        # 这里可以根据需要集成到现有的事件系统中
-        # 暂时打印事件信息供调试
-        print(f"  标题: {event_card.title}")
-        print(f"  描述: {event_card.description}")
-        print(f"  情绪基调: {event_card.emotion_tone}")
-        print(f"  忽略后果: {event_card.ignore_consequence}")
+        # 打印事件信息供调试
+        print(f"  标题: {news_item.title}")
+        print(f"  描述: {news_item.description}")
+        print(f"  情绪基调: {news_item.emotion_tone}")
         print("  选项:")
-        for i, choice in enumerate(event_card.choices):
-            print(f"    {i+1}. {choice.text}")
-            print(f"       代价: {choice.cost}")
-            print(f"       后果: {choice.consequence}")
+        for i, choice in enumerate(news_item.choices or []):
+            print(f"    {i+1}. {choice.get('text', '')}")
+            print(f"       代价: {choice.get('cost', '')}")
+            print(f"       后果: {choice.get('consequence_preview', '')}")
     
-    def _handle_generated_event(self, event_card: 'EventCard'):
+    def _handle_generated_event(self, news_item: LiveNewsItem):
         """
-        实例方法：处理生成的事件卡片
-        将EventCard接入配图和扩写流程
+        实例方法：处理生成的事件
+        将LiveNewsItem接入配图和扩写流程
         """
-        print(f"[StoryDirector] 实例方法处理生成的事件: {event_card.title}")
+        print(f"[StoryDirector] 实例方法处理生成的事件: {news_item.title}")
         
         # 查找关联的NPC
         npc = None
-        for actor in event_card.actors:
-            npc_id = actor.get('npc_id', '')
-            if npc_id in self.npc_data:
-                npc = self.npc_data[npc_id]
+        for npc_id in news_item.actor_ids:
+            npc_id_str = str(npc_id)
+            if npc_id_str in self.npc_data:
+                npc = self.npc_data[npc_id_str]
                 break
         
         if not npc:
@@ -980,27 +924,24 @@ class StoryDirector:
             return
         
         # 调用静态方法处理
-        StoryDirector._handle_generated_event_static(npc, event_card, ctx)
+        StoryDirector._handle_generated_event_static(npc, news_item, ctx)
     
-    def _show_dilemma_event_dialog(self, npc, event_card):
+    def _show_dilemma_event_dialog(self, npc, news_item: LiveNewsItem):
         """
         显示困境事件对话框（实例版本）
         
         Args:
             npc: NPC对象
-            event_card: EventCard事件卡片
+            news_item: LiveNewsItem新闻事件
         """
-        print(f"[DilemmaTest] 准备显示事件对话框: {event_card.title}")
+        print(f"[DilemmaTest] 准备显示事件对话框: {news_item.title}")
         
-        # 将EventCard转换为游戏内事件格式
-        # 这里可以根据需要集成到现有的事件系统中
-        # 暂时打印事件信息供调试
-        print(f"  标题: {event_card.title}")
-        print(f"  描述: {event_card.description}")
-        print(f"  情绪基调: {event_card.emotion_tone}")
-        print(f"  忽略后果: {event_card.ignore_consequence}")
+        # 打印事件信息供调试
+        print(f"  标题: {news_item.title}")
+        print(f"  描述: {news_item.description}")
+        print(f"  情绪基调: {news_item.emotion_tone}")
         print("  选项:")
-        for i, choice in enumerate(event_card.choices):
-            print(f"    {i+1}. {choice.text}")
-            print(f"       代价: {choice.cost}")
-            print(f"       后果: {choice.consequence}")
+        for i, choice in enumerate(news_item.choices or []):
+            print(f"    {i+1}. {choice.get('text', '')}")
+            print(f"       代价: {choice.get('cost', '')}")
+            print(f"       后果: {choice.get('consequence_preview', '')}")
