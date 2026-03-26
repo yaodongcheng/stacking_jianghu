@@ -38,7 +38,6 @@ from src.camera import Camera
 from tools.perf_profiler import get_perf_monitor
 ####姚东成测试111
 # 【新增】大宋实况系统
-from src.live_news_system import get_live_news_manager
 from src.director_system import get_director
 # NewsNotificationBar 已移除，统一使用 EventNotificationManager
    

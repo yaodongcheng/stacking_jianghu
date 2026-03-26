@@ -13,8 +13,9 @@
 import time
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from src.ui.event_notification import (
+    LiveNewsItem, EventNotificationManager, NewsCategory)
 
-from src.live_news_system import LiveNewsItem, get_live_news_manager
 from src.llm.event_dialog_generator import (
     EventDialogGenerator, EventScriptFull, EventDialogLine,
     get_event_dialog_generator

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from .llm_service import LLMService
 from .config import LLMConfig
 from src.utils import log_game_event
-
+from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
 
 @dataclass
 class EventDialogLine:
@@ -63,7 +63,7 @@ class EventDialogGenerator:
         第3步：基于LiveNewsItem，扩写完整的对话序列
         
         Args:
-            news_item: 新闻事件对象（LiveNewsItem/EventNotification）
+            news_item: 新闻事件对象LiveNewsItem
             npc_a_name: 主角名字（困境主角）
             npc_b_name: 配角名字（压力来源/求助对象等）
             effect_a/b/c: 三个选项的效果字符串（用于生成动作指令）

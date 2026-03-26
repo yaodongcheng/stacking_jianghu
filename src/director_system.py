@@ -1262,7 +1262,6 @@ class AIDirector:
                 choices = [{"text": c, "effect": ""} for c in choices]
             
             # 创建LiveNewsItem（包含小红书风格字段）
-            # 注意：LiveNewsItem是EventNotification的别名，构造函数用id不是news_id
             news_item = LiveNewsItem(
                 id=f"dir_{event_type}_{int(time.time())}",
                 title=decision.get('title', '突发事件'),

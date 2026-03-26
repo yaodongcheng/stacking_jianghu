@@ -19,7 +19,7 @@ from typing import Optional, List, Callable, Tuple
 from enum import Enum
 
 from src.ui.event_notification import (
-    EventNotification, EventNotificationManager, 
+    LiveNewsItem, EventNotificationManager, 
     get_notification_manager, NewsCategory,
     draw_event_card
 )
@@ -112,7 +112,7 @@ class LiveNewsPanel:
         self._font_cache = {}
         
         # 回调
-        self.on_item_click: Optional[Callable[[EventNotification], None]] = None
+        self.on_item_click: Optional[Callable[[LiveNewsItem], None]] = None
         self.on_close: Optional[Callable[[], None]] = None
         
         # 动画
@@ -495,7 +495,7 @@ class LiveNewsPanel:
             if self.open_progress <= 0:
                 self.visible = False
     
-    def _get_items(self) -> List[EventNotification]:
+    def _get_items(self) -> List[LiveNewsItem]:
         """获取当前标签页的事件列表
         
         当前tab: 未处理的事件 (is_resolved=False)
@@ -675,7 +675,7 @@ class LiveNewsPanel:
         
         return pygame.Rect(track_x, thumb_y, self.SCROLL_WIDTH, thumb_h)
     
-    def _on_item_click(self, item: EventNotification):
+    def _on_item_click(self, item: LiveNewsItem):
         """点击事件项"""
         print(f"[LiveNewsPanel] 点击事件: {item.title}")
         print(f"[LiveNewsPanel] snapshot_data 存在: {item.snapshot_data is not None}")
@@ -839,7 +839,7 @@ class LiveNewsPanel:
         if total_height > content_rect.height:
             self._draw_scrollbar(surf, content_rect, total_height)
     
-    def _draw_item(self, surf: pygame.Surface, item: EventNotification, 
+    def _draw_item(self, surf: pygame.Surface, item: LiveNewsItem, 
                    x: int, y: int, width: int, is_hover: bool):
         """绘制单个事件项 - 复用与通知栏相同的布局"""
         # 使用共享的 draw_event_card 函数，保持UI一致性

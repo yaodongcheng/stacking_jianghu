@@ -7,7 +7,7 @@
 这是游戏中唯一的事件/新闻通知系统，整合了原LiveNewsItem。
 
 功能：
-  1. EventNotification - 统一数据类（包含业务数据+UI状态）
+  1. LiveNewsItem - 统一数据类（包含业务数据+UI状态）
   2. EventNotificationManager - 通知管理+历史记录+效果应用
   3. 右侧通知卡片UI
 """
@@ -54,9 +54,9 @@ class DilemmaType(Enum):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
-class EventNotification:
+class LiveNewsItem:
     """
-    统一事件数据类（整合原LiveNewsItem + UI状态）
+    统一事件数据类
     
     兼容字段映射：
       - news_id → id
@@ -179,7 +179,7 @@ class EventNotification:
 
 
 # 兼容别名（让旧代码继续工作）
-LiveNewsItem = EventNotification
+LiveNewsItem = LiveNewsItem
 
 
 class EventNotificationManager:
@@ -228,13 +228,13 @@ class EventNotificationManager:
         self.screen_h = screen_h
         
         # 通知队列（当前活跃的，显示在右侧）
-        self.notifications: List[EventNotification] = []
+        self.notifications: List[LiveNewsItem] = []
         
         # ═══════════════════════════════════════════════════════════════
         # 【大宋实况·历史记录】所有事件的完整历史（最新在前）
         # 包括已过期、已读、被点击的所有通知
         # ═══════════════════════════════════════════════════════════════
-        self.history: List[EventNotification] = []
+        self.history: List[LiveNewsItem] = []
         
         # 悬停状态
         self.hovered_index = -1
@@ -246,7 +246,7 @@ class EventNotificationManager:
         self._avatar_cache: Dict[str, pygame.Surface] = {}
         
         # 回调
-        self.on_notification_click: Optional[Callable[[EventNotification], None]] = None
+        self.on_notification_click: Optional[Callable[[LiveNewsItem], None]] = None
         
         # 计算位置（在侧边栏左侧，不重叠）
         # 侧边栏位于 screen_w - SIDEBAR_W 到 screen_w
@@ -264,7 +264,7 @@ class EventNotificationManager:
     def add_notification(self, title: str, subtitle: str = "", 
                          priority: int = 2, icon: str = "[报]",
                          snapshot_data: Any = None,
-                         lifetime: float = None) -> EventNotification:
+                         lifetime: float = None) -> LiveNewsItem:
         """
         添加新通知
         
@@ -282,7 +282,7 @@ class EventNotificationManager:
         if lifetime is None:
             lifetime = self.NOTIFICATION_LIFETIME
         
-        notif = EventNotification(
+        notif = LiveNewsItem(
             id="",
             title=title,
             subtitle=subtitle,
@@ -309,7 +309,7 @@ class EventNotificationManager:
         while len(self.notifications) > self.MAX_VISIBLE * 2:
             self.notifications.pop()
         
-        print(f"[EventNotification] 添加通知: {title[:20]}... (历史:{len(self.history)}条)")
+        print(f"[LiveNewsItem] 添加通知: {title[:20]}... (历史:{len(self.history)}条)")
         return notif
     
     def update(self, dt_ms: int):
@@ -372,7 +372,7 @@ class EventNotificationManager:
         
         return False
     
-    def _get_card_rect(self, index: int, notif: EventNotification) -> pygame.Rect:
+    def _get_card_rect(self, index: int, notif: LiveNewsItem) -> pygame.Rect:
         """计算通知卡片的位置"""
         # 滑入动画：从右侧滑入
         slide_offset = int((1.0 - self._ease_out_cubic(notif.slide_progress)) * (self.CARD_WIDTH + 30))
@@ -390,7 +390,7 @@ class EventNotificationManager:
             import time
             if not hasattr(self, '_last_debug_time') or time.time() - self._last_debug_time > 5:
                 self._last_debug_time = time.time()
-                print(f"[EventNotification] 当前通知数量: {len(self.notifications)}")
+                print(f"[LiveNewsItem] 当前通知数量: {len(self.notifications)}")
         
         for i, notif in enumerate(self.notifications[:self.MAX_VISIBLE]):
             self._draw_notification(screen, i, notif)
@@ -473,7 +473,7 @@ class EventNotificationManager:
         
         return lines
     
-    def _draw_notification(self, screen: pygame.Surface, index: int, notif: EventNotification):
+    def _draw_notification(self, screen: pygame.Surface, index: int, notif: LiveNewsItem):
         """绘制单个通知卡片 - 使用共享的 draw_event_card 函数保持UI一致性"""
         card_rect = self._get_card_rect(index, notif)
         is_hover = (index == self.hovered_index)
@@ -509,7 +509,7 @@ class EventNotificationManager:
     # 【大宋实况·历史记录】API
     # ═══════════════════════════════════════════════════════════════════════
     
-    def get_history(self, limit: int = 0) -> List[EventNotification]:
+    def get_history(self, limit: int = 0) -> List[LiveNewsItem]:
         """
         获取历史记录
         
@@ -527,7 +527,7 @@ class EventNotificationManager:
         """获取历史记录总数"""
         return len(self.history)
     
-    def get_history_by_priority(self, min_priority: int = 1) -> List[EventNotification]:
+    def get_history_by_priority(self, min_priority: int = 1) -> List[LiveNewsItem]:
         """
         按优先级筛选历史记录
         
@@ -539,7 +539,7 @@ class EventNotificationManager:
         """
         return [n for n in self.history if n.priority >= min_priority]
     
-    def find_in_history(self, title_keyword: str) -> List[EventNotification]:
+    def find_in_history(self, title_keyword: str) -> List[LiveNewsItem]:
         """
         在历史中搜索标题包含关键词的事件
         
@@ -555,18 +555,18 @@ class EventNotificationManager:
     def clear_history(self):
         """清空历史记录"""
         self.history.clear()
-        print("[EventNotification] 历史记录已清空")
+        print("[LiveNewsItem] 历史记录已清空")
     
     # ═══════════════════════════════════════════════════════════════════════
     # 【业务逻辑】效果应用（原LiveNewsManager）
     # ═══════════════════════════════════════════════════════════════════════
     
-    def add_event(self, event: EventNotification) -> bool:
+    def add_event(self, event: LiveNewsItem) -> bool:
         """
         添加事件到队列（带去重检查）
         
         Args:
-            event: EventNotification 完整事件对象
+            event: LiveNewsItem 完整事件对象
             
         Returns:
             是否成功添加
@@ -574,11 +574,11 @@ class EventNotificationManager:
         # 去重检查
         for existing in self.notifications:
             if existing.id == event.id:
-                print(f"[EventNotification] 拒绝重复事件: {event.id}")
+                print(f"[LiveNewsItem] 拒绝重复事件: {event.id}")
                 return False
         for existing in self.history:
             if existing.id == event.id:
-                print(f"[EventNotification] 拒绝重复事件（历史中已存在）: {event.id}")
+                print(f"[LiveNewsItem] 拒绝重复事件（历史中已存在）: {event.id}")
                 return False
         
         # 设置UI动画状态
@@ -614,7 +614,7 @@ class EventNotificationManager:
         while len(self.notifications) > self.MAX_VISIBLE * 2:
             old = self.notifications.pop()
         
-        print(f"[EventNotification] 添加事件: {event.title} (ID: {event.id})")
+        print(f"[LiveNewsItem] 添加事件: {event.title} (ID: {event.id})")
         return True
     
     def resolve_event(self, event_id: str, choice_idx: int, ctx=None) -> Optional[Dict]:
@@ -657,7 +657,7 @@ class EventNotificationManager:
         
         return result
     
-    def apply_choice(self, event: EventNotification, choice_idx: int, ctx=None) -> Optional[Dict]:
+    def apply_choice(self, event: LiveNewsItem, choice_idx: int, ctx=None) -> Optional[Dict]:
         """
         直接应用选择到事件（供快照面板使用）
         
@@ -667,7 +667,7 @@ class EventNotificationManager:
         - 推进困境阶段（EMERGE -> ESCALATE -> CLIMAX -> SETTLE）
         
         Args:
-            event: EventNotification对象
+            event: LiveNewsItem对象
             choice_idx: 选择索引
             ctx: 游戏上下文
             
@@ -710,7 +710,7 @@ class EventNotificationManager:
         
         return result
     
-    def _update_story_director_progress(self, event: EventNotification, choice: Dict, choice_idx: int, ctx=None):
+    def _update_story_director_progress(self, event: LiveNewsItem, choice: Dict, choice_idx: int, ctx=None):
         """
         更新 StoryDirector 的故事进度，实现起承转合四幕追踪
         
@@ -867,7 +867,7 @@ class EventNotificationManager:
             import traceback
             traceback.print_exc()
     
-    def _apply_effects(self, effect_str: str, event: EventNotification, ctx=None) -> Dict:
+    def _apply_effects(self, effect_str: str, event: LiveNewsItem, ctx=None) -> Dict:
         """
         应用选择效果
         
@@ -885,7 +885,7 @@ class EventNotificationManager:
         changes = []
         commands = effect_str.split(';')
         
-        print(f"[EventNotification] 应用效果: {effect_str}")
+        print(f"[LiveNewsItem] 应用效果: {effect_str}")
         
         for cmd in commands:
             cmd = cmd.strip()
@@ -893,7 +893,7 @@ class EventNotificationManager:
                 continue
             parts = cmd.split(':')
             if len(parts) < 3:
-                print(f"[EventNotification] 跳过无效效果: {cmd}")
+                print(f"[LiveNewsItem] 跳过无效效果: {cmd}")
                 continue
             
             target, attr, val_str = parts[0].strip(), parts[1].strip(), parts[2].strip()
@@ -901,7 +901,7 @@ class EventNotificationManager:
             try:
                 val = int(val_str)
             except ValueError:
-                print(f"[EventNotification] 无效数值: {val_str}")
+                print(f"[LiveNewsItem] 无效数值: {val_str}")
                 continue
             
             if target == 'PLAYER' and ctx.player:
@@ -909,17 +909,17 @@ class EventNotificationManager:
                     old_val = ctx.player.money
                     ctx.player.money = max(0, ctx.player.money + val)
                     changes.append(f"金钱{'+' if val >= 0 else ''}{val}")
-                    print(f"[EventNotification] 玩家金钱: {old_val} -> {ctx.player.money}")
+                    print(f"[LiveNewsItem] 玩家金钱: {old_val} -> {ctx.player.money}")
                 elif attr == 'fame':
                     old_val = getattr(ctx.player, 'fame', 0)
                     ctx.player.fame = getattr(ctx.player, 'fame', 0) + val
                     changes.append(f"声望{'+' if val >= 0 else ''}{val}")
-                    print(f"[EventNotification] 玩家声望: {old_val} -> {ctx.player.fame}")
+                    print(f"[LiveNewsItem] 玩家声望: {old_val} -> {ctx.player.fame}")
                 elif attr == 'infamy':
                     old_val = getattr(ctx.player, 'infamy', 0)
                     ctx.player.infamy = getattr(ctx.player, 'infamy', 0) + val
                     changes.append(f"恶名{'+' if val >= 0 else ''}{val}")
-                    print(f"[EventNotification] 玩家恶名: {old_val} -> {ctx.player.infamy}")
+                    print(f"[LiveNewsItem] 玩家恶名: {old_val} -> {ctx.player.infamy}")
             
             elif target in ['A', 'B', 'C', 'D', 'E']:
                 idx = ord(target) - ord('A')
@@ -941,26 +941,26 @@ class EventNotificationManager:
                         social_manager.modify_affinity(player_id, target_npc_id, val)
                         new_affinity = social_manager.get_affinity(player_id, target_npc_id)
                         changes.append(f"{npc_name}好感{'+' if val >= 0 else ''}{val}")
-                        print(f"[EventNotification] {npc_name}对玩家好感: {old_affinity} -> {new_affinity}")
+                        print(f"[LiveNewsItem] {npc_name}对玩家好感: {old_affinity} -> {new_affinity}")
                     elif attr == 'hatred' and npc:
                         old_hatred = npc.hatred.get(ctx.player.id, 0) if hasattr(npc, 'hatred') else 0
                         if not hasattr(npc, 'hatred'):
                             npc.hatred = {}
                         npc.hatred[ctx.player.id] = old_hatred + val
                         changes.append(f"{npc_name}仇恨{'+' if val >= 0 else ''}{val}")
-                        print(f"[EventNotification] {npc_name}对玩家仇恨: {old_hatred} -> {npc.hatred[ctx.player.id]}")
+                        print(f"[LiveNewsItem] {npc_name}对玩家仇恨: {old_hatred} -> {npc.hatred[ctx.player.id]}")
                     elif attr == 'money' and npc:
                         old_money = getattr(npc, 'money', 0)
                         npc.money = max(0, getattr(npc, 'money', 0) + val)
                         changes.append(f"{npc_name}金钱{'+' if val >= 0 else ''}{val}")
-                        print(f"[EventNotification] {npc_name}金钱: {old_money} -> {npc.money}")
+                        print(f"[LiveNewsItem] {npc_name}金钱: {old_money} -> {npc.money}")
                 else:
-                    print(f"[EventNotification] 角色{target}不存在，actor_ids只有{len(event.actor_ids)}个")
+                    print(f"[LiveNewsItem] 角色{target}不存在，actor_ids只有{len(event.actor_ids)}个")
         
         if changes:
-            print(f"[EventNotification] 效果应用完成: {', '.join(changes)}")
+            print(f"[LiveNewsItem] 效果应用完成: {', '.join(changes)}")
         else:
-            print(f"[EventNotification] 无有效效果被应用")
+            print(f"[LiveNewsItem] 无有效效果被应用")
         
         return {"success": True, "changes": changes}
     
@@ -980,7 +980,7 @@ class EventNotificationManager:
                 event.read = True
                 break
     
-    def get_display_events(self) -> List[EventNotification]:
+    def get_display_events(self) -> List[LiveNewsItem]:
         """获取用于显示的事件列表"""
         return self.notifications[:self.MAX_VISIBLE]
     
@@ -989,20 +989,20 @@ class EventNotificationManager:
     # ═══════════════════════════════════════════════════════════════════════
     
     @property
-    def news_queue(self) -> List[EventNotification]:
+    def news_queue(self) -> List[LiveNewsItem]:
         """兼容：返回活跃通知队列"""
         return self.notifications
     
     @property
-    def news_history(self) -> List[EventNotification]:
+    def news_history(self) -> List[LiveNewsItem]:
         """兼容：返回历史记录"""
         return self.history
     
-    def add_news(self, news: EventNotification):
+    def add_news(self, news: LiveNewsItem):
         """兼容：添加新闻（等同于add_event）"""
         return self.add_event(news)
     
-    def get_display_news(self) -> List[EventNotification]:
+    def get_display_news(self) -> List[LiveNewsItem]:
         """兼容：获取显示用新闻列表"""
         return self.get_display_events()
 
@@ -1013,7 +1013,7 @@ class EventNotificationManager:
 
 def draw_event_card(
     surface: pygame.Surface,
-    notif: EventNotification,
+    notif: LiveNewsItem,
     x: int,
     y: int,
     width: int,

@@ -22,7 +22,7 @@
 
 # 重导出所有类，保持向后兼容
 from src.ui.event_notification import (
-    EventNotification,
+    LiveNewsItem,
     EventNotificationManager,
     get_notification_manager,
     NewsCategory,
@@ -51,7 +51,7 @@ __all__ = [
     'NewsCategory',
     'DilemmaType',
     # 新名称
-    'EventNotification',
+    'LiveNewsItem',
     'EventNotificationManager',
     'get_notification_manager',
 ]

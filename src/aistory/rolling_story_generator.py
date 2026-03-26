@@ -22,29 +22,13 @@ from .dilemma_seed import NPCDilemmaSeed, StoryBeat
 from typing import Any
 NPCData = Any
 from .shared_types import WorldSnapshot
+from src.live_news_system import  LiveNewsItem
 
-# 导入LiveNewsItem（避免EventCard和LiveNewsItem之间的重复转换）
-try:
-    from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
-except ImportError:
-    # 如果导入失败，使用占位符
-    LiveNewsItem = Any
-    NewsCategory = Any
-    DilemmaType = Any
+from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
+from src.utils import log_game_event
+from src.definitions import Emotion
+EMOTION_OPTIONS = ",".join([f"{e.value[0]}({e.value[1]})" for e in Emotion])
 
-# 导入日志函数
-try:
-    from src.utils import log_game_event
-except ImportError:
-    def log_game_event(text, tag="INFO"):
-        print(f"[{tag}] {text}")
-
-# 动态导入情绪枚举
-try:
-    from src.definitions import Emotion
-    EMOTION_OPTIONS = ",".join([f"{e.value[0]}({e.value[1]})" for e in Emotion])
-except ImportError:
-    EMOTION_OPTIONS = "NORMAL(平静),HAPPY(开心),SAD(悲伤),ANGRY(愤怒),DEPRESSED(沮丧),DESPAIR(绝望),ANXIOUS(焦虑),CONFUSED(困惑)"
 
 
 # ═══════════════════════════════════════════════════════════════
