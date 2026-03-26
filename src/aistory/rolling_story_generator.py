@@ -22,7 +22,6 @@ from .dilemma_seed import NPCDilemmaSeed, StoryBeat
 from typing import Any
 NPCData = Any
 from .shared_types import WorldSnapshot
-from src.live_news_system import  LiveNewsItem
 
 from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
 from src.utils import log_game_event

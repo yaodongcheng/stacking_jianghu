@@ -26,6 +26,7 @@ from src.ui.event_notification import (
 from src.definitions import SIDEBAR_W, DEBUG_LIVE_NEWS_TEST_EVENT
 from src.utils import resource_path
 
+from src.ui.event_notification import LiveNewsItem, NewsCategory, DilemmaType
 
 class NewsTab(Enum):
     """新闻标签页"""
@@ -134,7 +135,6 @@ class LiveNewsPanel:
         - 1020:小翠, 1021:黑风大王, 1022:山贼甲, 1023:山贼乙, 1024:泼皮牛二
         """
         from src.ui.live_snapshot_panel import LiveSnapshotData
-        from src.live_news_system import LiveNewsItem, NewsCategory, DilemmaType
         
         # 基础时间（当前时间），每个事件间隔5分钟
         base_time = time.time()

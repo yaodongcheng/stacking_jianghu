@@ -27,8 +27,8 @@ import re
 from pathlib import Path
 from src.llm.doubao_image import get_image_generator
 
-from src.live_news_system import (
-    LiveNewsItem, LiveNewsManager, get_live_news_manager,
+from src.ui.event_notification import (
+    LiveNewsItem, EventNotificationManager, get_notification_manager,
     NewsCategory, DilemmaType
 )
 from src.definitions import *
@@ -1296,7 +1296,7 @@ class AIDirector:
         """
         log_game_event(f"[Director] 并行生成启动: 图片 + 对话扩写", tag="DIRECTOR")
         
-        news_mgr = get_live_news_manager()
+        news_mgr = get_notification_manager()
         start_time = time.time()
         max_wait_time = TIMEOUT_IMAGE_GEN
         

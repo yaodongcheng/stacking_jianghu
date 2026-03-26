@@ -680,7 +680,7 @@ class StoryDirector:
         """
         import threading
         import time
-        from src.live_news_system import get_live_news_manager
+        from src.ui.event_notification import get_notification_manager
         from src.llm.event_dialog_generator import get_event_dialog_generator
         from src.llm.doubao_image import get_image_generator
         from pathlib import Path
@@ -689,7 +689,7 @@ class StoryDirector:
         
         log_game_event(f"[DilemmaTest] 并行生成启动: 图片 + 对话扩写", tag="DILEMMA")
         
-        news_mgr = get_live_news_manager()
+        news_mgr = get_notification_manager()
         start_time = time.time()
         max_wait_time = TIMEOUT_IMAGE_GEN
         
