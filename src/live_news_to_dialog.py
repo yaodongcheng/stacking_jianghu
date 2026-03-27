@@ -20,7 +20,7 @@ from src.llm.event_dialog_generator import (
     EventDialogGenerator, EventScriptFull, EventDialogLine,
     get_event_dialog_generator
 )
-from src.data_loader import NPC_ID_NAME_MAP, get_npc_name_by_id_global
+from src.data_loader import NPC_ID_NAME_MAP, get_npc_name_by_id_global, get_npc_id_by_name_global
 
 
 def convert_effect_to_directive(effect_str: str, actor_ids: list = None) -> str:
@@ -330,6 +330,7 @@ class LiveNewsToDialogBridge:
         ctx
     ) -> List[PlayableDialog]:
         """将 EventDialogLine 转换为 PlayableDialog"""
+        from src.entities import NPC
         
         result = []
         
@@ -346,6 +347,20 @@ class LiveNewsToDialogBridge:
                     if speaker != expected_name:
                         print(f"[NewsDialogBridge] 校验修正: ID={speaker_id}, '{speaker}' → '{expected_name}'")
                         speaker = expected_name
+            
+            # 【重要】如果 speaker_id == 0 或 None，从全局映射表或 ctx.all_cards 中查找对应的 NPC ID
+            if (speaker_id is None or speaker_id == 0) and speaker not in ['旁白', '我', '玩家', 'NARRATOR', 'PLAYER']:
+                # 1. 优先从全局映射表查找（NPC_ID_NAME_MAP 反向查找）
+                speaker_id = get_npc_id_by_name_global(speaker)
+                if speaker_id:
+                    print(f"[NewsDialogBridge] 说话人ID修正(全局表): '{speaker}' → ID={speaker_id}")
+                # 2. 回退到运行时 ctx.all_cards 查找
+                elif ctx and hasattr(ctx, 'all_cards'):
+                    for card in ctx.all_cards:
+                        if isinstance(card, NPC) and hasattr(card, 'name') and card.name == speaker:
+                            speaker_id = card.id
+                            print(f"[NewsDialogBridge] 说话人ID修正(运行时): '{speaker}' → ID={speaker_id}")
+                            break
             
             # 替换文本中的占位符
             text = self._resolve_text_placeholders(line.text, news)
@@ -398,7 +413,13 @@ class LiveNewsToDialogBridge:
                 return name, npc_id
             return '对方', None
         
-        # 直接使用名字
+        # 直接使用名字，尝试在 ctx.all_cards 中查找对应的 NPC ID
+        if ctx and hasattr(ctx, 'all_cards'):
+            from src.entities import NPC
+            for card in ctx.all_cards:
+                if isinstance(card, NPC) and hasattr(card, 'name') and card.name == speaker_code:
+                    return speaker_code, card.id
+        
         return speaker_code, None
     
     def _resolve_text_placeholders(self, text: str, news: LiveNewsItem) -> str:

@@ -931,7 +931,7 @@ class WorldLoader:
             all_cards.append(Resource(mx,      my + 90, ITEM_COIN,  count=10))
 
             # ---- 解锁所有限制 ----
-            from src.definitions import DEBUG_SKIP_YUXISHI
+            from src.definitions import DEBUG_SKIP_YUXISHI, STATE_IDLE
             if DEBUG_SKIP_YUXISHI:
                 # 【调试模式】跳过鱼西施主线，直接进入自由模式
                 ctx.quest_manager.active_quest_id = "Q_FREE_PLAY"
@@ -942,6 +942,15 @@ class WorldLoader:
                 ctx.quest_manager.set_flag('intro_played_dialog', True)
                 player.money = 100  # 调试模式：给一些初始金钱
                 print(f"[WorldLoader] 【调试模式】跳过鱼西施主线，直接进入自由模式")
+                
+                # 【调试模式】释放开场剧情NPC，让他们自由活动
+                if hasattr(ctx, 'event_actors') and ctx.event_actors:
+                    for npc in ctx.event_actors:
+                        npc.state = STATE_IDLE
+                        npc.ai_reason = "自由活动"
+                        npc._event_protected = False
+                        print(f"[WorldLoader] 【调试模式】释放 {npc.name}: EVENT -> IDLE")
+                    ctx.event_actors = []  # 清空事件演员列表
             else:
                 # 【修改】沙盒模式以鱼西施事件作为开场
                 ctx.quest_manager.active_quest_id = "Q_YUXISHI_TRIGGER"

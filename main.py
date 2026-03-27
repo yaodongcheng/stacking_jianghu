@@ -371,14 +371,20 @@ def main():
             print(f"[大宋实况·任务] 事件地点: ({event_x}, {event_y})，NPC已就位")
             
             # ═══════════════════════════════════════════════════════════════
-            # 3. 【玩家瞬移】直接传送到事件地点并触发对话
+            # 3. 【玩家瞬移】传送到外圈预留位置
             # ═══════════════════════════════════════════════════════════════
-            player_target_x = event_x
-            player_target_y = event_y - 30
+            # 玩家位置：外圈半径 200-250 像素，固定在正右方（角度=0）
+            import random
+            outer_radius_min = 200
+            outer_radius_max = 250
+            player_angle = 0  # 正右方
+            player_distance = random.uniform(outer_radius_min, outer_radius_max)
+            player_target_x = int(event_x + math.cos(player_angle) * player_distance)
+            player_target_y = int(event_y + math.sin(player_angle) * player_distance)
             
             # 玩家瞬移到目标位置
             ctx.player.set_pos(player_target_x, player_target_y)
-            print(f"[大宋实况·任务] 玩家瞬移到: ({player_target_x}, {player_target_y})")
+            print(f"[大宋实况·任务] 玩家瞬移到外圈: ({player_target_x}, {player_target_y})")
             
             # 摄像机聚焦
             if camera:

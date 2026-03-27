@@ -1160,9 +1160,10 @@ class NPC(CardBase):
             self.cold = max(0, self.cold - 5) # 回暖
         else:
             self.cold += 1 # 变冷（从2降到1）
-            
+        #寒冷值不得超过100
+        self.cold = min(100, self.cold)
         # 寒冷扣血 - 提高阈值，让NPC更不容易冻晕
-        if self.cold >= 90:  # 从80提高到90
+        if self.cold >= 110:  # 从80提高到90
             self.hp -= 1
             self.dissatisfaction += 1
             if self.hp <= 0:

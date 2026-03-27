@@ -46,6 +46,37 @@ def clear_npc_id_name_map():
     """清空映射表（用于重新加载游戏时）"""
     NPC_ID_NAME_MAP.clear()
 
+
+def get_npc_id_by_name_global(npc_name: str):
+    """
+    根据 NPC 名字获取 ID（通用函数）
+    
+    查询顺序：
+    1. 运行时加载的 NPC（从 NPC_ID_NAME_MAP 反向查找）
+    2. 种子 NPC（从 character_seeds.py）
+    
+    Args:
+        npc_name: NPC 名字
+        
+    Returns:
+        int or None: NPC ID，未找到返回 None
+    """
+    if not npc_name:
+        return None
+    
+    # 1. 从运行时映射表中反向查找
+    for npc_id_str, name in NPC_ID_NAME_MAP.items():
+        if name == npc_name:
+            return int(npc_id_str)
+    
+    # 2. 从种子 NPC 中反向查找
+    from src.quest_system import ID_TO_NAME
+    for npc_id_str, name in ID_TO_NAME.items():
+        if name == npc_name:
+            return int(npc_id_str)
+    
+    return None
+
 def load_npcs_from_csv(filepath):
     npcs = []
     try:

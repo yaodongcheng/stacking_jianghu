@@ -1482,19 +1482,21 @@ class AIDirector:
     
     
     
-    def _setup_event_scene(self, news_item: LiveNewsItem,ctx):
+    def _setup_event_scene(self, news_item: LiveNewsItem, ctx):
         """
-        【自动场景布置】事件生成完成后，立即让NPC瞬移到事发地点并进入剧情保护状态
-        
-        这样玩家只需要走到事发地点，就能直接开始剧情演绎，无需点击"前往处理"
+        【自动场景布置】事件生成完成后，统一重新计算位置：
+        1. 根据事件类型选择合适的建筑/场景作为事发地点
+        2. 瞬移当事NPC到事发地点
+        3. 瞬移围观群众到事发地点周围
+        4. 更新 news_item.location_x/y 为统一的事发地点
+        5. NPC进入事件保护状态，不再移动
         """
         import math
+        import random
         from src.entities import NPC, Building
         from src.definitions import STATE_EVENT, SAFETY_NORMAL
         
         try:
-           
-            
             # 1. 查找相关 NPC
             actor_ids = getattr(news_item, 'actor_ids', [])
             actor_names = getattr(news_item, 'actor_names', [])
@@ -1518,33 +1520,197 @@ class AIDirector:
             print(f"[Director·场景布置] ╔════════════════════════════════════════════════════════╗")
             print(f"[Director·场景布置] ║           自动布置事件场景: {news_item.title[:20]}...           ║")
             print(f"[Director·场景布置] ╚════════════════════════════════════════════════════════╝")
-            print(f"[Director·场景布置] 关联NPC: {[n.name for n in event_npcs]}")
+            print(f"[Director·场景布置] 事件actor_ids: {actor_ids}")
+            print(f"[Director·场景布置] 事件actor_names: {actor_names}")
+            print(f"[Director·场景布置] 匹配到的关联NPC: {[n.name for n in event_npcs]}")
             
-            # 2. 确定事发地点（选择第一个NPC的位置或附近建筑）
-            main_npc = event_npcs[0]
-            event_x = main_npc.rect.centerx
-            event_y = main_npc.rect.centery
-            
-            # 尝试找到附近的建筑作为集合点
+            # ══════════════════════════════════════════════════════════════
+            # 2. 【智能选址】根据事件类型从场上现有建筑中选择最合适的
+            # ══════════════════════════════════════════════════════════════
             buildings = [c for c in ctx.all_cards if isinstance(c, Building)]
-            nearest_building = None
-            nearest_dist = 9999
+            
+            # 统计场上实际存在的建筑类型
+            from collections import Counter
+            building_types_on_map = Counter(getattr(b, 'building_type', 'UNKNOWN') for b in buildings)
+            print(f"[Director·场景布置·选址] 场上建筑总数: {len(buildings)}")
+            print(f"[Director·场景布置·选址] 场上建筑类型统计: {dict(building_types_on_map)}")
+            
+            # 事件属性
+            from src.ui.event_notification import NewsCategory
+            category = getattr(news_item, 'category', None)
+            event_theme = getattr(news_item, 'event_theme', '').lower()
+            emotion_tone = getattr(news_item, 'emotion_tone', '').lower()
+            description = getattr(news_item, 'description', '').lower()
+            title = getattr(news_item, 'title', '').lower()
+            
+            print(f"[Director·场景布置·选址] 事件类别: {category}")
+            print(f"[Director·场景布置·选址] 事件主题: {event_theme}")
+            print(f"[Director·场景布置·选址] 情绪基调: {emotion_tone}")
+            print(f"[Director·场景布置·选址] 事件标题: {title}")
+            
+            # ══════════════════════════════════════════════════════════════
+            # 建筑类型特征定义（用于匹配事件特征）
+            # ══════════════════════════════════════════════════════════════
+            BUILDING_FEATURES = {
+                # 商业建筑
+                'MARKET': {'keywords': ['交易', '买卖', '商', '钱', '集市', '生意'], 
+                          'categories': [NewsCategory.ECONOMIC, NewsCategory.SOCIAL]},
+                'SHOP': {'keywords': ['交易', '买卖', '商', '铺'], 
+                        'categories': [NewsCategory.ECONOMIC]},
+                'TEAHOUSE': {'keywords': ['茶', '聚会', '闲聊', '消息', '情报'], 
+                            'categories': [NewsCategory.SOCIAL, NewsCategory.ECONOMIC]},
+                'TAVERN': {'keywords': ['酒', '饮酒', '聚会', '醉'], 
+                          'categories': [NewsCategory.SOCIAL]},
+                'PAWNSHOP': {'keywords': ['当铺', '抵押', '典当'], 
+                            'categories': [NewsCategory.ECONOMIC]},
+                
+                # 官府建筑
+                'GOV_OFFICE': {'keywords': ['官', '府衙', '案', '刑', '官府', '朝廷'], 
+                              'categories': [NewsCategory.POLITICAL]},
+                'GATEHOUSE': {'keywords': ['关卡', '守卫', '城门', '通行'], 
+                             'categories': [NewsCategory.POLITICAL, NewsCategory.MARTIAL]},
+                'JAIL': {'keywords': ['牢', '狱', '囚', '犯人'], 
+                        'categories': [NewsCategory.POLITICAL]},
+                
+                # 军事建筑
+                'BARRACKS': {'keywords': ['武', '兵', '训练', '军'], 
+                            'categories': [NewsCategory.MARTIAL]},
+                'ARMORY': {'keywords': ['武库', '兵器', '甲胄'], 
+                          'categories': [NewsCategory.MARTIAL]},
+                'DOJO': {'keywords': ['武', '江湖', '侠', '比武'], 
+                        'categories': [NewsCategory.MARTIAL]},
+                
+                # 文化建筑
+                'SCHOOL': {'keywords': ['书', '学', '读书', '科举'], 
+                          'categories': [NewsCategory.SOCIAL, NewsCategory.MORAL]},
+                'CLINIC': {'keywords': ['医', '药', '治病', '伤病'], 
+                          'categories': [NewsCategory.SOCIAL, NewsCategory.MORAL]},
+                'HERBSHOP': {'keywords': ['药', '草药'], 
+                            'categories': [NewsCategory.ECONOMIC]},
+                
+                # 宗教建筑
+                'TEMPLE': {'keywords': ['神', '佛', '庙', '寺庙', '祈祷'], 
+                          'categories': [NewsCategory.SUPERNATURAL, NewsCategory.MORAL]},
+                'TAOIST_TEMPLE': {'keywords': ['道', '道士', '符', '法术'], 
+                                 'categories': [NewsCategory.SUPERNATURAL]},
+                
+                # 农业建筑
+                'FARM': {'keywords': ['农', '田', '耕', '收成'], 
+                        'categories': [NewsCategory.ECONOMIC]},
+                'GRANARY': {'keywords': ['粮', '米', '饥饿', '赈灾'], 
+                           'categories': [NewsCategory.ECONOMIC, NewsCategory.SOCIAL]},
+                
+                # 娱乐建筑
+                'WASHE': {'keywords': ['瓦舍', '娱乐', '赌', '戏'], 
+                         'categories': [NewsCategory.SOCIAL]},
+                'GAMBLING': {'keywords': ['赌', '赌博'], 
+                            'categories': [NewsCategory.SOCIAL, NewsCategory.ECONOMIC]},
+            }
+            
+            # ══════════════════════════════════════════════════════════════
+            # 计算每种场上建筑的匹配分数
+            # ══════════════════════════════════════════════════════════════
+            all_text = f"{title} {event_theme} {description} {emotion_tone}"
+            
+            building_scores = {}  # building -> (score, reasons)
             for b in buildings:
-                dist = math.hypot(b.rect.centerx - event_x, b.rect.centery - event_y)
-                if dist < nearest_dist and dist < 400:
-                    nearest_dist = dist
-                    nearest_building = b
+                b_type = getattr(b, 'building_type', '')
+                score = 0
+                match_reasons = []
+                
+                # 获取该建筑类型的特征
+                features = BUILDING_FEATURES.get(b_type, {})
+                
+                # 1. 关键词匹配
+                keywords = features.get('keywords', [])
+                for kw in keywords:
+                    if kw in all_text:
+                        score += 10
+                        match_reasons.append(f"关键词'{kw}'")
+                
+                # 2. 事件类别匹配
+                suitable_categories = features.get('categories', [])
+                if category in suitable_categories:
+                    score += 5
+                    match_reasons.append(f"类别匹配")
+                
+                # 3. 如果当事NPC就在这建筑上或附近，加分
+                if event_npcs:
+                    for npc in event_npcs:
+                        dist = math.hypot(b.rect.centerx - npc.rect.centerx,
+                                        b.rect.centery - npc.rect.centery)
+                        if dist < 100:  # NPC就在建筑上
+                            score += 8
+                            match_reasons.append("NPC在此")
+                            break
+                        elif dist < 300:  # NPC在附近
+                            score += 3
+                
+                building_scores[b] = (score, match_reasons)
             
-            if nearest_building:
-                event_x = nearest_building.rect.centerx
-                event_y = nearest_building.rect.centery + 50
-                event_location_name = getattr(nearest_building, 'name', '附近')
-                print(f"[Director·场景布置] 集合地点: {event_location_name} ({event_x}, {event_y})")
+            # 输出评分结果（只显示有分数的前5个）
+            print(f"[Director·场景布置·选址] 建筑匹配评分:")
+            sorted_buildings = sorted(building_scores.items(), key=lambda x: -x[1][0])
+            for b, (score, reasons) in sorted_buildings[:5]:
+                if score > 0:
+                    print(f"[Director·场景布置·选址]   {b.name}({getattr(b, 'building_type', '?')}): {score}分 - {', '.join(reasons)}")
+            
+            # ══════════════════════════════════════════════════════════════
+            # 选择最佳建筑
+            # ══════════════════════════════════════════════════════════════
+            selected_building = None
+            selection_reason = ""
+            
+            if sorted_buildings:
+                best_building, (best_score, best_reasons) = sorted_buildings[0]
+                
+                if best_score > 0:
+                    selected_building = best_building
+                    selection_reason = f"匹配度最高({best_score}分): {', '.join(best_reasons)}"
+                    print(f"[Director·场景布置·选址] ✓ 选择: {best_building.name} (分数: {best_score})")
+            
+            # 如果没有匹配的建筑，选择当事NPC最近的建筑
+            if not selected_building and buildings and event_npcs:
+                main_npc = event_npcs[0]
+                nearest_building = min(buildings, 
+                    key=lambda b: math.hypot(b.rect.centerx - main_npc.rect.centerx,
+                                            b.rect.centery - main_npc.rect.centery))
+                dist = math.hypot(nearest_building.rect.centerx - main_npc.rect.centerx,
+                                 nearest_building.rect.centery - main_npc.rect.centery)
+                selected_building = nearest_building
+                selection_reason = f"NPC附近最近建筑(距离{dist:.0f})"
+                print(f"[Director·场景布置·选址] 使用NPC最近建筑: {nearest_building.name} (距离: {dist:.0f})")
+            
+            # 确定最终事发地点坐标
+            if selected_building:
+                event_x = selected_building.rect.centerx
+                event_y = selected_building.rect.centery + 50
+                event_location_name = getattr(selected_building, 'name', '事发地点')
+                print(f"[Director·场景布置·选址] ═════════════════════════════════════")
+                print(f"[Director·场景布置·选址] 最终选择: {event_location_name}")
+                print(f"[Director·场景布置·选址] 建筑类型: {getattr(selected_building, 'building_type', '未知')}")
+                print(f"[Director·场景布置·选址] 选择原因: {selection_reason}")
+                print(f"[Director·场景布置·选址] 坐标: ({event_x}, {event_y})")
+            elif event_npcs:
+                # 完全没有建筑，使用当事NPC当前位置
+                main_npc = event_npcs[0]
+                event_x = main_npc.rect.centerx
+                event_y = main_npc.rect.centery
+                event_location_name = "街市"
+                print(f"[Director·场景布置·选址] 无可用建筑，使用NPC位置: ({event_x}, {event_y})")
             else:
-                event_location_name = "事发现场"
-                print(f"[Director·场景布置] 集合地点: NPC当前位置 ({event_x}, {event_y})")
+                print(f"[Director·场景布置·选址] 错误: 无法确定事发地点")
+                return
             
-            # 3. 【瞬移+保护】让所有相关NPC瞬移到事发地点并进入剧情保护状态
+            # ══════════════════════════════════════════════════════════════
+            # 3. 【重要】更新 news_item 的位置信息（统一各组件使用的位置）
+            # ══════════════════════════════════════════════════════════════
+            news_item.location_x = float(event_x)
+            news_item.location_y = float(event_y)
+            news_item.location = event_location_name
+            print(f"[Director·场景布置] 已更新事件位置: location_x={event_x}, location_y={event_y}")
+            
+            # 4. 【瞬移+保护】让所有相关NPC瞬移到事发地点并进入剧情保护状态
             for i, npc in enumerate(event_npcs):
                 # 【演出状态恢复】确保NPC能够参与演出
                 from src.definitions import SAFETY_DOWNED, STATE_DOWNED, STATE_COMBAT
@@ -1573,21 +1739,34 @@ class AIDirector:
                 if hasattr(npc, 'temperature') and npc.temperature <= 10:
                     npc.temperature = 30
                 
-                # 【清除被背负状态】
+                # 【清除堆叠状态】使用 bounce_off 断开与建筑/其他NPC的堆叠
                 if hasattr(npc, 'stack_parent') and npc.stack_parent:
-                    carrier = npc.stack_parent
-                    npc.stack_parent = None
-                    if hasattr(carrier, 'dragging') and carrier.dragging == npc:
-                        carrier.dragging = None
+                    npc.bounce_off(npc.stack_parent, distance=10)
+                    print(f"[Director·场景布置] 从 {getattr(npc.stack_parent, 'name', '建筑')} 分离: {npc.name}")
                 
-                # 【瞬移】使用 set_pos 设置NPC位置（分散站位）
-                offset_x = (i % 3 - 1) * 80  # -80, 0, +80
-                offset_y = (i // 3) * 100   # 0, 100, 200
-                target_x = event_x + offset_x
-                target_y = event_y + offset_y
+                # 【清除作为父卡牌的堆叠状态】
+                if hasattr(npc, 'stack_child') and npc.stack_child:
+                    npc.bounce_off(npc.stack_child, distance=10)
+                    print(f"[Director·场景布置] 释放背负者: {npc.stack_child.name}")
+                
+                # 【瞬移】使用 set_pos 设置NPC位置（内圈分散站位，间距≥90像素）
+                # 内圈半径：100像素，按人数均匀分布角度
+                import math
+                inner_radius = 100  # 内圈半径
+                angle_step = 2 * math.pi / len(event_npcs) if len(event_npcs) > 0 else 0
+                angle = i * angle_step  # 从正上方开始，顺时针分布
+                target_x = int(event_x + math.cos(angle) * inner_radius)
+                target_y = int(event_y + math.sin(angle) * inner_radius)
                 
                 # 使用 set_pos 方法设置位置（传入中心点坐标）
                 npc.set_pos(target_x, target_y, reason=f"事件场景布置: {news_item.title[:15]}")
+                
+                # 【清除旧移动目标】防止移动系统继续执行之前的移动
+                if hasattr(npc, 'clear_movement_target'):
+                    npc.clear_movement_target("进入事件场景，清除旧移动目标")
+                else:
+                    npc.target_x = None
+                    npc.target_y = None
                 
                 # 【状态保护】设置为事件状态（暂停AI，防止被攻击等中断）
                 npc.state = STATE_EVENT
@@ -1597,7 +1776,18 @@ class AIDirector:
                 npc._event_protected = True
                 npc._event_news_id = getattr(news_item, 'news_id', None)
                 
+                # 【调试】打印 NPC 瞬移后的状态
+                target_xy = (getattr(npc, 'target_x', None), getattr(npc, 'target_y', None))
+                ai_reason = getattr(npc, 'ai_reason', '???')
+                state = getattr(npc, 'state', '???')
+                stack_parent = getattr(npc, 'stack_parent', None)
+                stack_child = getattr(npc, 'stack_child', None)
+                stack_parent_name = getattr(stack_parent, 'name', None) if stack_parent else None
+                stack_child_name = getattr(stack_child, 'name', None) if stack_child else None
                 print(f"[Director·场景布置] ✓ {npc.name} 已瞬移到 ({target_x}, {target_y}) 并进入剧情保护")
+                print(f"[Director·场景布置]   状态: {state}, AI原因: {ai_reason}")
+                print(f"[Director·场景布置]   移动目标: {target_xy}")
+                print(f"[Director·场景布置]   堆叠状态: parent={stack_parent_name}, child={stack_child_name}")
             
             # 4. 【保存事件信息】供后续玩家到达检测使用
             ctx._pending_event_news = news_item
@@ -1636,6 +1826,7 @@ class AIDirector:
         # 获取评论列表
         comments = getattr(news_item, 'comments', [])
         if not comments:
+            print(f"[Director·场景布置] 该事件没有评论，跳过围观群众生成")
             return
         
         # 从 comments 中提取 user 名字
@@ -1645,43 +1836,95 @@ class AIDirector:
             if user_name and user_name not in spectator_names:
                 spectator_names.append(user_name)
         
+        print(f"[Director·场景布置] 评论中的用户名: {spectator_names}")
+        
         if not spectator_names:
+            print(f"[Director·场景布置] 评论中没有有效的用户名")
             return
         
         # 获取事件NPC的名字集合（避免重复）
         event_npc_names = {npc.name for npc in event_npcs}
+        print(f"[Director·场景布置] 事件NPC名字集合: {event_npc_names}")
         
         # 在 all_cards 中查找匹配的NPC
         spectators = []
+        all_npc_names = []
         for card in ctx.all_cards:
             if not isinstance(card, NPC):
                 continue
             card_name = getattr(card, 'name', '')
+            all_npc_names.append(card_name)
             # 如果评论者的名字匹配某个NPC，且该NPC不在事件中
             if card_name in spectator_names and card_name not in event_npc_names:
                 spectators.append(card)
         
+        print(f"[Director·场景布置] 场上所有NPC: {all_npc_names}")
+        
         if not spectators:
-            print(f"[Director·场景布置] 未找到评论中提到的围观NPC")
+            print(f"[Director·场景布置] [!] 未找到评论中提到的围观NPC（评论者名字可能与NPC名字不匹配）")
             return
         
-        print(f"[Director·场景布置] 从评论中找到 {len(spectators)} 位围观群众: {[n.name for n in spectators]}")
+        print(f"[Director·场景布置] [OK] 从评论中找到 {len(spectators)} 位围观群众: {[n.name for n in spectators]}")
         
-        # 瞬移围观群众到事件周围
-        for i, npc in enumerate(spectators):
-            # 在事件周围随机位置（距离150-280像素）
-            angle = random.uniform(0, 3.14159 * 2)
-            distance = random.uniform(150, 280)
-            spectator_x = int(event_x + math.cos(angle) * distance)
-            spectator_y = int(event_y + math.sin(angle) * distance)
-            
-            # 瞬移到围观位置（使用 set_pos）
-            npc.set_pos(spectator_x, spectator_y, reason=f"围观事件: {news_item.title[:10]}")
-            
-            # 设置为围观状态
-            npc.ai_reason = "围观事件..."
-            
-            print(f"[Director·场景布置]   👥 {npc.name} 作为围观群众出现在 ({spectator_x}, {spectator_y})")
+        # 【外圈站位】围观群众，预留位置给玩家
+        # 外圈半径：200-300像素，均匀分布
+        outer_radius_min = 200
+        outer_radius_max = 300
+        
+        # 预留一个位置给玩家（外圈第0号位置）
+        player_reserved_angle = 0  # 玩家固定在正下方（π/2 = 180°）
+        
+        # 围观群众数量 + 1（玩家）= 总外圈人数
+        total_outer = len(spectators) + 1
+        
+        if len(spectators) == 0:
+            # 没有围观群众，只给玩家预留位置
+            pass
+        else:
+            # 均匀分布外圈站位（跳过玩家的预留位置）
+            spectator_idx = 0
+            for i in range(total_outer):
+                # 计算角度：均匀分布
+                angle = (2 * math.pi * i / total_outer)
+                
+                # 跳过玩家预留的位置
+                if abs(angle - player_reserved_angle) < 0.3 or abs(angle - player_reserved_angle - 2*math.pi) < 0.3:
+                    continue
+                
+                if spectator_idx >= len(spectators):
+                    break
+                    
+                npc = spectators[spectator_idx]
+                spectator_idx += 1
+                
+                # 随机半径
+                distance = random.uniform(outer_radius_min, outer_radius_max)
+                spectator_x = int(event_x + math.cos(angle) * distance)
+                spectator_y = int(event_y + math.sin(angle) * distance)
+                
+                # 【清除堆叠状态】使用 bounce_off 断开与建筑/其他NPC的堆叠
+                if hasattr(npc, 'stack_parent') and npc.stack_parent:
+                    npc.bounce_off(npc.stack_parent, distance=10)
+                
+                # 瞬移到围观位置（使用 set_pos）
+                npc.set_pos(spectator_x, spectator_y, reason=f"围观事件: {news_item.title[:10]}")
+                
+                # 【清除旧移动目标】防止继续移动
+                if hasattr(npc, 'clear_movement_target'):
+                    npc.clear_movement_target("围观事件，清除旧移动目标")
+                else:
+                    npc.target_x = None
+                    npc.target_y = None
+                
+                # 【围观状态保护】设置为观看状态，防止AI干扰
+                npc.state = STATE_EVENT
+                npc.ai_reason = "围观事件..."
+                npc._event_protected = True
+                
+                # 【调试】打印围观群众状态
+                target_xy = (getattr(npc, 'target_x', None), getattr(npc, 'target_y', None))
+                print(f"[Director·场景布置]   👥 {npc.name} 作为围观群众出现在 ({spectator_x}, {spectator_y})")
+                print(f"[Director·场景布置]      状态: {npc.state}, AI原因: {npc.ai_reason}, 移动目标: {target_xy}")
     
     
     def get_pending_news_item(self) -> Optional[LiveNewsItem]:

@@ -192,6 +192,31 @@ class StoryUI:
     def _next_line(self):
         if self.dialog_queue:
             self.current_line = self.dialog_queue.pop(0)
+            
+            # 【调试】打印说话人、内容、坐标
+            speaker_name = getattr(self.current_line, 'speaker', '???')
+            speaker_id = getattr(self.current_line, 'speaker_id', None)
+            text_preview = self.current_line.text[:50] + "..." if len(self.current_line.text) > 50 else self.current_line.text
+            
+            # 查找说话人的坐标
+            speaker_x, speaker_y = None, None
+            if self._all_cards_ref and speaker_id is not None:
+                for card in self._all_cards_ref:
+                    card_id = getattr(card, 'id', None)
+                    if card_id is None:
+                        npc_data = getattr(card, 'npc_data', None)
+                        if npc_data:
+                            card_id = getattr(npc_data, 'id', None)
+                    if card_id == speaker_id:
+                        speaker_x = getattr(card, 'rect', None)
+                        if speaker_x:
+                            speaker_x = speaker_x.centerx
+                            speaker_y = card.rect.centery
+                        break
+            
+            from src.utils import log_game_event
+            log_game_event(f"[StoryUI·对话] 【{speaker_name}】(ID={speaker_id}, 坐标=({speaker_x}, {speaker_y})): {text_preview}")
+            
             print(f"{self.current_line.text}")
             self.char_index = 0
             self.timer = 0
