@@ -1527,27 +1527,30 @@ class QuestManager:
             if news_bridge.is_choice_pending():
                 # 这是大宋实况事件，从 news_item 获取选项
                 current_news = news_bridge.get_current_news()
-                if current_news and hasattr(current_news, 'choices') and current_news.choices:
-                    print(f"[Quest] SHOW_EVENT_CHOICE - 大宋实况事件选择，共 {len(current_news.choices)} 个选项")
+                # 使用 story_choices（包含完整的选项数据，如 requirement, cost, effect, consequence_preview）
+                story_choices = current_news.story_choices if current_news and hasattr(current_news, 'story_choices') else []
+                if current_news and story_choices:
+                    print(f"[Quest] SHOW_EVENT_CHOICE - 大宋实况事件选择，共 {len(story_choices)} 个选项")
                     
-                    # 构建选项格式供 StoryUI 显示
+                    # 构建选项格式供 StoryUI 显示 - 保留完整的选项数据用于tooltip
                     options = []
-                    for i, choice in enumerate(current_news.choices):
+                    for i, choice in enumerate(story_choices):
                         if isinstance(choice, dict):
-                            text = choice.get('text', f'选项{i+1}')
-                            effect = choice.get('effect', '')
-                            # 使用索引作为 key (A, B, C 或 0, 1, 2)
-                            key = chr(ord('A') + i) if i < 3 else str(i)
+                            # 使用原始choice数据，添加key字段
+                            option_data = choice.copy()
+                            option_data['key'] = chr(ord('A') + i) if i < 3 else str(i)
+                            # 保留原有的hint字段（如果有），否则生成简单的hint
+                            if 'hint' not in option_data:
+                                effect = choice.get('effect', '')
+                                option_data['hint'] = effect[:30] if effect else ''
                         else:
-                            text = str(choice)
-                            effect = ''
-                            key = chr(ord('A') + i) if i < 3 else str(i)
+                            option_data = {
+                                'key': chr(ord('A') + i) if i < 3 else str(i),
+                                'text': str(choice),
+                                'hint': ''
+                            }
                         
-                        options.append({
-                            'key': key,
-                            'text': text,
-                            'hint': effect[:30] if effect else ''
-                        })
+                        options.append(option_data)
                     
                     # 显示选择界面
                     if ctx and hasattr(ctx, 'story_ui') and ctx.story_ui:

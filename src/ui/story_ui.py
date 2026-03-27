@@ -3,6 +3,7 @@ import pygame
 import math
 from src.definitions import *
 from src.utils import wrap_text, load_image
+from src.ui.choice_tooltip import ChoiceTooltipHelper
 
 class StoryUI:
     def __init__(self, screen_w, screen_h):
@@ -20,6 +21,9 @@ class StoryUI:
         self.font_hint = pygame.font.SysFont(font_names, 16)  # 选择提示字体
         self.font_bubble = pygame.font.SysFont(font_names, 18)  # 气泡文字字体
         self.font_bubble_name = pygame.font.SysFont(font_names, 16, bold=True)  # 气泡名字字体
+        
+        # 字体缓存（用于tooltip）
+        self._font_cache = {}
         
         # AVG 对话状态
         self.dialog_queue = [] 
@@ -43,6 +47,9 @@ class StoryUI:
         self.choice_buttons = []           # 按钮矩形区域列表
         self.choice_anim_timer = 0         # 选择界面动画计时器
         self.choice_prompt = ""            # 选择提示文字
+        
+        # 【新增】选项tooltip
+        self.choice_tooltip = None  # {lines: [], btn_rect: Rect, alpha: float}
         
         # 【新增】缓存选择界面的遮罩层，避免每帧重建导致闪烁
         self._choice_overlay = None
@@ -997,6 +1004,7 @@ class StoryUI:
         self.choice_options = []
         self.choice_buttons = []
         self.choice_hover_index = -1
+        self.choice_tooltip = None  # 清除tooltip
     
     def handle_choice_input(self, event, ctx):
         """
@@ -1011,11 +1019,16 @@ class StoryUI:
         # 鼠标移动 - 更新悬停状态
         if event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
+            prev_hover = self.choice_hover_index
             self.choice_hover_index = -1
             for i, btn_rect in enumerate(self.choice_buttons):
                 if btn_rect.collidepoint(mx, my):
                     self.choice_hover_index = i
                     break
+            
+            # 如果悬停变化，清除tooltip（让新的悬停重新准备）
+            if prev_hover != self.choice_hover_index:
+                self.choice_tooltip = None
         
         # 鼠标点击 - 选择
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1090,6 +1103,14 @@ class StoryUI:
         self.choice_buttons = []
         btn_y = panel_y + 70
         
+        # 获取玩家引用（用于tooltip条件检查）
+        player = None
+        try:
+            from src.context import ctx
+            player = getattr(ctx, 'player', None)
+        except:
+            pass
+        
         for i, option in enumerate(self.choice_options):
             btn_rect = pygame.Rect(panel_x + 15, btn_y, panel_w - 30, btn_h)
             self.choice_buttons.append(btn_rect)
@@ -1104,7 +1125,35 @@ class StoryUI:
             # 绘制按钮
             self._draw_choice_button(screen, btn_rect_draw, option, i + 1, is_hover)
             
+            # 悬停时准备tooltip
+            if is_hover:
+                self._prepare_choice_tooltip(option, btn_rect_draw, player)
+            
             btn_y += btn_h + btn_gap
+        
+        # 绘制tooltip（在所有按钮之后绘制，确保显示在最上层）
+        if self.choice_tooltip and self.choice_hover_index >= 0:
+            self._draw_choice_tooltip(screen)
+    
+    def _prepare_choice_tooltip(self, choice: dict, btn_rect: pygame.Rect, player=None):
+        """准备选项的tooltip内容"""
+        self.choice_tooltip = ChoiceTooltipHelper.create_tooltip_data(choice, btn_rect, player)
+    
+    def _draw_choice_tooltip(self, screen: pygame.Surface):
+        """绘制选项tooltip"""
+        if not self.choice_tooltip:
+            return
+        
+        ChoiceTooltipHelper.draw_tooltip(
+            surface=screen,
+            tooltip_data=self.choice_tooltip,
+            font_cache=self._font_cache,
+            fixed_width=280,
+            line_height=26,
+            padding=12,
+            panel_h=self.screen_h,  # 使用屏幕高度进行边界检测
+            panel_offset=(0, 0)
+        )
     
     def _draw_choice_panel_bg(self, screen, rect):
         """绘制选择面板背景 - 直接在screen上绘制，避免创建临时Surface"""

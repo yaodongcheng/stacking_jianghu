@@ -26,6 +26,7 @@ from src.definitions import (
 from src.utils import resource_path
 from src.data_loader import get_npc_name_by_id_global
 from src.ui.event_notification import FunctionalAction, LiveNewsItem
+from src.ui.choice_tooltip import ChoiceTooltipHelper
 
 # 默认屏幕尺寸（实际值由构造函数传入）
 DEFAULT_SCREEN_W = 1280
@@ -852,65 +853,16 @@ class LiveSnapshotPanel:
             btn_rect: 按钮区域
             requirement_met: 条件是否满足
         """
-        lines = []
-           
-        # Requirement（条件，显示在顶部）- 标题和内容分开
-        req_str = choice.get('requirement')
-        req_satisfied = True  # 标记条件是否满足
-        if req_str and str(req_str).lower() != 'null':
-            req_text = self._format_requirement_text(req_str)
-            # 检查实际是否满足条件
-            player = None
-            try:
-                from src.context import ctx
-                player = getattr(ctx, 'player', None)
-            except:
-                pass
-            req_satisfied = self._check_choice_requirement(player, req_str)
-            # 标题单独一行
-            lines.append(('【条件】', 'title'))
-            # 内容单独一行，根据满足状态
-            lines.append((req_text, 'req_unsatisfied' if not req_satisfied else 'req_satisfied'))
+        # 获取玩家引用
+        player = None
+        try:
+            from src.context import ctx
+            player = getattr(ctx, 'player', None)
+        except:
+            pass
         
-        # 使用统一函数解析 cost、effect 和 transfer
-        cost_text, gain_text = self._format_all_effects(choice)
-        
-        # 消耗（包含 cost + transfer 中的付出）
-        if cost_text != "无":
-            lines.append(('【消耗】', 'title'))
-            lines.append((cost_text, 'cost'))
-        
-        # 收益（包含 transfer 中的获得 + effect）
-        if gain_text != "无":
-            lines.append(('【影响】', 'title'))
-            lines.append((gain_text, 'effect'))
-        
-        # Consequence preview（后果预测：即时反应 + 长期影响）
-        preview = choice.get('consequence_preview')
-        if preview and str(preview).lower() != 'null':
-            # 预处理：删除所有换行符，将连续内容合并
-            import re
-            preview = re.sub(r'[\r\n]+', '', preview)
-            lines.append(('', 'normal'))  # 空行
-            lines.append(('【预测】', 'title'))
-            # 解析两个标签：[即时反应] + [埋下隐患]/[最终走向]/[长远影响]（长期）
-            for tag in ['[即时反应]', '[埋下隐患]', '[最终走向]', '[长远影响]']:
-                if tag in preview:
-                    # 提取标签后的内容
-                    start = preview.find(tag)
-                    end = preview.find('[', start + 1)
-                    if end == -1:
-                        end = len(preview)
-                    content = preview[start:end].replace(tag, '').strip()
-                    if content:
-                        lines.append((f"  {tag} {content}", 'normal'))
-        
-        if lines:
-            self.choice_tooltip = {
-                'lines': lines,
-                'btn_rect': btn_rect,
-                'alpha': 0.0
-            }
+        # 使用公共模块创建tooltip数据
+        self.choice_tooltip = ChoiceTooltipHelper.create_tooltip_data(choice, btn_rect, player)
     
     def _format_effect_text(self, effect_str: str, is_cost: bool) -> str:
         """格式化 effect/cost 文本为自然语言，支持多个效果"""
@@ -1176,115 +1128,17 @@ class LiveSnapshotPanel:
         if not self.choice_tooltip:
             return
         
-        tooltip = self.choice_tooltip
-        lines = tooltip['lines']
-        btn_rect = tooltip['btn_rect']
-        
-        # 淡入动画
-        tooltip['alpha'] = min(1.0, tooltip['alpha'] + 0.15)
-        alpha = int(255 * tooltip['alpha'])
-        
-        # 计算 tooltip 尺寸
-        font = self._get_font(16)
-        line_height = 26
-        padding = 12
-        
-        # 固定 tooltip 宽度
-        fixed_tooltip_w = 280
-        
-        # 对每行文本进行换行处理（按字符宽度换行，不到边缘不换行）
-        wrapped_lines = []
-        for line_data in lines:
-            # 支持新旧两种格式：字符串或元组 (text, color_type)
-            if isinstance(line_data, tuple):
-                text, color_type = line_data
-            else:
-                text = line_data
-                color_type = 'normal'
-            
-            # 直接按字符添加，当宽度超过时才换行
-            if not text:
-                wrapped_lines.append((text, color_type))
-                continue
-                
-            # 计算这一行能容纳的最大宽度
-            max_width = fixed_tooltip_w - padding * 2
-            
-            # 按字符逐个添加，超过宽度才换行
-            current_line = ""
-            for char in text:
-                test_line = current_line + char
-                if font.size(test_line)[0] <= max_width:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        wrapped_lines.append((current_line, color_type))
-                    current_line = char
-            if current_line:
-                wrapped_lines.append((current_line, color_type))
-        
-        tooltip_w = fixed_tooltip_w
-        tooltip_h = len(wrapped_lines) * line_height + padding * 2
-        
-        # 位置：按钮右侧（始终显示在右侧）
-        tooltip_x = btn_rect.right + 25  # 右侧偏移
-        tooltip_y = btn_rect.top  # 与按钮顶部对齐
-        
-        # 确保不超出面板底部边界
-        if tooltip_y + tooltip_h > self.panel_h - 10:
-            tooltip_y = self.panel_h - tooltip_h - 10  # 往上移动，确保不超出底部
-        
-        tooltip_rect = pygame.Rect(tooltip_x, tooltip_y, tooltip_w, tooltip_h)
-        
-        # 绘制不透明背景（深色底）
-        bg_color = (25, 25, 35, alpha)  # 深色背景
-        bg_surface = pygame.Surface((tooltip_w, tooltip_h), pygame.SRCALPHA)
-        bg_surface.fill(bg_color)
-        surface.blit(bg_surface, tooltip_rect)
-        
-        # 绘制边框
-        border_color = (180, 150, 100, alpha)
-        pygame.draw.rect(surface, border_color, tooltip_rect, 2, border_radius=6)
-        
-        # 绘制文本
-        y = tooltip_rect.top + padding
-        for i, line_data in enumerate(wrapped_lines):
-            # 支持新旧两种格式
-            if isinstance(line_data, tuple):
-                line, color_type = line_data
-            else:
-                line = line_data
-                color_type = 'normal'
-            
-            # 根据颜色类型决定颜色
-            if color_type == 'title':
-                # 标题用白色
-                color = (255, 255, 255)
-            elif color_type == 'req_satisfied':
-                # 条件满足 - 绿色
-                color = (100, 220, 100)
-            elif color_type == 'req_unsatisfied':
-                # 条件不满足 - 红色
-                color = (255, 80, 80)
-            elif color_type == 'cost':
-                # 代价 - 橙色
-                color = (255, 180, 100)
-            elif color_type == 'effect':
-                # 收益 - 绿色
-                color = (100, 220, 100)
-            elif color_type == 'normal':
-                # 正常正文 - 白色
-                color = (255, 255, 255)
-            else:
-                # 兼容旧格式 True/False
-                if color_type:
-                    color = (255, 200, 100)
-                else:
-                    color = (255, 80, 80)
-            
-            text_surf = font.render(line, True, color)
-            surface.blit(text_surf, (tooltip_rect.left + padding, y))
-            y += line_height
+        # 使用公共模块绘制tooltip
+        ChoiceTooltipHelper.draw_tooltip(
+            surface=surface,
+            tooltip_data=self.choice_tooltip,
+            font_cache=self._font_cache,
+            fixed_width=280,
+            line_height=26,
+            padding=12,
+            panel_h=self.panel_h,
+            panel_offset=(self.panel_x, self.panel_y)
+        )
     
     # 注意：旧的绘制代码已删除
     
