@@ -12,7 +12,7 @@ from enum import Enum
 
 from src.definitions import *
 from src.ui.base import UIBase
-from src.aistory.story_director import FateNode, NodeType
+from src.aistory.story_director import FateNode, NodeType, NPCDilemmaSeed, DilemmaPhase
 
 
 @dataclass
@@ -114,6 +114,62 @@ class FateGraphUI:
         self.font_ui = font_ui
         self.font_small = font_small
         
+    def _create_test_fate_node(
+        self,
+        node_id: str,
+        npc_id: str,
+        npc_name: str,
+        npc_job: str,
+        title: str,
+        desc: str,
+        phase_str: str,
+        game_day: int,
+        game_season: str,
+        game_year: int,
+        player_choice: Optional[str] = None,
+        alternative_choices: List[str] = None,
+        consequence: str = "",
+        node_status: str = "past",
+        is_intervenable: bool = False,
+        heat: float = 50.0
+    ) -> FateNode:
+        """辅助方法：创建测试用的FateNode"""
+        phase_map = {
+            "EMERGE": DilemmaPhase.EMERGE,
+            "ESCALATE": DilemmaPhase.ESCALATE,
+            "CLIMAX": DilemmaPhase.CLIMAX,
+            "SETTLE": DilemmaPhase.SETTLE
+        }
+        phase = phase_map.get(phase_str, DilemmaPhase.EMERGE)
+        
+        # 创建 NPCDilemmaSeed
+        seed = NPCDilemmaSeed(
+            id=npc_id,  # 使用 id 而非 npc_id
+            desire=title,  # 简化：用标题作为欲望
+            misgiving=desc[:30] if desc else "",  # 简化：用描述前30字作为顾虑
+            heat=heat,
+            phase=phase
+        )
+        
+        # 创建 FateNode
+        node = FateNode(
+            node_id=node_id,
+            npc_id=npc_id,
+            seed=seed,
+            npc_name=npc_name,
+            npc_job=npc_job,
+            game_day=game_day,
+            game_season=game_season,
+            game_year=game_year,
+            player_choice=player_choice,
+            alternative_choices=alternative_choices or [],
+            consequence=consequence,
+            node_status=node_status,
+            is_intervenable=is_intervenable
+        )
+        
+        return node
+
     def _generate_test_data(self, current_day: int = 1):
         """生成测试数据，使用npc_data.csv中的真实NPC"""
         test_timelines = []
@@ -127,53 +183,59 @@ class FateGraphUI:
             heat=90.0
         )
         
-        # 节点1: 高衙内逼婚 (过去，玩家介入) - 时间延后避免与NPC信息重叠
-        node1_1 = FateNode(
+        # 节点1: 高衙内逼婚 (过去，玩家介入)
+        node1_1 = self._create_test_fate_node(
+            node_id="1008_1",
             npc_id="1008",
             npc_name="鱼西施",
             npc_job="MERCHANT",
-            dilemma_title="高衙内逼婚",
-            dilemma_desc="高衙内要强纳她为妾，威胁不从就让她无法在城中卖鱼",
-            phase="EMERGE",
-            game_day=150,  # 延后到第150天，避免与左侧NPC信息重叠
+            title="高衙内逼婚",
+            desc="高衙内要强纳她为妾，威胁不从就让她无法在城中卖鱼",
+            phase_str="EMERGE",
+            game_day=150,
             game_season="夏",
             game_year=1,
             player_choice="拒绝婚事",
             alternative_choices=["顺从高衙内"],
             consequence="与父亲决裂，独自在城东卖鱼为生",
-            node_status=NodeType.PLAYER_INTERVENED.value
+            node_status=NodeType.PLAYER_INTERVENED.value,
+            heat=90.0
         )
         
-        # 节点2: 泼皮抢鱼摊 (改为NPC自然选择，只保留第一个玩家介入节点)
-        node1_2 = FateNode(
+        # 节点2: 泼皮抢鱼摊 (NPC自然选择)
+        node1_2 = self._create_test_fate_node(
+            node_id="1008_2",
             npc_id="1008",
             npc_name="鱼西施",
             npc_job="MERCHANT",
-            dilemma_title="泼皮抢鱼摊",
-            dilemma_desc="泼皮牛二带人来收保护费，要霸占她的鱼摊",
-            phase="ESCALATE",
+            title="泼皮抢鱼摊",
+            desc="泼皮牛二带人来收保护费，要霸占她的鱼摊",
+            phase_str="ESCALATE",
             game_day=320,
             game_season="冬",
             game_year=1,
-            player_choice=None,  # 改为NPC自然选择
+            player_choice=None,
             alternative_choices=["挺身而出", "忍气吞声"],
             consequence="大声呼救，引来街坊赶走泼皮",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=85.0
         )
         
         # 节点3: 黑风寨来人 (当前可介入)
-        node1_3 = FateNode(
+        node1_3 = self._create_test_fate_node(
+            node_id="1008_3",
             npc_id="1008",
             npc_name="鱼西施",
             npc_job="MERCHANT",
-            dilemma_title="黑风寨来人",
-            dilemma_desc="黑风大王派人传话，要她上山做压寨夫人",
-            phase="CLIMAX",
+            title="黑风寨来人",
+            desc="黑风大王派人传话，要她上山做压寨夫人",
+            phase_str="CLIMAX",
             game_day=current_day,
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_status=NodeType.CURRENT_INTERVENABLE.value
+            node_status=NodeType.CURRENT_INTERVENABLE.value,
+            heat=95.0
         )
         
         timeline1.nodes = [node1_1, node1_2, node1_3]
@@ -189,69 +251,77 @@ class FateGraphUI:
         )
         
         # 节点1: 欠下赌债 (NPC自然选择)
-        node2_1 = FateNode(
+        node2_1 = self._create_test_fate_node(
+            node_id="1026_1",
             npc_id="1026",
             npc_name="泼皮牛二",
             npc_job="BANDIT",
-            dilemma_title="欠下赌债",
-            dilemma_desc="赌钱输光了，欠了一屁股债",
-            phase="EMERGE",
-            game_day=120,  # 延后避免与NPC信息重叠
+            title="欠下赌债",
+            desc="赌钱输光了，欠了一屁股债",
+            phase_str="EMERGE",
+            game_day=120,
             game_season="夏",
             game_year=1,
             player_choice=None,
             alternative_choices=["金盆洗手"],
             consequence="投靠黑风大王，当起了泼皮",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=60.0
         )
         
-        # 节点2: 调戏鱼西施被教训 (改为NPC自然选择，只保留一个玩家介入节点)
-        node2_2 = FateNode(
+        # 节点2: 调戏鱼西施被教训 (NPC自然选择)
+        node2_2 = self._create_test_fate_node(
+            node_id="1026_2",
             npc_id="1026",
             npc_name="泼皮牛二",
             npc_job="BANDIT",
-            dilemma_title="调戏鱼西施被教训",
-            dilemma_desc="调戏鱼西施时被玩家打败",
-            phase="ESCALATE",
+            title="调戏鱼西施被教训",
+            desc="调戏鱼西施时被玩家打败",
+            phase_str="ESCALATE",
             game_day=280,
             game_season="冬",
             game_year=1,
-            player_choice=None,  # 改为NPC自然选择
+            player_choice=None,
             alternative_choices=["放他一马", "送官查办"],
             consequence="被痛打一顿，心存怨恨",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=65.0
         )
         
         # 节点3: 得罪高衙内 (NPC选择)
-        node2_3 = FateNode(
+        node2_3 = self._create_test_fate_node(
+            node_id="1026_3",
             npc_id="1026",
             npc_name="泼皮牛二",
             npc_job="BANDIT",
-            dilemma_title="得罪高衙内",
-            dilemma_desc="喝多了酒，调戏了高府的丫鬟",
-            phase="CLIMAX",
+            title="得罪高衙内",
+            desc="喝多了酒，调戏了高府的丫鬟",
+            phase_str="CLIMAX",
             game_day=400,
             game_season="春",
             game_year=2,
             player_choice=None,
             alternative_choices=["向高衙内求饶", "逃跑"],
             consequence="被高衙内追杀",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=70.0
         )
         
         # 节点4: 当前状态
-        node2_4 = FateNode(
+        node2_4 = self._create_test_fate_node(
+            node_id="1026_4",
             npc_id="1026",
             npc_name="泼皮牛二",
             npc_job="BANDIT",
-            dilemma_title="黑风寨的庇护",
-            dilemma_desc="黑风大王庇护他，但要求高衙内的人情",
-            phase="SETTLE",
+            title="黑风寨的庇护",
+            desc="黑风大王庇护他，但要求高衙内的人情",
+            phase_str="SETTLE",
             game_day=current_day,
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_status=NodeType.CURRENT_INTERVENABLE.value
+            node_status=NodeType.CURRENT_INTERVENABLE.value,
+            heat=75.0
         )
         
         timeline2.nodes = [node2_1, node2_2, node2_3, node2_4]
@@ -266,34 +336,38 @@ class FateGraphUI:
             heat=95.0
         )
         
-        node3_1 = FateNode(
+        node3_1 = self._create_test_fate_node(
+            node_id="1023_1",
             npc_id="1023",
             npc_name="黑风大王",
             npc_job="BANDIT",
-            dilemma_title="寨子缺粮",
-            dilemma_desc="冬天寨子粮食不够，兄弟们要饿肚子",
-            phase="EMERGE",
-            game_day=220,  # 延后避免与NPC信息重叠
+            title="寨子缺粮",
+            desc="冬天寨子粮食不够，兄弟们要饿肚子",
+            phase_str="EMERGE",
+            game_day=220,
             game_season="冬",
             game_year=1,
             player_choice=None,
             alternative_choices=["下山抢粮", "紧缩度日"],
             consequence="派手下到镇上收保护费",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=85.0
         )
         
-        node3_2 = FateNode(
+        node3_2 = self._create_test_fate_node(
+            node_id="1023_2",
             npc_id="1023",
             npc_name="黑风大王",
             npc_job="BANDIT",
-            dilemma_title="高衙内的命令",
-            dilemma_desc="高衙内命令他绑架一位朝廷命官的家眷",
-            phase="CLIMAX",
+            title="高衙内的命令",
+            desc="高衙内命令他绑架一位朝廷命官的家眷",
+            phase_str="CLIMAX",
             game_day=current_day,
             game_season="秋",
             game_year=3,
             is_intervenable=True,
-            node_status=NodeType.CURRENT_INTERVENABLE.value
+            node_status=NodeType.CURRENT_INTERVENABLE.value,
+            heat=95.0
         )
         
         timeline3.nodes = [node3_1, node3_2]
@@ -308,36 +382,40 @@ class FateGraphUI:
             heat=80.0
         )
         
-        node4_1 = FateNode(
+        node4_1 = self._create_test_fate_node(
+            node_id="1002_1",
             npc_id="1002",
             npc_name="林冲",
             npc_job="GUARD",
-            dilemma_title="发现主公秘密",
-            dilemma_desc="发现方承意暗中打压政敌，手段并不光明",
-            phase="EMERGE",
-            game_day=200,  # 延后避免与NPC信息重叠
+            title="发现主公秘密",
+            desc="发现方承意暗中打压政敌，手段并不光明",
+            phase_str="EMERGE",
+            game_day=200,
             game_season="夏",
             game_year=1,
             player_choice=None,
             alternative_choices=["向主公进谏", "装作不知"],
             consequence="内心挣扎，继续效忠",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=75.0
         )
         
-        node4_2 = FateNode(
+        node4_2 = self._create_test_fate_node(
+            node_id="1002_2",
             npc_id="1002",
             npc_name="林冲",
             npc_job="GUARD",
-            dilemma_title="忠义的抉择",
-            dilemma_desc="方承意命令他做违背良心的事",
-            phase="ESCALATE",
+            title="忠义的抉择",
+            desc="方承意命令他做违背良心的事",
+            phase_str="ESCALATE",
             game_day=450,
             game_season="秋",
             game_year=2,
-            player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
+            player_choice=None,
             alternative_choices=["违心执行", "直言进谏"],
             consequence="婉拒执行，主公对他产生嫌隙",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=80.0
         )
         
         timeline4.nodes = [node4_1, node4_2]
@@ -352,36 +430,40 @@ class FateGraphUI:
             heat=75.0
         )
         
-        node5_1 = FateNode(
+        node5_1 = self._create_test_fate_node(
+            node_id="1013_1",
             npc_id="1013",
             npc_name="鲁智深",
             npc_job="MONK",
-            dilemma_title="醉酒打人",
-            dilemma_desc="因醉酒打伤了寺中僧人，方丈要罚他禁闭",
-            phase="EMERGE",
-            game_day=180,  # 延后避免与NPC信息重叠
+            title="醉酒打人",
+            desc="因醉酒打伤了寺中僧人，方丈要罚他禁闭",
+            phase_str="EMERGE",
+            game_day=180,
             game_season="夏",
             game_year=1,
             player_choice=None,
             alternative_choices=["接受惩罚", "逃离寺院"],
             consequence="被罚禁闭思过",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=70.0
         )
         
-        node5_2 = FateNode(
+        node5_2 = self._create_test_fate_node(
+            node_id="1013_2",
             npc_id="1013",
             npc_name="鲁智深",
             npc_job="MONK",
-            dilemma_title="救林冲",
-            dilemma_desc="林冲被陷害充军，他出手相救",
-            phase="CLIMAX",
+            title="救林冲",
+            desc="林冲被陷害充军，他出手相救",
+            phase_str="CLIMAX",
             game_day=480,
             game_season="春",
             game_year=2,
-            player_choice=None,  # 改为NPC自然选择，减少玩家介入节点
+            player_choice=None,
             alternative_choices=["大闹野猪林", "不插手"],
             consequence="暗中护送，与官府结仇",
-            node_status=NodeType.NPC_NATURAL.value
+            node_status=NodeType.NPC_NATURAL.value,
+            heat=75.0
         )
         
         timeline5.nodes = [node5_1, node5_2]
@@ -488,39 +570,41 @@ class FateGraphUI:
                     
                     # 从story_beats创建节点
                     for i, beat in enumerate(seed.story_beats):
-                        node = FateNode(
+                        node = self._create_test_fate_node(
+                            node_id=f"{npc_id}_beat_{i}",
                             npc_id=npc_id,
                             npc_name=timeline.npc_name,
                             npc_job=timeline.npc_job,
-                            npc_avatar=timeline.npc_avatar,
-                            dilemma_title=beat.event_summary,
-                            dilemma_desc=f"{beat.desire[:30] if beat.desire else ''}..." if beat.desire else beat.event_summary,
-                            phase=beat.phase.value if beat.phase else "EMERGE",
+                            title=beat.event_summary,
+                            desc=f"{beat.desire[:30] if beat.desire else ''}..." if beat.desire else beat.event_summary,
+                            phase_str=beat.phase.value if beat.phase else "EMERGE",
                             game_day=i * 30 + 1,  # 估算天数
                             game_season=["春", "夏", "秋", "冬"][(i // 4) % 4],
                             game_year=1 + i // 4,
-                            player_choice=beat.player_choice,
+                            player_choice=beat.player_choice if beat.player_choice else None,
                             consequence=beat.consequence_summary,
-                            node_status=NodeType.PLAYER_INTERVENED.value if beat.player_choice else NodeType.NPC_NATURAL.value
+                            node_status=NodeType.PLAYER_INTERVENED.value if beat.player_choice else NodeType.NPC_NATURAL.value,
+                            heat=seed.heat
                         )
                         timeline.nodes.append(node)
                     
                     # 添加当前可介入节点（如果有pending_event）
                     if hasattr(seed, 'pending_event') and seed.pending_event:
                         pending = seed.pending_event
-                        node = FateNode(
+                        node = self._create_test_fate_node(
+                            node_id=f"{npc_id}_pending",
                             npc_id=npc_id,
                             npc_name=timeline.npc_name,
                             npc_job=timeline.npc_job,
-                            npc_avatar=timeline.npc_avatar,
-                            dilemma_title=pending.title,
-                            dilemma_desc=pending.description[:50] + "..." if len(pending.description) > 50 else pending.description,
-                            phase=seed.phase.value if seed.phase else "EMERGE",
+                            title=pending.title,
+                            desc=pending.description[:50] + "..." if len(pending.description) > 50 else pending.description,
+                            phase_str=seed.phase.value if seed.phase else "EMERGE",
                             game_day=current_day,
                             game_season=["春", "夏", "秋", "冬"][(current_day // 90) % 4],
                             game_year=1 + current_day // 360,
                             is_intervenable=True,
-                            node_status=NodeType.CURRENT_INTERVENABLE.value
+                            node_status=NodeType.CURRENT_INTERVENABLE.value,
+                            heat=seed.heat
                         )
                         timeline.nodes.append(node)
             

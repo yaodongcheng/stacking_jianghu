@@ -239,6 +239,11 @@ def main():
     ctx.event_notification = get_notification_manager(SCREEN_W, SCREEN_H)
     ctx.live_news_manager = ctx.event_notification  # 兼容别名
     
+    # 【事发地显示模式】设置摄像机引用
+    if camera:
+        ctx.event_notification.set_camera(camera)
+        print(f"[EventNotification] 已设置摄像机引用，显示模式: ON_SITE")
+    
     # 事件生成器和导演系统
     ctx.director = get_director()
     
@@ -590,7 +595,7 @@ def main():
             
             # 【大宋实况】右侧事件通知点击处理
             if hasattr(ctx, 'event_notification') and ctx.current_state == GAME_STATE_PLAYING:
-                if ctx.event_notification.handle_event(event):
+                if ctx.event_notification.handle_event(event, camera):
                     continue  # 事件通知消费了事件
             
             # 【大宋实况】快捷键 L 打开新闻历史面板
@@ -1161,7 +1166,7 @@ def main():
         # ══════════════════════════════════════════════════════════════════════
         if hasattr(ctx, 'event_notification') and ctx.current_state == GAME_STATE_PLAYING:
             ctx.event_notification.update(dt)
-            ctx.event_notification.draw(screen)
+            ctx.event_notification.draw(screen, camera)
         
         # ══════════════════════════════════════════════════════════════════════
         # 【大宋实况】实况快照面板（全屏事件展示）

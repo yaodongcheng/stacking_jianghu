@@ -9,16 +9,21 @@
 功能：
   1. LiveNewsItem - 统一数据类（包含业务数据+UI状态）
   2. EventNotificationManager - 通知管理+历史记录+效果应用
-  3. 右侧通知卡片UI
+  3. 右侧通知卡片UI（支持右上角模式 / 事发地模式）
 """
 
 import pygame
+import math
 import time
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from src.definitions import SIDEBAR_W
+from src.definitions import (
+    SIDEBAR_W, TOPBAR_H,
+    EVENT_DISPLAY_MODE, EVENT_ONSITE_CARD_OFFSET_X, EVENT_ONSITE_CARD_OFFSET_Y,
+    EVENT_ARROW_SIZE, EVENT_ARROW_MARGIN
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -186,8 +191,13 @@ class EventNotificationManager:
     """
     事件通知管理器
     
-    管理右侧的事件通知卡片队列 + 历史记录
+    管理事件通知卡片队列 + 历史记录
     统一管理"大宋实况"系统的所有事件数据
+    
+    显示模式：
+      - CORNER: 右上角模式 - 事件卡片固定显示在屏幕右上角
+      - ON_SITE: 事发地模式 - 事件卡片显示在事件发生位置
+                如果事件超出摄像机范围，显示在最靠近的边界并添加方向箭头
     """
     
     # 布局常量
@@ -222,6 +232,7 @@ class EventNotificationManager:
     COLOR_TITLE = (255, 255, 255)
     COLOR_SUBTITLE = (180, 180, 200)
     COLOR_UNREAD = (100, 180, 255)
+    COLOR_ARROW = (255, 200, 100)  # 箭头颜色
     
     def __init__(self, screen_w: int, screen_h: int):
         self.screen_w = screen_w
@@ -245,14 +256,28 @@ class EventNotificationManager:
         # 头像缓存
         self._avatar_cache: Dict[str, pygame.Surface] = {}
         
+        # 箭头图标缓存
+        self._arrow_cache: Dict[str, pygame.Surface] = {}
+        
         # 回调
         self.on_notification_click: Optional[Callable[[LiveNewsItem], None]] = None
+        
+        # 摄像机引用（用于事发地模式计算位置）
+        self._camera = None
         
         # 计算位置（在侧边栏左侧，不重叠）
         # 侧边栏位于 screen_w - SIDEBAR_W 到 screen_w
         # 通知卡片位于侧边栏左侧
         self.base_x = screen_w - SIDEBAR_W - self.CARD_WIDTH - 15
         self.base_y = 100
+    
+    def set_camera(self, camera):
+        """设置摄像机引用（事发地模式需要）"""
+        self._camera = camera
+    
+    def _get_display_mode(self) -> str:
+        """获取当前显示模式"""
+        return EVENT_DISPLAY_MODE
     
     def _get_font(self, size: int) -> pygame.font.Font:
         """获取缓存的字体"""
@@ -334,19 +359,27 @@ class EventNotificationManager:
         for notif in to_remove:
             self.notifications.remove(notif)
     
-    def handle_event(self, event: pygame.event.Event) -> bool:
+    def handle_event(self, event: pygame.event.Event, camera=None) -> bool:
         """
         处理事件
+        
+        Args:
+            event: pygame事件
+            camera: 摄像机对象（事发地模式需要）
         
         Returns:
             bool: 是否消费了事件
         """
+        # 如果没有传入摄像机但有缓存的摄像机引用，使用缓存
+        if camera is None:
+            camera = self._camera
+        
         if event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
             self.hovered_index = -1
             
             for i, notif in enumerate(self.notifications[:self.MAX_VISIBLE]):
-                card_rect = self._get_card_rect(i, notif)
+                card_rect, _ = self._get_card_rect(i, notif, camera)
                 if card_rect.collidepoint(mx, my):
                     self.hovered_index = i
                     break
@@ -357,8 +390,17 @@ class EventNotificationManager:
             mx, my = event.pos
             
             for i, notif in enumerate(self.notifications[:self.MAX_VISIBLE]):
-                card_rect = self._get_card_rect(i, notif)
+                card_rect, direction_arrow = self._get_card_rect(i, notif, camera)
                 if card_rect.collidepoint(mx, my):
+                    # 事发地模式下，如果事件在视野外，先移动摄像机
+                    if self._get_display_mode() == 'ON_SITE' and camera and direction_arrow:
+                        # 事件在视野外，移动摄像机到事件位置
+                        world_x = notif.location_x
+                        world_y = notif.location_y
+                        if world_x != 0 or world_y != 0:
+                            camera.start_event_focus(world_x, world_y)
+                            print(f"[EventNotification] 移动摄像机到事件位置: ({world_x}, {world_y})")
+                    
                     # 标记为已读
                     notif.read = True
                     
@@ -372,28 +414,195 @@ class EventNotificationManager:
         
         return False
     
-    def _get_card_rect(self, index: int, notif: LiveNewsItem) -> pygame.Rect:
-        """计算通知卡片的位置"""
-        # 滑入动画：从右侧滑入
-        slide_offset = int((1.0 - self._ease_out_cubic(notif.slide_progress)) * (self.CARD_WIDTH + 30))
+    def _get_card_rect(self, index: int, notif: LiveNewsItem, 
+                       camera=None) -> Tuple[pygame.Rect, Optional[str]]:
+        """
+        计算通知卡片的位置
         
-        y = self.base_y + index * (self.CARD_HEIGHT + self.CARD_MARGIN)
-        x = self.base_x + slide_offset
+        Args:
+            index: 通知索引
+            notif: 通知对象
+            camera: 摄像机对象（事发地模式需要）
+            
+        Returns:
+            (card_rect, direction_arrow): 卡片位置矩形, 方向箭头（None表示在视野内无需箭头）
+        """
+        mode = self._get_display_mode()
         
-        return pygame.Rect(x, y, self.CARD_WIDTH, self.CARD_HEIGHT)
+        # 右上角模式：固定位置
+        if mode == 'CORNER' or not camera:
+            slide_offset = int((1.0 - self._ease_out_cubic(notif.slide_progress)) * (self.CARD_WIDTH + 30))
+            y = self.base_y + index * (self.CARD_HEIGHT + self.CARD_MARGIN)
+            x = self.base_x + slide_offset
+            return pygame.Rect(x, y, self.CARD_WIDTH, self.CARD_HEIGHT), None
+        
+        # 事发地模式：根据事件位置计算
+        return self._get_onsite_card_rect(notif, camera)
     
-    def draw(self, screen: pygame.Surface):
-        """绘制所有通知"""
+    def _get_onsite_card_rect(self, notif: LiveNewsItem, 
+                               camera) -> Tuple[pygame.Rect, Optional[str]]:
+        """
+        计算事发地模式下的卡片位置
+        
+        Args:
+            notif: 通知对象
+            camera: 摄像机对象
+            
+        Returns:
+            (card_rect, direction_arrow): 卡片位置矩形, 方向箭头
+        """
+        # 获取事件世界坐标
+        world_x = notif.location_x
+        world_y = notif.location_y
+        
+        # 如果事件没有位置信息，退回到右上角模式
+        if world_x == 0 and world_y == 0:
+            return pygame.Rect(self.base_x, self.base_y, self.CARD_WIDTH, self.CARD_HEIGHT), None
+        
+        # 转换为屏幕坐标
+        screen_x, screen_y = camera.world_to_screen(world_x, world_y)
+        
+        # 计算卡片目标位置（事件位置上方偏移）
+        card_target_x = screen_x + EVENT_ONSITE_CARD_OFFSET_X
+        card_target_y = screen_y + EVENT_ONSITE_CARD_OFFSET_Y - self.CARD_HEIGHT
+        
+        # 计算视口边界（排除侧边栏和顶部栏）
+        view_left = EVENT_ARROW_MARGIN
+        view_right = self.screen_w - SIDEBAR_W - self.CARD_WIDTH - EVENT_ARROW_MARGIN
+        view_top = TOPBAR_H + EVENT_ARROW_MARGIN
+        view_bottom = self.screen_h - self.CARD_HEIGHT - EVENT_ARROW_MARGIN
+        
+        # 判断事件是否在视野内
+        event_in_view = (
+            view_left <= screen_x <= self.screen_w - SIDEBAR_W - EVENT_ARROW_MARGIN and
+            view_top <= screen_y <= self.screen_h - EVENT_ARROW_MARGIN
+        )
+        
+        direction_arrow = None
+        
+        if event_in_view:
+            # 事件在视野内：卡片显示在事件位置
+            # 确保卡片不超出边界
+            card_x = max(view_left, min(view_right, card_target_x))
+            card_y = max(view_top, min(view_bottom, card_target_y))
+        else:
+            # 事件在视野外：计算最近边界位置和方向箭头
+            card_x, card_y, direction_arrow = self._calc_boundary_position(
+                screen_x, screen_y, view_left, view_right, view_top, view_bottom
+            )
+        
+        # 滑入动画
+        slide_progress = self._ease_out_cubic(notif.slide_progress)
+        if slide_progress < 1.0:
+            # 从右侧滑入
+            slide_offset = int((1.0 - slide_progress) * (self.CARD_WIDTH + 30))
+            card_x += slide_offset
+        
+        return pygame.Rect(card_x, card_y, self.CARD_WIDTH, self.CARD_HEIGHT), direction_arrow
+    
+    def _calc_boundary_position(self, event_sx: float, event_sy: float,
+                                 view_left: float, view_right: float,
+                                 view_top: float, view_bottom: float) -> Tuple[int, int, str]:
+        """
+        计算事件在视野外时的边界位置和方向箭头
+        
+        Args:
+            event_sx, event_sy: 事件的屏幕坐标
+            view_left, view_right, view_top, view_bottom: 视口边界
+            
+        Returns:
+            (card_x, card_y, arrow_direction): 卡片位置和箭头方向
+        """
+        # 计算事件相对于视口中心的方位
+        center_x = (view_left + view_right + self.CARD_WIDTH) / 2
+        center_y = (view_top + view_bottom + self.CARD_HEIGHT) / 2
+        
+        dx = event_sx - center_x
+        dy = event_sy - center_y
+        angle = math.atan2(dy, dx)
+        
+        # 定义8个方向
+        # 角度范围：-π 到 π
+        # 右=0, 上=π/2, 左=π, 下=-π/2
+        directions = [
+            ('↗', math.pi * 3 / 8, math.pi * 5 / 8),      # 右上
+            ('↑', math.pi * 5 / 8, math.pi * 7 / 8),      # 上
+            ('↖', math.pi * 7 / 8, math.pi),              # 左上 (正范围)
+            ('↖', -math.pi, -math.pi * 7 / 8),            # 左上 (负范围)
+            ('←', -math.pi * 7 / 8, -math.pi * 5 / 8),    # 左
+            ('↙', -math.pi * 5 / 8, -math.pi * 3 / 8),    # 左下
+            ('↓', -math.pi * 3 / 8, -math.pi * 1 / 8),    # 下
+            ('↘', -math.pi * 1 / 8, math.pi * 1 / 8),     # 右下
+            ('→', math.pi * 1 / 8, math.pi * 3 / 8),      # 右
+        ]
+        
+        arrow = '→'  # 默认箭头
+        for direction, min_angle, max_angle in directions:
+            if min_angle <= angle < max_angle:
+                arrow = direction
+                break
+        
+        # 特殊处理：左上方向的角度跨越边界
+        if angle >= math.pi * 7 / 8 or angle <= -math.pi * 7 / 8:
+            arrow = '↖'
+        
+        # 计算卡片位置：边界上最近的点
+        # 优先考虑主要方向（上下左右）
+        card_x = max(view_left, min(view_right, event_sx))
+        card_y = max(view_top, min(view_bottom, event_sy - self.CARD_HEIGHT))
+        
+        # 如果事件在左侧或右侧外，卡片贴到边界
+        if event_sx < view_left:
+            card_x = view_left
+            # 根据y位置调整箭头
+            if event_sy < view_top:
+                arrow = '↖'
+                card_y = view_top
+            elif event_sy > view_bottom + self.CARD_HEIGHT:
+                arrow = '↙'
+                card_y = view_bottom
+        elif event_sx > view_right + self.CARD_WIDTH:
+            card_x = view_right
+            if event_sy < view_top:
+                arrow = '↗'
+                card_y = view_top
+            elif event_sy > view_bottom + self.CARD_HEIGHT:
+                arrow = '↘'
+                card_y = view_bottom
+        
+        # 如果事件在上方或下方外，卡片贴到边界
+        if event_sy < view_top:
+            card_y = view_top
+            if view_left <= event_sx <= view_right:
+                arrow = '↑'
+        elif event_sy > view_bottom + self.CARD_HEIGHT:
+            card_y = view_bottom
+            if view_left <= event_sx <= view_right:
+                arrow = '↓'
+        
+        return int(card_x), int(card_y), arrow
+    
+    def draw(self, screen: pygame.Surface, camera=None):
+        """
+        绘制所有通知
+        
+        Args:
+            screen: 目标surface
+            camera: 摄像机对象（事发地模式需要）
+        """
         # 调试：打印当前通知数量
         if self.notifications:
             # 每5秒打印一次，避免刷屏
-            import time
             if not hasattr(self, '_last_debug_time') or time.time() - self._last_debug_time > 5:
                 self._last_debug_time = time.time()
                 print(f"[LiveNewsItem] 当前通知数量: {len(self.notifications)}")
         
+        # 如果没有传入摄像机但有缓存的摄像机引用，使用缓存
+        if camera is None:
+            camera = self._camera
+        
         for i, notif in enumerate(self.notifications[:self.MAX_VISIBLE]):
-            self._draw_notification(screen, i, notif)
+            self._draw_notification(screen, i, notif, camera)
     
     def _load_avatar(self, name: str) -> Optional[pygame.Surface]:
         """加载头像图片，从assets/head_icon目录"""
@@ -473,9 +682,18 @@ class EventNotificationManager:
         
         return lines
     
-    def _draw_notification(self, screen: pygame.Surface, index: int, notif: LiveNewsItem):
-        """绘制单个通知卡片 - 使用共享的 draw_event_card 函数保持UI一致性"""
-        card_rect = self._get_card_rect(index, notif)
+    def _draw_notification(self, screen: pygame.Surface, index: int, notif: LiveNewsItem,
+                           camera=None):
+        """
+        绘制单个通知卡片
+        
+        Args:
+            screen: 目标surface
+            index: 通知索引
+            notif: 通知对象
+            camera: 摄像机对象（事发地模式需要）
+        """
+        card_rect, direction_arrow = self._get_card_rect(index, notif, camera)
         is_hover = (index == self.hovered_index)
         
         # 使用共享的绘制函数
@@ -492,6 +710,56 @@ class EventNotificationManager:
             is_unread=not notif.read,
             show_border=True
         )
+        
+        # 如果有方向箭头，绘制箭头
+        if direction_arrow:
+            self._draw_direction_arrow(screen, card_rect, direction_arrow, notif)
+    
+    def _draw_direction_arrow(self, screen: pygame.Surface, card_rect: pygame.Rect,
+                               arrow: str, notif: LiveNewsItem):
+        """
+        绘制方向箭头
+        
+        Args:
+            screen: 目标surface
+            card_rect: 卡片矩形
+            arrow: 箭头字符（↑↓←→↗↘↙↖）
+            notif: 通知对象（用于判断闪烁效果）
+        """
+        # 箭头位置：卡片角落
+        arrow_positions = {
+            '↑': (card_rect.centerx, card_rect.bottom + 5),
+            '↓': (card_rect.centerx, card_rect.top - 5),
+            '←': (card_rect.right + 5, card_rect.centery),
+            '→': (card_rect.left - 5, card_rect.centery),
+            '↗': (card_rect.left - 5, card_rect.bottom + 5),
+            '↘': (card_rect.left - 5, card_rect.top - 5),
+            '↙': (card_rect.right + 5, card_rect.top - 5),
+            '↖': (card_rect.right + 5, card_rect.bottom + 5),
+        }
+        
+        pos_x, pos_y = arrow_positions.get(arrow, (card_rect.right, card_rect.centery))
+        
+        # 绘制箭头背景圆
+        bg_radius = EVENT_ARROW_SIZE
+        # 闪烁效果
+        flash = (int(time.time() * 3) % 2 == 0)
+        bg_color = (255, 220, 100, 200) if flash else (200, 160, 60, 200)
+        
+        # 创建带透明度的圆
+        arrow_surf = pygame.Surface((bg_radius * 2 + 4, bg_radius * 2 + 4), pygame.SRCALPHA)
+        center = (bg_radius + 2, bg_radius + 2)
+        pygame.draw.circle(arrow_surf, bg_color, center, bg_radius)
+        pygame.draw.circle(arrow_surf, (255, 255, 255), center, bg_radius, 2)
+        
+        # 绘制箭头文字
+        font = self._get_font(EVENT_ARROW_SIZE)
+        arrow_text = font.render(arrow, True, (50, 30, 10))
+        text_rect = arrow_text.get_rect(center=center)
+        arrow_surf.blit(arrow_text, text_rect)
+        
+        # 绘制到屏幕
+        screen.blit(arrow_surf, (pos_x - bg_radius - 2, pos_y - bg_radius - 2))
     
     def _ease_out_cubic(self, t: float) -> float:
         """缓出动画曲线"""

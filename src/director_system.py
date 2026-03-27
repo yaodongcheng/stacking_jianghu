@@ -1217,6 +1217,31 @@ class AIDirector:
             actor_ids = [int(a.get('npc_id', 0)) for a in actors if a.get('npc_id')]
             actor_names = [a.get('npc_name', '') for a in actors]
             
+            # ════════════════════════════════════════════════════════════
+            # 【事发地显示模式】获取事件位置（第一个演员的位置）
+            # ════════════════════════════════════════════════════════════
+            location_x = 0
+            location_y = 0
+            location_name = "未知地点"
+            
+            if actor_ids and ctx and hasattr(ctx, 'all_cards'):
+                # 从 all_cards 中查找第一个演员的位置
+                for card in ctx.all_cards:
+                    if hasattr(card, 'id') and card.id == actor_ids[0]:
+                        location_x = card.rect.centerx
+                        location_y = card.rect.centery
+                        # 尝试获取位置名称
+                        if hasattr(card, 'zone'):
+                            zone_names = {
+                                'INNER': '城内',
+                                'OUTER': '城外',
+                                'FARM': '农田',
+                                'MARKET': '集市',
+                                'SLUM': '贫民窟'
+                            }
+                            location_name = zone_names.get(card.zone, '城内')
+                        break
+            
             # 确定事件类别
             event_type = decision.get('event_type', '')
             template = next((t for t in self.event_templates if t['id'] == event_type), None)
@@ -1270,7 +1295,9 @@ class AIDirector:
                 dilemma_type=dilemma,
                 actor_ids=actor_ids,
                 actor_names=actor_names,
-                location="城内",  # TODO: 根据演员位置确定
+                location=location_name,  # 根据演员位置动态确定
+                location_x=location_x,   # 【事发地显示模式】世界坐标
+                location_y=location_y,
                 choices=choices,  # 使用处理后的选项（包含"前往处理"）
                 priority=3 if tension == 'HIGH' else (4 if tension == 'CRITICAL' else 2),
                 auto_popup=(tension == 'CRITICAL'),

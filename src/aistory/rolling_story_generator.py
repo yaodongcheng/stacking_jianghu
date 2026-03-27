@@ -1122,7 +1122,8 @@ actors数组中的role字段可选值：
             news_item = self._parse_event_card(
                 response.raw_response, 
                 npc_id_str,
-                npc_name_str
+                npc_name_str,
+                npc  # 【事发地显示模式】传入npc对象以获取位置
             )
             return news_item
             
@@ -1130,13 +1131,14 @@ actors数组中的role字段可选值：
             log_game_event(f"[RollingStoryGenerator] 生成失败: {e}", tag="ERROR")
             raise
 
-    def _parse_event_card(self, response: str, npc_id: str, npc_name: str = "") -> LiveNewsItem:
+    def _parse_event_card(self, response: str, npc_id: str, npc_name: str = "", npc=None) -> LiveNewsItem:
         """解析LLM返回的事件卡JSON - 直接创建LiveNewsItem，避免中间转换
         
         Args:
             response: LLM返回的JSON字符串
             npc_id: 困境主角NPC的ID（生成事件的核心NPC）
             npc_name: 困境主角NPC的名字
+            npc: NPC对象（用于获取位置）
         """
         
         try:
@@ -1184,6 +1186,27 @@ actors数组中的role字段可选值：
                         pass
                 actor_names.append(actor.get('npc_name', ''))
             
+            # ════════════════════════════════════════════════════════════
+            # 【事发地显示模式】获取事件位置（主角NPC的位置）
+            # ════════════════════════════════════════════════════════════
+            location_x = 0
+            location_y = 0
+            location_name = "街市"  # 默认地点
+            
+            if npc and hasattr(npc, 'rect'):
+                location_x = npc.rect.centerx
+                location_y = npc.rect.centery
+                # 尝试获取位置名称
+                if hasattr(npc, 'zone'):
+                    zone_names = {
+                        'INNER': '城内',
+                        'OUTER': '城外',
+                        'FARM': '农田',
+                        'MARKET': '集市',
+                        'SLUM': '贫民窟'
+                    }
+                    location_name = zone_names.get(npc.zone, '街市')
+            
             # 创建LiveNewsItem（直接创建，避免EventCard中间转换）
             news_item = LiveNewsItem(
                 id=f"beat_{npc_id}_{data.get('chain_phase', 'EMERGE')}_{hash(response) % 10000}",
@@ -1195,7 +1218,9 @@ actors数组中的role字段可选值：
                 dilemma_type=DilemmaType(data.get('dilemma_type', 'MORAL_GREY')) if DilemmaType else None,
                 actor_ids=actor_ids,
                 actor_names=actor_names,
-                location="街市",  # 默认地点
+                location=location_name,  # 根据NPC位置动态确定
+                location_x=location_x,   # 【事发地显示模式】世界坐标
+                location_y=location_y,
                 choices=choices,
                 tags=data.get('tags', []),
                 comments=data.get('comments', []),

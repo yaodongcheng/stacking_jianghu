@@ -314,6 +314,20 @@ DEBUG_SHOW_INVISIBLE = True
 # 'SUBTITLE' - 底部字幕式：对话框固定在屏幕下方（适合3A大作风格）
 DIALOG_DISPLAY_MODE = 'BUBBLE'
 
+# =========================================
+# 事件通知显示模式
+# =========================================
+# 'CORNER'  - 右上角模式：事件通知卡片固定显示在屏幕右上角（默认）
+# 'ON_SITE' - 事发地模式：事件通知卡片显示在事件发生的地点
+#             如果事件超出摄像机范围，显示在最靠近的边界并添加方向箭头
+EVENT_DISPLAY_MODE = 'ON_SITE'
+
+# 事发地显示配置
+EVENT_ONSITE_CARD_OFFSET_X = 20    # 卡片相对事件位置的X偏移（避免遮挡）
+EVENT_ONSITE_CARD_OFFSET_Y = -80   # 卡片相对事件位置的Y偏移（显示在事件上方）
+EVENT_ARROW_SIZE = 16              # 方向箭头大小（像素）
+EVENT_ARROW_MARGIN = 30            # 箭头距屏幕边缘的最小距离
+
 # 气泡式对话框配置
 BUBBLE_MAX_WIDTH = 280        # 气泡最大宽度
 BUBBLE_PADDING = 12           # 气泡内边距
