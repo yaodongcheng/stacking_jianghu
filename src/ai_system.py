@@ -127,6 +127,36 @@ class AISystem:
                     npc.state    = STATE_IDLE
                     npc.ai_reason = "散去(原地)"
                 interrupted = True
+            
+            # ── EVENT_ZONE_CLEAR：清场（离开事件区）────────────────
+            elif etype == 'EVENT_ZONE_CLEAR':
+                # 事件区清场：让NPC离开事件区
+                center_x = evt.get('center_x', 0)
+                center_y = evt.get('center_y', 0)
+                radius = evt.get('radius', 300)
+                
+                # 计算离开方向：从事件中心向外
+                import math
+                npc_x = npc.rect.centerx
+                npc_y = npc.rect.centery
+                angle = math.atan2(npc_y - center_y, npc_x - center_x)
+                
+                # 目标点：事件区边界外 50 像素
+                exit_distance = radius + 50
+                target_x = int(center_x + math.cos(angle) * exit_distance)
+                target_y = int(center_y + math.sin(angle) * exit_distance)
+                
+                # 清除当前行为
+                npc.action_queue.clear()
+                npc.target_obj = None  # 清除建筑目标
+                
+                # 设置移动目标和状态
+                npc.state = STATE_MOVING
+                npc.ai_reason = "清场"
+                npc.set_movement_target(target_x, target_y, "清场：离开事件区")
+                
+                log_game_event(f"[EVENT] {npc.name} 收到EVENT_ZONE_CLEAR → 清场前往 ({target_x}, {target_y})", tag="AI")
+                interrupted = True
 
         npc._event_queue = []   # 消费完毕，清空队列
         return interrupted
@@ -1901,9 +1931,51 @@ class AISystem:
         # 配方驱动AI没有找到工作，返回False让硬编码逻辑处理
         return False
     
+    def _is_in_event_zone(self, target) -> bool:
+        """
+        检查目标是否在事件区内
+        
+        Args:
+            target: 建筑、NPC 或任何有 rect 属性的对象
+            
+        Returns:
+            bool: True 表示在事件区内，应该被排除
+        """
+        from src.context import ctx
+        
+        event_zone = getattr(ctx, '_event_zone', None)
+        if not event_zone or not event_zone.get('active', False):
+            return False
+        
+        # 获取目标位置
+        if hasattr(target, 'rect'):
+            tx = target.rect.centerx
+            ty = target.rect.centery
+        elif hasattr(target, 'x') and hasattr(target, 'y'):
+            tx, ty = target.x, target.y
+        else:
+            return False
+        
+        # 计算距离
+        center_x = event_zone.get('center_x', 0)
+        center_y = event_zone.get('center_y', 0)
+        radius = event_zone.get('radius', 0)
+        
+        dist = math.hypot(tx - center_x, ty - center_y)
+        return dist <= radius
+    
     def _find_nearest_building(self, npc, all_buildings, building_type):
-        """找到最近的指定类型建筑"""
+        """找到最近的指定类型建筑（排除事件区内的建筑）"""
+        from src.context import ctx
+        
         candidates = [b for b in all_buildings if b.building_type == building_type]
+        
+        # 排除事件区内的建筑
+        if getattr(ctx, '_event_zone', {}).get('active', False):
+            # 无关NPC不能选择事件区内的建筑
+            if not getattr(npc, '_event_protected', False):
+                candidates = [b for b in candidates if not self._is_in_event_zone(b)]
+        
         if not candidates:
             return None
         return min(candidates, key=lambda b: math.hypot(
@@ -1912,11 +1984,19 @@ class AISystem:
         ))
     
     def _find_nearest_empty_building(self, npc, all_buildings, building_type):
-        """找到最近的空闲指定类型建筑"""
+        """找到最近的空闲指定类型建筑（排除事件区内的建筑）"""
+        from src.context import ctx
+        
         candidates = [
             b for b in all_buildings 
             if b.building_type == building_type and b.stack_child is None
         ]
+        
+        # 排除事件区内的建筑
+        if getattr(ctx, '_event_zone', {}).get('active', False):
+            if not getattr(npc, '_event_protected', False):
+                candidates = [b for b in candidates if not self._is_in_event_zone(b)]
+        
         if not candidates:
             return None
         return min(candidates, key=lambda b: math.hypot(

@@ -1800,6 +1800,22 @@ class AIDirector:
             # 5. 【添加围观群众】从 comments 中提取围观者并瞬移到周围
             self._spawn_spectators_from_comments(ctx, event_x, event_y, event_npcs, news_item)
             
+            # ══════════════════════════════════════════════════════════════
+            # 6. 【设置事件区域】定义事件边界，用于清场和渲染遮罩
+            # ══════════════════════════════════════════════════════════════
+            event_radius = 350  # 事件区域半径（像素）
+            ctx._event_zone = {
+                'center_x': event_x,
+                'center_y': event_y,
+                'radius': event_radius,
+                'news_id': getattr(news_item, 'news_id', None),
+                'active': True
+            }
+            print(f"[Director·场景布置] 事件区域已设置: 中心=({event_x}, {event_y}), 半径={event_radius}")
+            
+            # 7. 【清场】让事件区内的无关 NPC 离开
+            self._clear_event_zone(ctx, event_x, event_y, event_radius, event_npcs, news_item)
+            
             print(f"[Director·场景布置] 场景布置完成！等待玩家前往...")
             print(f"{'='*70}\n")
             
@@ -1925,8 +1941,69 @@ class AIDirector:
                 target_xy = (getattr(npc, 'target_x', None), getattr(npc, 'target_y', None))
                 print(f"[Director·场景布置]   👥 {npc.name} 作为围观群众出现在 ({spectator_x}, {spectator_y})")
                 print(f"[Director·场景布置]      状态: {npc.state}, AI原因: {npc.ai_reason}, 移动目标: {target_xy}")
-    
-    
+        
+        # 保存围观群众列表供后续使用
+        ctx._pending_spectators = spectators
+
+
+    def _clear_event_zone(self, ctx, event_x: int, event_y: int, event_radius: int, event_npcs: list, news_item):
+        """
+        清场：让事件区域内的无关 NPC 离开（通过 AI 系统发送事件）
+        
+        Args:
+            ctx: 游戏上下文
+            event_x, event_y: 事件中心坐标
+            event_radius: 事件区域半径
+            event_npcs: 事件相关的NPC列表（演员）
+            news_item: 新闻事件对象
+        """
+        from src.entities import NPC
+        import math
+        
+        # 获取事件相关NPC的ID集合（演员 + 围观群众）
+        event_npc_ids = {getattr(npc, 'id', None) for npc in event_npcs}
+        spectators = getattr(ctx, '_pending_spectators', [])
+        event_npc_ids.update(getattr(npc, 'id', None) for npc in spectators)
+        
+        # 遍历所有NPC，找出在事件区内但无关的NPC
+        cleared_count = 0
+        for card in ctx.all_cards:
+            if not isinstance(card, NPC):
+                continue
+            
+            # 跳过玩家
+            if getattr(card, 'job', '') == 'PLAYER':
+                continue
+            
+            # 跳过事件相关的NPC
+            npc_id = getattr(card, 'id', None)
+            if npc_id in event_npc_ids:
+                continue
+            
+            # 跳过已经处于事件保护状态的NPC
+            if getattr(card, '_event_protected', False):
+                continue
+            
+            # 检查是否在事件区域内
+            npc_x = card.rect.centerx
+            npc_y = card.rect.centery
+            dist = math.hypot(npc_x - event_x, npc_y - event_y)
+            
+            if dist <= event_radius:
+                # 无关NPC在事件区内，发送清场事件
+                clear_event = {
+                    'type': 'EVENT_ZONE_CLEAR',
+                    'center_x': event_x,
+                    'center_y': event_y,
+                    'radius': event_radius,
+                    'news_id': getattr(news_item, 'news_id', None)
+                }
+                ctx.ai_system.push_event(card, clear_event)
+                cleared_count += 1
+        
+        print(f"[Director·清场] 已发送清场事件给 {cleared_count} 位无关NPC")
+
+
     def get_pending_news_item(self) -> Optional[LiveNewsItem]:
         """获取待展示的新闻事件"""
         result = self.pending_news_item

@@ -824,12 +824,18 @@ def main():
                         old_state = card.state
                         card.state = STATE_IDLE
                         card.ai_reason = "剧情结束，恢复正常"
+                        card._event_protected = False  # 清除事件保护标记
                         event_npcs_released += 1
                         print(f"  释放 {getattr(card, 'name', '?')}: {old_state} -> {card.state}")
                 if event_npcs_released > 0:
                     print(f"[Main] 共释放了 {event_npcs_released} 个事件NPC")
                 else:
                     print("[Main] 没有需要释放的事件NPC")
+                
+                # 【事件区清理】关闭事件区域，恢复所有NPC的正常AI行为
+                if hasattr(ctx, '_event_zone') and ctx._event_zone.get('active', False):
+                    ctx._event_zone['active'] = False
+                    print(f"[Main] 事件区域已关闭，NPC可正常进入该区域")
                 
                 # ══════════════════════════════════════════════════════════════
                 # 【大宋实况·任务模式】剧情结束后调用清理回调

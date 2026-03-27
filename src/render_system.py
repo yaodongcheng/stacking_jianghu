@@ -160,6 +160,9 @@ class RenderSystem:
             else:
                 p.draw(screen)
 
+        # ── 4.5 事件区域遮罩（半透明+边框）────────────────────────
+        self._draw_event_zone(context, screen, cam)
+
         # ── 5. UI 层（固定坐标，不随摄像机移动）──────────────────
         self._draw_ui_layer(context, mx, my, click_event)
 
@@ -177,6 +180,56 @@ class RenderSystem:
             self._draw_player_debug(player, cam)
 
         # 注意：flip() 已移至 main.py 统一调用，避免多次刷新导致闪烁
+
+    def _draw_event_zone(self, ctx, screen, cam):
+        """
+        绘制事件区域遮罩（半透明+边框）
+        
+        Args:
+            ctx: 游戏上下文
+            screen: Pygame 屏幕对象
+            cam: 摄像机对象（可能为 None）
+        """
+        # 检查是否有活跃的事件区域
+        event_zone = getattr(ctx, '_event_zone', None)
+        if not event_zone or not event_zone.get('active', False):
+            return
+        
+        center_x = event_zone.get('center_x', 0)
+        center_y = event_zone.get('center_y', 0)
+        radius = event_zone.get('radius', 300)
+        
+        # 应用摄像机偏移
+        if cam is not None:
+            draw_x = center_x - cam.offset_x
+            draw_y = center_y - cam.offset_y
+        else:
+            draw_x = center_x
+            draw_y = center_y
+        
+        # 创建半透明遮罩表面
+        mask_size = radius * 2 + 4  # 边框占 2 像素
+        mask_surface = pygame.Surface((mask_size, mask_size), pygame.SRCALPHA)
+        
+        # 绘制半透明圆形区域（淡红色，表示事件区）
+        # 外圈：半透明遮罩
+        pygame.draw.circle(mask_surface, (255, 200, 200, 40), 
+                          (radius + 2, radius + 2), radius)
+        
+        # 边框：红色虚线效果（用多个短弧线模拟）
+        border_color = (255, 100, 100, 180)
+        num_dashes = 36  # 虚线段数
+        for i in range(num_dashes):
+            if i % 2 == 0:  # 间隔绘制，形成虚线
+                start_angle = i * 2 * math.pi / num_dashes
+                end_angle = (i + 1) * 2 * math.pi / num_dashes
+                # 绘制弧线
+                rect = pygame.Rect(2, 2, radius * 2, radius * 2)
+                pygame.draw.arc(mask_surface, border_color, rect, 
+                               start_angle, end_angle, 3)
+        
+        # 绘制到屏幕
+        screen.blit(mask_surface, (draw_x - radius - 2, draw_y - radius - 2))
 
     def _draw_ui_layer(self, ctx, mx, my, click_event):
         # 顶部时间栏
