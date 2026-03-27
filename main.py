@@ -519,15 +519,28 @@ def main():
                     news_bridge = get_news_dialog_bridge()
                     
                     if news_bridge.is_choice_pending():
-                        # 这是大宋实况事件的选择，获取后续对话
+                        # 这是大宋实况事件的选择
+                        current_news = news_bridge.get_current_news()
+                        
+                        # 【关键】将 selected_key ('A','B','C') 转换为 story_choices 中的索引
+                        key_to_idx = {'A': 0, 'B': 1, 'C': 2, '0': 0, '1': 1, '2': 2}
+                        choice_idx = key_to_idx.get(selected_key, 0)
+                        
+                        # 【核心】调用 apply_choice 推进故事阶段、执行效果（与 live_snapshot_panel 一致）
+                        from src.ui.event_notification import get_notification_manager
+                        notif_mgr = get_notification_manager()
+                        result = notif_mgr.apply_choice(current_news, choice_idx, ctx)
+                        print(f"[大宋实况] 玩家选择 {selected_key}，已应用效果并推进故事阶段")
+                        
+                        # 获取后续对话
                         followup_dialogs = news_bridge.get_choice_followup_dialogs(selected_key, ctx)
                         if followup_dialogs:
                             ctx.story_ui.start_dialog(followup_dialogs)
                             ctx.ft_manager.add_text(f"📜 {selected_key}", ctx.player.rect.centerx, 
                                                    ctx.player.rect.top - 50, (255, 230, 150))
-                            print(f"[大宋实况] 玩家选择 {selected_key}，播放后续对话 {len(followup_dialogs)} 句")
+                            print(f"[大宋实况] 播放后续对话 {len(followup_dialogs)} 句")
                         else:
-                            print(f"[大宋实况] 玩家选择 {selected_key}，但没有后续对话")
+                            print(f"[大宋实况] 没有后续对话")
                             news_bridge.clear_current()  # 清理状态
                     else:
                         # 主线任务的选择，使用原有逻辑

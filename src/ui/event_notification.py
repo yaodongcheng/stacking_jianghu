@@ -1005,9 +1005,9 @@ class EventNotificationManager:
         
         return result
     
-    def apply_choice(self, event: LiveNewsItem, choice_idx: int, ctx=None) -> Optional[Dict]:
+    def apply_choice(self, event: LiveNewsItem, choice_idx: int, ctx=None, use_story_choices: bool = True) -> Optional[Dict]:
         """
-        直接应用选择到事件（供快照面板使用）
+        直接应用选择到事件（供快照面板和story_ui使用）
         
         【起承转合四幕追踪】
         - 记录玩家选择到 StoryBeat
@@ -1018,6 +1018,7 @@ class EventNotificationManager:
             event: LiveNewsItem对象
             choice_idx: 选择索引
             ctx: 游戏上下文
+            use_story_choices: 是否使用 story_choices（默认True，story_ui调用时使用）
             
         Returns:
             效果执行结果
@@ -1025,10 +1026,18 @@ class EventNotificationManager:
         if not event or event.is_resolved:
             return None
         
-        if choice_idx < 0 or choice_idx >= len(event.choices):
+        # 【修复】根据调用场景选择正确的选项列表
+        # - story_ui.py 调用时：索引对应 story_choices
+        # - live_snapshot_panel.py 调用时：索引对应 choices（已通过 setup_ui_choices 设置）
+        if use_story_choices:
+            choices_list = event.story_choices
+        else:
+            choices_list = event.choices
+        
+        if choice_idx < 0 or choice_idx >= len(choices_list):
             return None
         
-        choice = event.choices[choice_idx]
+        choice = choices_list[choice_idx]
         event.player_choice = choice.get("text", "")
         event.player_choice_idx = choice_idx  # 保存选择索引
         event.is_resolved = True

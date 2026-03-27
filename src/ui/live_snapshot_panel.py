@@ -373,9 +373,10 @@ class LiveSnapshotPanel:
                             story_idx = self.news_item.get_story_choice_index(i)
                             if story_idx >= 0:
                                 # 快信处理的故事选项：调用 apply_choice
+                                # 注意：传入 use_story_choices=False，因为当前 choices 已通过 setup_ui_choices 设置
                                 from src.ui.event_notification import get_notification_manager
                                 notif_mgr = get_notification_manager()
-                                result = notif_mgr.apply_choice(self.news_item, story_idx, None)
+                                result = notif_mgr.apply_choice(self.news_item, story_idx, None, use_story_choices=False)
                                 print(f"[LiveSnapshotPanel] 已处理故事选项: {choice.get('text', '未知')} (索引: {story_idx})")
                             else:
                                 # 回退到回调方式（当面处理模式）
