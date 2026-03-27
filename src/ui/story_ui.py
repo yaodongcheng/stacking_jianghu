@@ -1062,46 +1062,45 @@ class StoryUI:
             self.choice_anim_timer += 1
     
     def draw_choice(self, screen):
-        """绘制选择界面 - 屏幕中间靠右1/3位置"""
+        """绘制选择界面 - 屏幕居中偏下位置"""
         if not self.choice_mode or not self.choice_options:
             return
         
-        # 使用缓存的遮罩层，避免每帧创建新 Surface 导致闪烁
-        # 轻微的全屏半透明遮罩
+        # 使用缓存的遮罩层
         if self._choice_overlay is None or self._choice_overlay.get_size() != (self.screen_w, self.screen_h):
             self._choice_overlay = pygame.Surface((self.screen_w, self.screen_h), pygame.SRCALPHA)
-            # 均匀的半透明黑色遮罩
-            self._choice_overlay.fill((0, 0, 0, 120))
+            self._choice_overlay.fill((0, 0, 0, 150))  # 稍深的遮罩
         
         screen.blit(self._choice_overlay, (0, 0))
         
-        # 面板参数
-        panel_w = 420
-        btn_h = 65
-        btn_gap = 12
+        # 面板参数 - 更宽更美观
+        panel_w = 500
+        btn_h = 50
+        btn_gap = 10
         num_options = len(self.choice_options)
-        panel_h = 80 + num_options * (btn_h + btn_gap) + 20
+        panel_h = 70 + num_options * (btn_h + btn_gap) + 15
         
-        # 放置在屏幕中间靠右1/3位置（水平方向在2/3处）
-        panel_x = self.screen_w * 2 // 3 - panel_w // 2
-        panel_y = (self.screen_h - panel_h) // 2
+        # 【修改】屏幕居中偏下（垂直方向在60%位置）
+        panel_x = (self.screen_w - panel_w) // 2
+        panel_y = int(self.screen_h * 0.55)  # 偏下一点
         
-        # 面板背景 - 右侧半透明深色
+        # 面板背景
         panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
         self._draw_choice_panel_bg(screen, panel_rect)
         
-        # 提示文字 - 左对齐风格
+        # 提示文字 - 居中
         prompt_surf = self.font_name.render(self.choice_prompt, True, (255, 230, 150))
-        screen.blit(prompt_surf, (panel_x + 25, panel_y + 22))
+        prompt_x = panel_x + (panel_w - prompt_surf.get_width()) // 2
+        screen.blit(prompt_surf, (prompt_x, panel_y + 18))
         
         # 分隔线
-        pygame.draw.line(screen, (100, 90, 70), 
-                        (panel_x + 20, panel_y + 55), 
-                        (panel_x + panel_w - 20, panel_y + 55), 1)
+        pygame.draw.line(screen, (120, 100, 60), 
+                        (panel_x + 30, panel_y + 50), 
+                        (panel_x + panel_w - 30, panel_y + 50), 1)
         
         # 绘制选项按钮
         self.choice_buttons = []
-        btn_y = panel_y + 70
+        btn_y = panel_y + 60
         
         # 获取玩家引用（用于tooltip条件检查）
         player = None
@@ -1112,26 +1111,22 @@ class StoryUI:
             pass
         
         for i, option in enumerate(self.choice_options):
-            btn_rect = pygame.Rect(panel_x + 15, btn_y, panel_w - 30, btn_h)
+            btn_rect = pygame.Rect(panel_x + 20, btn_y, panel_w - 40, btn_h)
             self.choice_buttons.append(btn_rect)
-            
-            # 动画：按钮从右侧滑入（仅前几帧有动画）
-            anim_offset = max(0, (i + 1) * 4 - self.choice_anim_timer) * 25
-            btn_rect_draw = btn_rect.move(anim_offset, 0)
             
             # 判断是否悬停
             is_hover = (i == self.choice_hover_index)
             
             # 绘制按钮
-            self._draw_choice_button(screen, btn_rect_draw, option, i + 1, is_hover)
+            self._draw_choice_button(screen, btn_rect, option, i + 1, is_hover)
             
             # 悬停时准备tooltip
             if is_hover:
-                self._prepare_choice_tooltip(option, btn_rect_draw, player)
+                self._prepare_choice_tooltip(option, btn_rect, player)
             
             btn_y += btn_h + btn_gap
         
-        # 绘制tooltip（在所有按钮之后绘制，确保显示在最上层）
+        # 绘制tooltip
         if self.choice_tooltip and self.choice_hover_index >= 0:
             self._draw_choice_tooltip(screen)
     
@@ -1156,88 +1151,103 @@ class StoryUI:
         )
     
     def _draw_choice_panel_bg(self, screen, rect):
-        """绘制选择面板背景 - 直接在screen上绘制，避免创建临时Surface"""
-        # 主体背景 - 直接绘制不透明矩形
-        pygame.draw.rect(screen, (20, 20, 35), rect, border_radius=5)
+        """绘制选择面板背景 - 现代简洁风格"""
+        # 圆角矩形背景
+        pygame.draw.rect(screen, (28, 26, 40), rect, border_radius=8)
         
-        # 金色边框
-        pygame.draw.rect(screen, (180, 150, 80), rect, 3, border_radius=5)
+        # 金色边框（更细更优雅）
+        pygame.draw.rect(screen, (160, 140, 90), rect, 2, border_radius=8)
         
-        # 内部装饰线
-        inner_rect = rect.inflate(-10, -10)
-        pygame.draw.rect(screen, (100, 80, 50), inner_rect, 1, border_radius=3)
+        # 顶部渐变装饰条
+        deco_rect = pygame.Rect(rect.x + 40, rect.y + 3, rect.width - 80, 3)
+        pygame.draw.rect(screen, (200, 170, 100), deco_rect, border_radius=2)
         
-        # 顶部装饰
-        deco_w = 100
-        deco_x = rect.centerx - deco_w // 2
-        pygame.draw.line(screen, (200, 170, 100), 
-                        (deco_x, rect.y), (deco_x + deco_w, rect.y), 3)
+        # 底部装饰条
+        deco_rect_bottom = pygame.Rect(rect.x + 40, rect.bottom - 5, rect.width - 80, 2)
+        pygame.draw.rect(screen, (100, 90, 70), deco_rect_bottom, border_radius=1)
     
     def _draw_choice_button(self, screen, rect, option, num, is_hover):
-        """绘制单个选择按钮"""
-        # 根据选项类型决定颜色风格
-        key = option['key']
-        if key == 'GOOD':
-            base_color = (40, 80, 60)      # 绿色基调
-            hover_color = (60, 120, 80)
-            border_color = (100, 200, 120)
-            icon = "善"
-        elif key == 'EVIL':
-            base_color = (80, 40, 50)      # 红色基调
-            hover_color = (120, 60, 70)
-            border_color = (200, 100, 100)
-            icon = "恶"
-        else:
-            base_color = (50, 50, 70)      # 中性蓝色
-            hover_color = (70, 70, 100)
-            border_color = (150, 150, 200)
-            icon = "中"
-        
+        """绘制单个选择按钮 - 简洁美观风格"""
         # 按钮背景
-        color = hover_color if is_hover else base_color
-        pygame.draw.rect(screen, color, rect, border_radius=8)
-        
-        # 边框 (悬停时更亮)
-        border_w = 3 if is_hover else 2
-        pygame.draw.rect(screen, border_color, rect, border_w, border_radius=8)
-        
-        # 悬停时的发光效果
         if is_hover:
-            glow_rect = rect.inflate(4, 4)
-            glow_color = (*border_color, 100)
-            glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(glow_surf, glow_color, glow_surf.get_rect(), border_radius=10)
-            screen.blit(glow_surf, glow_rect.topleft)
+            bg_color = (60, 55, 75)
+            border_color = (220, 190, 120)
+        else:
+            bg_color = (35, 32, 48)
+            border_color = (100, 90, 70)
         
-        # 序号和图标
-        num_text = f"{num}. {icon}"
-        num_surf = self.font_choice.render(num_text, True, border_color)
-        screen.blit(num_surf, (rect.x + 15, rect.y + 12))
+        pygame.draw.rect(screen, bg_color, rect, border_radius=6)
         
-        # 选项文本
-        text = option.get('text', key)
-        text_color = (255, 255, 255) if is_hover else (220, 220, 220)
-        text_surf = self.font_choice.render(text, True, text_color)
-        screen.blit(text_surf, (rect.x + 70, rect.y + 14))
+        # 边框
+        border_w = 2 if is_hover else 1
+        pygame.draw.rect(screen, border_color, rect, border_w, border_radius=6)
         
-        # 提示文本（效果预览）
-        hint = option.get('hint', '')
-        if hint:
-            # 根据提示内容决定颜色
-            if '+' in hint and '声望' in hint:
-                hint_color = (150, 220, 150)  # 绿色（正面）
-            elif '悬赏' in hint or '-' in hint:
-                hint_color = (220, 150, 150)  # 红色（负面）
+        # 悬停时的微光效果
+        if is_hover:
+            glow_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(glow_surf, (255, 220, 150, 30), glow_surf.get_rect(), border_radius=6)
+            screen.blit(glow_surf, rect.topleft)
+        
+        # 序号圆圈
+        circle_x = rect.x + 25
+        circle_y = rect.centery
+        circle_r = 14
+        circle_color = border_color if is_hover else (80, 75, 65)
+        pygame.draw.circle(screen, circle_color, (circle_x, circle_y), circle_r)
+        pygame.draw.circle(screen, (40, 38, 50), (circle_x, circle_y), circle_r - 2)
+        
+        # 序号文字
+        num_font = self._get_font_cached(16, bold=True)
+        num_surf = num_font.render(str(num), True, (255, 255, 255) if is_hover else (180, 175, 160))
+        num_rect = num_surf.get_rect(center=(circle_x, circle_y))
+        screen.blit(num_surf, num_rect)
+        
+        # 选项文本（支持自动换行）
+        text = option.get('text', option.get('key', '?'))
+        text_color = (255, 255, 255) if is_hover else (210, 205, 195)
+        
+        # 计算可用文本宽度（按钮宽度 - 序号区域 - 右边距）
+        max_text_width = rect.width - 70
+        font = self._get_font_cached(18)
+        
+        # 文本换行处理
+        lines = self._wrap_text_to_width(text, font, max_text_width)
+        
+        # 绘制文本（垂直居中）
+        line_height = 22
+        total_height = len(lines) * line_height
+        start_y = rect.centery - total_height // 2 + 2
+        
+        for j, line in enumerate(lines):
+            text_surf = font.render(line, True, text_color)
+            screen.blit(text_surf, (rect.x + 50, start_y + j * line_height))
+    
+    def _get_font_cached(self, size: int, bold: bool = False) -> pygame.font.Font:
+        """获取缓存的字体"""
+        key = (size, bold)
+        if key not in self._font_cache:
+            font_names = "microsoftyahei,simhei,pingfangsc,notosanscjk,arial"
+            self._font_cache[key] = pygame.font.SysFont(font_names, size, bold=bold)
+        return self._font_cache[key]
+    
+    def _wrap_text_to_width(self, text: str, font: pygame.font.Font, max_width: int) -> list:
+        """将文本按宽度自动换行"""
+        if not text:
+            return ['']
+        
+        lines = []
+        current_line = ""
+        
+        for char in text:
+            test_line = current_line + char
+            if font.size(test_line)[0] <= max_width:
+                current_line = test_line
             else:
-                hint_color = (180, 180, 180)  # 灰色（中性）
-            
-            hint_surf = self.font_hint.render(hint, True, hint_color)
-            screen.blit(hint_surf, (rect.x + 70, rect.y + 42))
+                if current_line:
+                    lines.append(current_line)
+                current_line = char
         
-        # 悬停时的箭头指示
-        if is_hover:
-            arrow = ">"
-            arrow_surf = self.font_choice.render(arrow, True, (255, 255, 255))
-            # 箭头呼吸动画
-            breathe = math.sin(self.choice_anim_timer * 0.15) * 3
-            screen.blit(arrow_surf, (rect.right - 30 + breathe, rect.centery - 10))
+        if current_line:
+            lines.append(current_line)
+        
+        return lines if lines else ['']
