@@ -89,26 +89,14 @@ class FateNode:
         return self.acts.get(self.seed.phase) if self.seed else None
     
     def add_act(self, phase: DilemmaPhase, news_item: 'LiveNewsItem'):
-        """添加一幕新闻，同时创建 snapshot_data 供UI展示"""
+        """添加一幕新闻"""
         self.acts[phase] = news_item
         log_game_event(f"[FateNode] 添加一幕新闻到acts: {phase.value} - {news_item.title} 当前已有新闻数量: {len(self.acts)}", tag="DIRECTOR")
-        # 创建 LiveSnapshotData 供后续UI展示使用
-        # 此时图片已经生成完成，可以直接使用 _image_path
-        from src.ui.live_snapshot_panel import LiveSnapshotData
-        if not hasattr(news_item, 'snapshot_data') or news_item.snapshot_data is None:
-            image_url = getattr(news_item, '_image_path', None) or "placeholder"
-            news_item.snapshot_data = LiveSnapshotData(
-                title=news_item.title or "未知事件",
-                description=news_item.description or "",
-                image_url=image_url,
-                heat_score=getattr(news_item, 'heat_score', 0),
-                tags=news_item.tags if hasattr(news_item, 'tags') else [],
-                comments=news_item.comments if hasattr(news_item, 'comments') else [],
-                choices=news_item.choices if hasattr(news_item, 'choices') else [],
-                actor_names=news_item.actor_names if hasattr(news_item, 'actor_names') else [],
-                news_item=news_item
-            )
-            print(f"[FateNode] 创建 snapshot_data: {news_item.title}, image={image_url[:30]}...")
+        # 重构后：不再需要创建 LiveSnapshotData，news_item 本身已包含所有数据
+        # 设置 image_url（如果图片已生成）
+        if hasattr(news_item, '_image_path') and news_item._image_path:
+            news_item.image_url = news_item._image_path
+            print(f"[FateNode] 设置 image_url: {news_item.title}, image={news_item._image_path[:30]}...")
     
     @property
     def current_phase(self) -> str:
@@ -650,26 +638,34 @@ class StoryDirector:
         """
         处理生成的LiveNewsItem，启动配图+对话扩写流程
         现在generate_next_beat直接返回LiveNewsItem，不再需要转换
+        
+        重构说明：
+        - 不再插入"前往处理"按钮（这由 UI 层面的"当面处理"按钮处理）
+        - story_choices 存储真正的故事选项
+        - choices 由 UI 层动态设置
         """
         print(f"[DilemmaTest] 处理LiveNewsItem: {news_item.title}")
         
-        # 1. 添加"前往处理"按钮作为第一个选项（如果还没有的话）
-        choices = news_item.choices or []
-        has_start_dialog = any(c.get('action') == 'START_DIALOG' for c in choices)
-        if not has_start_dialog:
-            choices.insert(0, {
-                'text': '前往处理',
-                'action': 'START_DIALOG',
-                'effect': ''
-            })
-            news_item.choices = choices
-        
-        # 2. 保存关联的NPC信息供后续使用
+        # 保存关联的NPC信息供后续使用
         news_item._source_npc = npc
         
-        print(f"[DilemmaTest] LiveNewsItem处理完成，启动配图+扩写流程")
+        # 初始化选项系统
+        from src.ui.event_notification import FunctionalAction
         
-        # 3. 启动并行生成流程（配图+对话扩写）
+        # 将 choices 中的故事选项移动到 story_choices
+        if news_item.choices:
+            news_item.story_choices = [
+                c for c in news_item.choices 
+                if not FunctionalAction.is_functional(c.get('action', ''))
+            ]
+        
+        # 设置初始 UI 选项（一级界面：当面处理 + 快信处理）
+        news_item.setup_ui_choices(level=1)
+        
+        print(f"[DilemmaTest] LiveNewsItem处理完成，启动配图+扩写流程")
+        print(f"  story_choices: {len(news_item.story_choices)} 个故事选项")
+        
+        # 启动并行生成流程（配图+对话扩写）
         StoryDirector._start_parallel_generation_for_dilemma(news_item, ctx)
     
     @staticmethod
@@ -724,9 +720,8 @@ class StoryDirector:
                     dialog_done.set()
                     return
                 
-                # 跳过"前往处理"按钮
-                all_choices = news_item.choices or []
-                story_choices = [c for c in all_choices if c.get('action') != 'START_DIALOG']
+                # 使用 story_choices（重构后不再需要过滤）
+                story_choices = news_item.story_choices or []
                 
                 # 提取效果字符串
                 effect_a = story_choices[0].get('effect', '') if len(story_choices) > 0 else ''

@@ -1,4 +1,4 @@
-"""
+﻿"""
 大宋实况 - 实况快照面板
 ========================================
 
@@ -25,40 +25,21 @@ from src.definitions import (
 )
 from src.utils import resource_path
 from src.data_loader import get_npc_name_by_id_global
+from src.ui.event_notification import FunctionalAction, LiveNewsItem
 
 # 默认屏幕尺寸（实际值由构造函数传入）
 DEFAULT_SCREEN_W = 1280
 DEFAULT_SCREEN_H = 720
 
 
-@dataclass
-class LiveSnapshotData:
-    """实况快照数据"""
-    title: str                       # 爆款标题
-    image_url: Optional[str] = None  # AI生图URL (None时显示加载中)
-    heat_score: int = 0              # 热度值
-    comments: List[Dict] = None      # 评论列表
-    tags: List[str] = None           # 标签
-    choices: List[Dict] = None       # 玩家选项
-    actor_names: List[str] = None    # 演员名字
-    news_item: object = None         # 关联的 LiveNewsItem
-    description: str = ""            # 事件详细描述（前因后果）
-    
-    def __post_init__(self):
-        if self.comments is None:
-            self.comments = []
-        if self.tags is None:
-            self.tags = []
-        if self.choices is None:
-            self.choices = []
-        if self.actor_names is None:
-            self.actor_names = []
-
-
 class LiveSnapshotPanel:
     """实况快照展示面板
     
     仿抖音/小红书风格的全屏事件面板
+    
+    重构说明：
+    - 直接使用 LiveNewsItem，不再需要 LiveSnapshotData
+    - 选项系统使用 LiveNewsItem.setup_ui_choices() 管理
     """
     
     def __init__(self, screen_w: int, screen_h: int):
@@ -81,8 +62,8 @@ class LiveSnapshotPanel:
         self.COMMENT_BUTTON_GAP = 12  # 评论区和按钮区间距
         self.DANMAKU_Y_OFFSET = 30  # 弹幕位置上移（从图片顶部往下）
         
-        # 当前显示的快照
-        self.snapshot: Optional[LiveSnapshotData] = None
+        # 当前显示的事件
+        self.news_item: Optional[LiveNewsItem] = None
         self.visible = False
         
         # 动画状态
@@ -177,9 +158,20 @@ class LiveSnapshotPanel:
         # 装饰边框
         pygame.draw.rect(self.placeholder_surface, (80, 70, 100), (0, 0, w, h), 2, border_radius=8)
     
-    def show(self, snapshot: LiveSnapshotData):
-        """显示快照面板"""
-        self.snapshot = snapshot
+    def show(self, news_item: LiveNewsItem):
+        """
+        显示快照面板
+        
+        Args:
+            news_item: LiveNewsItem 对象（已包含 story_choices 和 choices）
+        
+        重构说明：
+        - 直接使用 LiveNewsItem，不再需要 LiveSnapshotData
+        - 选项层级由 news_item.choice_level 管理
+        - 故事选项存储在 news_item.story_choices
+        - UI 展示选项存储在 news_item.choices
+        """
+        self.news_item = news_item
         self.visible = True
         self.show_progress = 0.0
         self.heat_anim = 0.0
@@ -188,57 +180,35 @@ class LiveSnapshotPanel:
         self.flying_comments.clear()
         self.danmaku_timer = 0
         
-        # 检查新闻是否已完成（已解决）
-        news_item = getattr(snapshot, 'news_item', None)
-        is_resolved = getattr(news_item, 'is_resolved', False) if news_item else False
-        player_choice_idx = getattr(news_item, 'player_choice_idx', -1) if news_item else -1
-        
         # 初始化两级选择状态
         self.choice_level = 1
-        if snapshot.choices:
-            # 保存原始选项
-            self.original_choices = snapshot.choices.copy()
-            
-            if is_resolved:
-                # 【已完成的新闻】直接显示原始选项，并标记玩家选择
-                # 过滤掉 START_DIALOG（当面处理选项）和 BACK（返回按钮）
-                filtered_choices = []
-                selected_idx_in_filtered = -1
-                for idx, c in enumerate(self.original_choices):
-                    action = c.get('action', '')
-                    if action != 'START_DIALOG' and action != 'BACK':
-                        # 记录玩家选择在过滤后列表中的位置
-                        if idx == player_choice_idx:
-                            selected_idx_in_filtered = len(filtered_choices)
-                        filtered_choices.append(c.copy())
-                
-                # 在过滤后的列表中标记玩家选择
-                if selected_idx_in_filtered >= 0 and selected_idx_in_filtered < len(filtered_choices):
-                    filtered_choices[selected_idx_in_filtered]['_player_selected'] = True
-                
-                snapshot.choices = filtered_choices
-                self.choice_level = 2  # 直接设置为第二级，跳过第一级
-            else:
-                # 【未完成的新闻】设置第一级选项：当面处理 + 快信处理
-                snapshot.choices = [
-                    {"text": "当面处理", "action": "FACE_TO_FACE", "_level": 1},
-                    {"text": "快信处理", "action": "LETTER", "_level": 1}
-                ]
+        
+        if news_item.is_resolved:
+            # 【已完成的新闻】显示故事选项列表，标记玩家选择
+            filtered_choices = []
+            for idx, c in enumerate(news_item.story_choices):
+                choice_copy = c.copy()
+                if idx == news_item.player_choice_idx:
+                    choice_copy['_player_selected'] = True
+                filtered_choices.append(choice_copy)
+            news_item.choices = filtered_choices
+            self.choice_level = 2
         else:
-            self.original_choices = []
+            # 【未完成的新闻】设置第一级选项：当面处理 + 快信处理
+            news_item.setup_ui_choices(level=1)
         
-        # 【修改】直接显示全部热评，不逐个出现
-        if snapshot.comments:
-            self.visible_comment_count = len(snapshot.comments)
+        # 直接显示全部热评
+        if news_item.comments:
+            self.visible_comment_count = len(news_item.comments)
         
-        # 【改进】立即生成几条初始弹幕，让效果更明显
-        if snapshot.comments:
-            for i in range(min(3, len(snapshot.comments))):
-                comment = snapshot.comments[i]
+        # 立即生成几条初始弹幕
+        if news_item.comments:
+            for i in range(min(3, len(news_item.comments))):
+                comment = news_item.comments[i]
                 self.flying_comments.append({
                     'text': comment['text'][:15],
-                    'x': self.panel_x + self.panel_w - i * 100,  # 错开位置
-                    'y': self.panel_y + self.DANMAKU_Y_OFFSET + random.randint(0, 80),  # 上移50像素
+                    'x': self.panel_x + self.panel_w - i * 100,
+                    'y': self.panel_y + self.DANMAKU_Y_OFFSET + random.randint(0, 80),
                     'speed': random.uniform(1.0, 2.5),
                     'color': self._get_comment_color(comment.get('type', '中立'))
                 })
@@ -257,7 +227,7 @@ class LiveSnapshotPanel:
     def hide(self):
         """隐藏面板"""
         self.visible = False
-        self.snapshot = None
+        self.news_item = None
         self.flying_comments.clear()
         if self.on_close:
             self.on_close()
@@ -272,20 +242,17 @@ class LiveSnapshotPanel:
             self.show_progress = min(1.0, self.show_progress + dt_ms / 300)  # 300ms动画
         
         # 热度数字滚动
-        if self.snapshot and self.heat_anim < self.snapshot.heat_score:
-            speed = max(100, self.snapshot.heat_score // 20)
-            self.heat_anim = min(self.snapshot.heat_score, self.heat_anim + speed * dt_ms / 1000 * 30)
+        if self.news_item and self.heat_anim < self.news_item.heat_score:
+            speed = max(100, self.news_item.heat_score // 20)
+            self.heat_anim = min(self.news_item.heat_score, self.heat_anim + speed * dt_ms / 1000 * 30)
         
         # 【修复】定期检查图片是否已异步加载完成
-        if self.snapshot and self.snapshot.image_url == "loading":
-            # 检查news_item上是否已有图片surface（异步回调已完成）
-            news_item = self.snapshot.news_item
-            if news_item:
-                if hasattr(news_item, '_image_surface') and news_item._image_surface:
-                    # 图片已就绪，更新状态
-                    self.snapshot.image_url = getattr(news_item, '_image_path', 'ready')
-                    self.snapshot._image_surface = news_item._image_surface
-                    print(f"[LiveSnapshotPanel] 检测到图片已就绪，更新显示")
+        if self.news_item and self.news_item.image_url == "loading":
+            # 重构后：self.news_item 本身就是 LiveNewsItem
+            if hasattr(self.news_item, '_image_surface') and self.news_item._image_surface:
+                # 图片已就绪，更新状态
+                self.news_item.image_url = getattr(self.news_item, '_image_path', 'ready')
+                print(f"[LiveSnapshotPanel] 检测到图片已就绪，更新显示")
         
         # 【修改】评论已全部显示，不需要逐个出现
         # 保留代码结构，但不做任何事
@@ -294,9 +261,9 @@ class LiveSnapshotPanel:
         self.danmaku_timer += dt_ms
         if self.danmaku_timer > 2000:  # 每2秒生成一条弹幕
             self.danmaku_timer = 0
-            if self.snapshot and self.snapshot.comments:
+            if self.news_item and self.news_item.comments:
                 # 从评论中随机选一条作为弹幕
-                comment = random.choice(self.snapshot.comments)
+                comment = random.choice(self.news_item.comments)
                 self.flying_comments.append({
                     'text': comment['text'][:15],  # 限制长度
                     'x': self.panel_x + self.panel_w,  # 从右侧开始
@@ -340,22 +307,16 @@ class LiveSnapshotPanel:
                 return True
             
             # 点击选项 - 使用缓存的按钮位置（在draw中计算）
-            if self.snapshot and self.snapshot.choices and hasattr(self, '_cached_button_rects'):
-                # 检查事件是否已完成
-                is_completed = False
-                news_item = getattr(self.snapshot, 'news_item', None)
-                if news_item:
-                    is_completed = getattr(news_item, 'is_resolved', False)
-                
-                # 如果事件已完成，禁用所有点击
-                if is_completed:
+            if self.news_item and self.news_item.choices and hasattr(self, '_cached_button_rects'):
+                # 检查事件是否已完成（重构后直接使用 self.news_item）
+                if self.news_item.is_resolved:
                     return True  # 消费事件但不执行任何操作
                 
                 for i, btn_rect in enumerate(self._cached_button_rects):
                     # 将相对坐标转换为屏幕坐标
                     screen_rect = btn_rect.move(self.panel_x, self.panel_y)
                     if screen_rect.collidepoint(mx, my):
-                        choice = self.snapshot.choices[i]
+                        choice = self.news_item.choices[i]
                         
                         # 检查 requirement，不满足则拒绝点击
                         player = None
@@ -383,80 +344,42 @@ class LiveSnapshotPanel:
                         
                         action = choice.get('action', '')
                         
-                        # 第一级选择处理
-                        if choice.get('_level') == 1:
-                            if action == 'FACE_TO_FACE':
-                                # 当面处理：触发回调（由外部处理）
-                                if self.on_choice_selected:
-                                    self.on_choice_selected(i, choice)
-                                self.hide()
-                                return True
-                            elif action == 'LETTER':
-                                # 快信处理：切换到第二级选项（过滤掉需要亲自前往的选项）
-                                self.choice_level = 2
-                                # 过滤掉 START_DIALOG（需要玩家亲自前往的选项），并保存原始索引映射
-                                self._filtered_to_original_idx = {}  # 过滤后索引 -> 原始索引
-                                filtered_choices = []
-                                for orig_idx, c in enumerate(self.original_choices):
-                                    if c.get('action') != 'START_DIALOG':
-                                        self._filtered_to_original_idx[len(filtered_choices)] = orig_idx
-                                        filtered_choices.append(c)
-                                # ===== [调试] 打印过滤后的选项 =====
-                                print(f"[LiveSnapshotPanel] ========== 点击了【快信处理】==========")
-                                print(f"  过滤前选项数量: {len(self.original_choices)}")
-                                print(f"  过滤后选项数量: {len(filtered_choices)}")
-                                for idx, orig in enumerate(filtered_choices):
-                                    orig_idx = self._filtered_to_original_idx[idx]
-                                    print(f"    选项{idx+1}: {orig.get('text')} (action={orig.get('action')}, 原始索引: {orig_idx})")
-                                    # 打印所有字段用于调试
-                                    print(f"      - requirement: {orig.get('requirement')}")
-                                    print(f"      - cost: {orig.get('cost')}")
-                                    print(f"      - effect: {orig.get('effect')}")
-                                    print(f"      - transfer: {orig.get('transfer')}")
-                                    # 解析并打印tooltip内容
-                                    cost_text, gain_text = self._format_all_effects(orig)
-                                    print(f"      - 消耗: {cost_text}")
-                                    print(f"      - 收益: {gain_text}")
-                                print("=" * 50)
-                                # =====================================
-                                # 使用过滤后的选项，并在最后添加返回键
-                                self.snapshot.choices = filtered_choices
-                                self.snapshot.choices.append({
-                                    "text": "← 返回",
-                                    "action": "BACK",
-                                    "_level": 2
-                                })
-                                self.hovered_choice = -1
-                                return True
-                        # 第二级选择处理
-                        elif choice.get('_level') == 2:
-                            if action == 'BACK':
-                                # 返回第一级
-                                self.choice_level = 1
-                                self.snapshot.choices = [
-                                    {"text": "当面处理", "action": "FACE_TO_FACE", "_level": 1},
-                                    {"text": "快信处理", "action": "LETTER", "_level": 1}
-                                ]
-                                self.hovered_choice = -1
-                                return True
-                            else:
-                                # 【修复】快信处理选项：使用原始索引直接调用 apply_choice
-                                original_idx = self._filtered_to_original_idx.get(i)
-                                if original_idx is not None and self.snapshot and self.snapshot.news_item:
-                                    from src.ui.event_notification import get_notification_manager
-                                    notif_mgr = get_notification_manager()
-                                    result = notif_mgr.apply_choice(self.snapshot.news_item, original_idx, None)
-                                    print(f"[LiveSnapshotPanel] 已处理快信选择: {choice.get('text', '未知')} (原始索引: {original_idx})")
-                                else:
-                                    # 回退到回调方式
-                                    if self.on_choice_selected:
-                                        self.on_choice_selected(i, choice)
-                                self.hide()
-                                return True
-                        else:
-                            # 普通选项（兼容旧逻辑）
+                        # 使用 FunctionalAction 常量判断
+                        if action == FunctionalAction.FACE_TO_FACE:
+                            # 当面处理：触发回调（由外部处理）
                             if self.on_choice_selected:
                                 self.on_choice_selected(i, choice)
+                            self.hide()
+                            return True
+                        
+                        elif action == FunctionalAction.LETTER:
+                            # 快信处理：切换到第二级选项（故事选项列表）
+                            self.choice_level = 2
+                            self.news_item.setup_ui_choices(level=2)
+                            print(f"[LiveSnapshotPanel] 切换到快信处理模式，{len(self.news_item.story_choices)} 个故事选项")
+                            self.hovered_choice = -1
+                            return True
+                        
+                        elif action == FunctionalAction.BACK:
+                            # 返回第一级
+                            self.choice_level = 1
+                            self.news_item.setup_ui_choices(level=1)
+                            self.hovered_choice = -1
+                            return True
+                        
+                        else:
+                            # 故事选项：直接使用 story_choices 中的索引
+                            story_idx = self.news_item.get_story_choice_index(i)
+                            if story_idx >= 0:
+                                # 快信处理的故事选项：调用 apply_choice
+                                from src.ui.event_notification import get_notification_manager
+                                notif_mgr = get_notification_manager()
+                                result = notif_mgr.apply_choice(self.news_item, story_idx, None)
+                                print(f"[LiveSnapshotPanel] 已处理故事选项: {choice.get('text', '未知')} (索引: {story_idx})")
+                            else:
+                                # 回退到回调方式（当面处理模式）
+                                if self.on_choice_selected:
+                                    self.on_choice_selected(i, choice)
                             self.hide()
                             return True
             
@@ -502,7 +425,7 @@ class LiveSnapshotPanel:
             self.hovered_choice = -1
             
             # 使用缓存的按钮位置检测悬停
-            if self.snapshot and self.snapshot.choices and hasattr(self, '_cached_button_rects'):
+            if self.news_item and self.news_item.choices and hasattr(self, '_cached_button_rects'):
                 for i, btn_rect in enumerate(self._cached_button_rects):
                     screen_rect = btn_rect.move(self.panel_x, self.panel_y)
                     if screen_rect.collidepoint(mx, my):
@@ -578,7 +501,7 @@ class LiveSnapshotPanel:
     
     def draw(self, screen: pygame.Surface):
         """绘制面板"""
-        if not self.visible or not self.snapshot:
+        if not self.visible or not self.news_item:
             return
         
         # 半透明背景遮罩
@@ -638,7 +561,7 @@ class LiveSnapshotPanel:
         
         # 【关键】根据实际内容高度，动态计算按钮位置和面板的最终高度
         # 按钮紧跟在评论区下方，留出 COMMENT_BUTTON_GAP 间距
-        num_choices = len(self.snapshot.choices) if self.snapshot.choices else 0
+        num_choices = len(self.news_item.choices) if self.news_item.choices else 0
         buttons_height = num_choices * 60  # 按钮总高度
         
         # 计算按钮起始位置（评论区高度 + 间距）
@@ -712,14 +635,13 @@ class LiveSnapshotPanel:
         # 检查事件是否已完成 - 需要在判断 choices 之前
         is_completed = False
         player_choice_text = ""
-        news_item = getattr(self.snapshot, 'news_item', None)
-        if news_item:
-            is_completed = getattr(news_item, 'is_resolved', False)
-            player_choice_text = getattr(news_item, 'player_choice', "") or ""
+        # 重构后：self.news_item 本身就是 LiveNewsItem
+        is_completed = self.news_item.is_resolved if self.news_item else False
+        player_choice_text = self.news_item.player_choice if self.news_item else ""
         
-        # 如果事件已完成，使用 snapshot.choices（show 方法已设置好）
+        # 如果事件已完成，使用 news_item.choices（show 方法已设置好）
         # 否则使用当前 choices
-        choices_to_draw = self.snapshot.choices if self.snapshot.choices else []
+        choices_to_draw = self.news_item.choices if self.news_item.choices else []
         
         if not choices_to_draw:
             return
@@ -1374,12 +1296,10 @@ class LiveSnapshotPanel:
         
         # 检查是否有实际图片
         img_surface = None
-        if self.snapshot.image_url and self.snapshot.image_url not in ("placeholder", "loading"):
-            news_item = self.snapshot.news_item
-            if news_item and hasattr(news_item, '_image_surface') and news_item._image_surface:
-                img_surface = news_item._image_surface
-            elif hasattr(self.snapshot, '_image_surface') and self.snapshot._image_surface:
-                img_surface = self.snapshot._image_surface
+        if self.news_item.image_url and self.news_item.image_url not in ("placeholder", "loading"):
+            # 重构后：self.news_item 本身就是 LiveNewsItem
+            if hasattr(self.news_item, '_image_surface') and self.news_item._image_surface:
+                img_surface = self.news_item._image_surface
         
         if img_surface:
             orig_w, orig_h = img_surface.get_size()
@@ -1399,27 +1319,27 @@ class LiveSnapshotPanel:
         # 标题（最多2行）
         y += 32 * 2 + 5
         # 当事人头像（如果有）- 36px头像+名字，可能换行
-        if self.snapshot.actor_names:
-            num_actors = len(self.snapshot.actor_names)
+        if self.news_item.actor_names:
+            num_actors = len(self.news_item.actor_names)
             # 估算每行能放几个头像（头像36+间距12+名字约40）
             actors_per_row = max(1, (self.panel_w - 40) // 100)
             num_rows = (num_actors + actors_per_row - 1) // actors_per_row
             y += (36 + 8) * num_rows + 4  # 头像高度 + 间距
         # 描述（最多3行）
-        if self.snapshot.description:
+        if self.news_item.description:
             y += 28 * 3
         return y
     
     def _get_tags_bottom_y(self, start_y: int) -> int:
         """计算标签区域底部Y坐标"""
-        if not self.snapshot.tags:
+        if not self.news_item.tags:
             return start_y
         # 标签高度
         return start_y + 32
     
     def _get_comments_bottom_y(self, start_y: int) -> int:
         """计算评论区底部Y坐标 - 小红书风格布局"""
-        if not self.snapshot.comments:
+        if not self.news_item.comments:
             return start_y
         
         y = start_y
@@ -1433,7 +1353,7 @@ class LiveSnapshotPanel:
         COMMENT_GAP = 8  # 减小评论间距
         
         num_comments = min(self.visible_comment_count, 6)
-        for comment in self.snapshot.comments[:num_comments]:
+        for comment in self.news_item.comments[:num_comments]:
             text = comment.get('text', '')
             
             # 计算内容需要的行数
@@ -1450,7 +1370,7 @@ class LiveSnapshotPanel:
     
     def _estimate_content_height(self) -> int:
         """估算内容高度（用于确定面板高度）"""
-        if not self.snapshot:
+        if not self.news_item:
             return 600
         
         h = 20  # 顶部边距
@@ -1463,33 +1383,33 @@ class LiveSnapshotPanel:
         h += 32 * 2 + 5
         
         # 当事人头像（如果有）
-        if self.snapshot.actor_names:
+        if self.news_item.actor_names:
             h += 28 + 8  # 头像高度 + 间距
         
         # 描述高度 - 根据实际行数，最多4行
-        if self.snapshot.description:
+        if self.news_item.description:
             font_md = self._get_font(20)
             content_width = self.panel_w - 40  # 左右边距20*2
-            desc_lines = self._wrap_text(self.snapshot.description, font_md, content_width)
+            desc_lines = self._wrap_text(self.news_item.description, font_md, content_width)
             actual_lines = min(len(desc_lines), self.DESC_MAX_LINES)
             h += self.desc_line_height * actual_lines
         
         h += self.SECTION_GAP
         
         # 标签高度
-        if self.snapshot.tags:
+        if self.news_item.tags:
             h += 32
         h += self.SECTION_GAP
         
         # 评论区高度 - 考虑换行
-        if self.snapshot.comments:
+        if self.news_item.comments:
             h += 28  # 标题
             font_xs = self._get_font(16)
             content_start_x = 25 + 20 + 6  # avatar_x + avatar_size + spacing
             max_line_width = self.panel_w - content_start_x - 25
             
-            num_comments = min(len(self.snapshot.comments), 5)
-            for comment in self.snapshot.comments[:num_comments]:
+            num_comments = min(len(self.news_item.comments), 5)
+            for comment in self.news_item.comments[:num_comments]:
                 user = comment.get('user', '路人')
                 text = comment.get('text', '')
                 user_prefix = f"@{user}[评]："
@@ -1519,7 +1439,7 @@ class LiveSnapshotPanel:
         
         # 按钮区域高度 - 确保按钮完全可见
         # 按钮高度45 + 间距70，每个按钮实际占用70像素（原来是60）
-        num_choices = len(self.snapshot.choices) if self.snapshot.choices else 0
+        num_choices = len(self.news_item.choices) if self.news_item.choices else 0
         h += self.COMMENT_BUTTON_GAP + num_choices * 60 + 20  # 间距 + 按钮(45高+25空隙) + 底部边距
         
         return h
@@ -1530,7 +1450,7 @@ class LiveSnapshotPanel:
         
         # 标签
         x = 20
-        for tag in self.snapshot.tags[:3]:  # 最多显示3个标签
+        for tag in self.news_item.tags[:3]:  # 最多显示3个标签
             tag_text = f"#{tag}"
             text_surf = font_sm.render(tag_text, True, (150, 200, 255))
             
@@ -1552,7 +1472,7 @@ class LiveSnapshotPanel:
     
     def _draw_actor_avatars_header(self, surface: pygame.Surface, y: int) -> int:
         """绘制主要演员头像（在图片上方）"""
-        if not self.snapshot or not self.snapshot.actor_names:
+        if not self.news_item or not self.news_item.actor_names:
             return y  # 没有演员，直接返回
         
         from pathlib import Path
@@ -1562,14 +1482,14 @@ class LiveSnapshotPanel:
         margin_x = 40  # 左右边距
         
         # 计算总宽度（头像 + 间距）
-        num_actors = len(self.snapshot.actor_names)
+        num_actors = len(self.news_item.actor_names)
         total_width = num_actors * avatar_size + (num_actors - 1) * spacing
         
         # 居中排列
         start_x = (self.panel_w - total_width) // 2
         
         # 绘制每个演员头像
-        for i, actor_name in enumerate(self.snapshot.actor_names):
+        for i, actor_name in enumerate(self.news_item.actor_names):
             x = start_x + i * (avatar_size + spacing)
             
             # 尝试加载头像
@@ -1624,17 +1544,14 @@ class LiveSnapshotPanel:
         img_surface = None
         
         # 尝试获取图片
-        if self.snapshot.image_url and self.snapshot.image_url not in ("placeholder", "loading"):
-            news_item = self.snapshot.news_item
-            
-            if news_item and hasattr(news_item, '_image_surface') and news_item._image_surface:
-                img_surface = news_item._image_surface
-            elif hasattr(self.snapshot, '_image_surface') and self.snapshot._image_surface:
-                img_surface = self.snapshot._image_surface
-            elif self.snapshot.image_url and isinstance(self.snapshot.image_url, str):
-                img_surface = self._load_image_from_path(self.snapshot.image_url)
-                if img_surface and news_item:
-                    news_item._image_surface = img_surface
+        if self.news_item.image_url and self.news_item.image_url not in ("placeholder", "loading"):
+            # 重构后：self.news_item 本身就是 LiveNewsItem
+            if hasattr(self.news_item, '_image_surface') and self.news_item._image_surface:
+                img_surface = self.news_item._image_surface
+            elif self.news_item.image_url and isinstance(self.news_item.image_url, str):
+                img_surface = self._load_image_from_path(self.news_item.image_url)
+                if img_surface:
+                    self.news_item._image_surface = img_surface
         
         if img_surface:
             # 获取原始尺寸
@@ -1678,7 +1595,7 @@ class LiveSnapshotPanel:
             actual_img_h = display_h
         
         # 加载中状态
-        elif self.snapshot.image_url == "loading":
+        elif self.news_item.image_url == "loading":
             img_x = margin_x
             loading_w = max_img_w
             loading_h = max_img_h  # 与图片最大高度保持一致
@@ -1768,7 +1685,7 @@ class LiveSnapshotPanel:
         start_y = y
         
         # ===== 主标题（自动换行）=====
-        title = self.snapshot.title
+        title = self.news_item.title
         title_lines = self._wrap_text(title, font_lg, content_width)
         
         for i, line in enumerate(title_lines[:2]):  # 最多2行
@@ -1778,12 +1695,12 @@ class LiveSnapshotPanel:
         y += len(title_lines[:2]) * 30 + 6
         
         # ===== 参与人一行显示（在标题下方）=====
-        if self.snapshot.actor_names:
+        if self.news_item.actor_names:
             AVATAR_SIZE = 40  # 和评论区头像一样大
             SPACING = 8  # 头像间距
             
             # 预计算每个名字宽度（用于悬浮时推开效果）
-            for actor_name in self.snapshot.actor_names:
+            for actor_name in self.news_item.actor_names:
                 if actor_name not in self.actor_name_widths:
                     name_surf = font_name.render(actor_name, True, (80, 80, 80))
                     self.actor_name_widths[actor_name] = name_surf.get_width()
@@ -1792,7 +1709,7 @@ class LiveSnapshotPanel:
             actor_positions = []  # [(x, show_name), ...]
             current_x = MARGIN
             
-            for i, actor_name in enumerate(self.snapshot.actor_names[:6]):  # 最多6个
+            for i, actor_name in enumerate(self.news_item.actor_names[:6]):  # 最多6个
                 # 检查是否悬浮在这个头像上
                 avatar_rect = pygame.Rect(
                     self.panel_x + current_x,
@@ -1837,7 +1754,7 @@ class LiveSnapshotPanel:
             y += AVATAR_SIZE + 10  # 头像高度 + 间距
         
         # ===== 事件描述（正文）- 支持滚动 =====
-        description = self.snapshot.description
+        description = self.news_item.description
         desc_start_y = y
         if description:
             desc_lines = self._wrap_text(description, font_md, content_width)
@@ -1964,7 +1881,7 @@ class LiveSnapshotPanel:
     
     def _draw_actor_avatars_inline(self, surface: pygame.Surface, y: int, title_height: int):
         """在标题行右侧绘制当事人头像（紧凑排列，与标题同高）"""
-        if not self.snapshot or not self.snapshot.actor_names:
+        if not self.news_item or not self.news_item.actor_names:
             return
         
         from pathlib import Path
@@ -1973,7 +1890,7 @@ class LiveSnapshotPanel:
         spacing = 8  # 头像间距
         
         # 计算头像区域总宽度
-        num_actors = min(len(self.snapshot.actor_names), 3)  # 最多显示3个
+        num_actors = min(len(self.news_item.actor_names), 3)  # 最多显示3个
         total_width = num_actors * avatar_size + (num_actors - 1) * spacing
         
         # 靠右排列，留出边距
@@ -1981,7 +1898,7 @@ class LiveSnapshotPanel:
         # 垂直居中（基于标题高度）
         avatar_y = y + (title_height - avatar_size) // 2
         
-        for i, actor_name in enumerate(self.snapshot.actor_names[:3]):
+        for i, actor_name in enumerate(self.news_item.actor_names[:3]):
             x = start_x + i * (avatar_size + spacing)
             
             # 尝试加载头像
@@ -2017,7 +1934,7 @@ class LiveSnapshotPanel:
     
     def _draw_actor_avatars_compact(self, surface: pygame.Surface, y: int) -> int:
         """绘制主要演员头像和名字（小红书风格：头像+名字横向排列）"""
-        if not self.snapshot or not self.snapshot.actor_names:
+        if not self.news_item or not self.news_item.actor_names:
             return y  # 没有演员，直接返回
         
         from pathlib import Path
@@ -2030,7 +1947,7 @@ class LiveSnapshotPanel:
         current_x = start_x
         
         # 绘制每个演员（头像+名字）
-        for i, actor_name in enumerate(self.snapshot.actor_names[:4]):  # 最多显示4个
+        for i, actor_name in enumerate(self.news_item.actor_names[:4]):  # 最多显示4个
             # 尝试加载头像
             avatar_surface = None
             avatar_path = PyPath(resource_path(f"assets/head_icon/{actor_name}.png"))
@@ -2076,7 +1993,7 @@ class LiveSnapshotPanel:
             current_x += actor_width
             
             # 如果超出面板宽度，换行
-            if current_x > self.panel_w - 80 and i < len(self.snapshot.actor_names) - 1:
+            if current_x > self.panel_w - 80 and i < len(self.news_item.actor_names) - 1:
                 current_x = start_x
                 y += avatar_size + 8
         
@@ -2098,8 +2015,8 @@ class LiveSnapshotPanel:
         available_width = self.panel_w - 40 - heat_width - 20  # 边距 + 热度宽度 + 间距
         
         # 绘制标签
-        if self.snapshot.tags:
-            for tag in self.snapshot.tags[:4]:  # 最多显示4个标签
+        if self.news_item.tags:
+            for tag in self.news_item.tags[:4]:  # 最多显示4个标签
                 tag_text = f"#{tag}"
                 text_surf = font.render(tag_text, True, (80, 160, 255))
                 
@@ -2127,7 +2044,7 @@ class LiveSnapshotPanel:
         Returns:
             评论区实际占用的高度
         """
-        if not self.snapshot.comments:
+        if not self.news_item.comments:
             return y
         
         font_sm = self._get_font(20)  # 标题字体
@@ -2148,7 +2065,7 @@ class LiveSnapshotPanel:
         # 计算所有评论的总高度
         total_comments_height = 0
         comment_heights = []  # 记录每条评论的高度
-        for comment in self.snapshot.comments[:self.visible_comment_count]:
+        for comment in self.news_item.comments[:self.visible_comment_count]:
             text = comment.get('text', '')
             content_x = 25 + AVATAR_COL_WIDTH
             content_width = self.panel_w - content_x - 25
@@ -2192,7 +2109,7 @@ class LiveSnapshotPanel:
         current_y = y - self.comment_scroll_y
         displayed_count = 0
         
-        for i, comment in enumerate(self.snapshot.comments[:self.visible_comment_count]):
+        for i, comment in enumerate(self.news_item.comments[:self.visible_comment_count]):
             user = comment.get('user', '路人')
             text = comment.get('text', '')
             ctype = comment.get('type', '中立')
@@ -2273,7 +2190,7 @@ class LiveSnapshotPanel:
             pygame.draw.rect(surface, (100, 100, 120), (scrollbar_x, thumb_y, 8, thumb_height), border_radius=4)
         
         # 如果还有更多评论未显示，添加提示
-        total_comments = len(self.snapshot.comments)
+        total_comments = len(self.news_item.comments)
         if total_comments > self.visible_comment_count:
             more_text = f"...还有 {total_comments - self.visible_comment_count} 条热评"
             more_surf = font_content.render(more_text, True, (120, 120, 150))
@@ -2400,11 +2317,11 @@ class LiveSnapshotPanel:
     
     def _get_desc_total_lines(self) -> int:
         """获取正文总行数"""
-        if not self.snapshot or not self.snapshot.description:
+        if not self.news_item or not self.news_item.description:
             return 0
         font_md = self._get_font(20)
         content_width = self.panel_w - 40
-        desc_lines = self._wrap_text(self.snapshot.description, font_md, content_width)
+        desc_lines = self._wrap_text(self.news_item.description, font_md, content_width)
         return len(desc_lines)
     
     def _get_comment_scrollbar_rect(self) -> Optional[pygame.Rect]:

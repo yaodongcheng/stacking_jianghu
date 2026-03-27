@@ -7,7 +7,8 @@ from src.data.character_seeds import ORGANIZATIONS
 from src.item_system import ItemManager
 from src.aistory.story_director import StoryDirector
 from src.ui.live_news_panel import toggle_live_news_panel
-from src.ui.live_snapshot_panel import LiveSnapshotData, get_snapshot_panel
+from src.ui.live_snapshot_panel import get_snapshot_panel
+from src.ui.event_notification import LiveNewsItem
 import asyncio
 
 class UIDialogsMixin:
@@ -2388,20 +2389,15 @@ class UIDialogsMixin:
                     # 获取该阶段对应的新闻数据
                     news_item = node_info.get('news_item')
                     if news_item:
-                        # 检查是否有 snapshot_data
-                        snapshot_data = getattr(news_item, 'snapshot_data', None)
-                        if snapshot_data:
-                            # 显示快照面板
-                            snapshot_panel = get_snapshot_panel()
-                            snapshot_panel.show(snapshot_data)
-                            # 切换游戏状态以显示快照面板
-                            ctx = getattr(self, '_game_ctx', None)
-                            if ctx:
-                                from src.definitions import GAME_STATE_LIVE_SNAPSHOT
-                                ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
-                            print(f"[NPC面板] 打开新闻详情: {news_item.title}")
-                        else:
-                            print(f"[NPC面板] 该阶段暂无新闻详情: {node_info['stage']} (news_item 存在但无 snapshot_data)")
+                        # 重构后：直接使用 news_item
+                        snapshot_panel = get_snapshot_panel()
+                        snapshot_panel.show(news_item)
+                        # 切换游戏状态以显示快照面板
+                        ctx = getattr(self, '_game_ctx', None)
+                        if ctx:
+                            from src.definitions import GAME_STATE_LIVE_SNAPSHOT
+                            ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
+                        print(f"[NPC面板] 打开新闻详情: {news_item.title}")
                     else:
                         print(f"[NPC面板] 该阶段暂无数据: {node_info['stage']}")
                     break

@@ -40,8 +40,8 @@ from src.llm.event_dialog_generator import (
     get_event_dialog_generator
 )
 
-# UI数据类
-from src.ui.live_snapshot_panel import LiveSnapshotData
+# UI数据类（重构后不再需要 LiveSnapshotData）
+# from src.ui.live_snapshot_panel import LiveSnapshotData
 
 # 从aistory导入共享类型（避免重复定义）
 from src.aistory.shared_types import WorldSnapshot, DramaticTension
@@ -1359,9 +1359,8 @@ class AIDirector:
                     dialog_done.set()
                     return
                 
-                # 注意：choices[0]可能是"前往处理"按钮（action=START_DIALOG），需要跳过
-                all_choices = news_item.choices or []
-                story_choices = [c for c in all_choices if c.get('action') != 'START_DIALOG']
+                # 重构后：直接使用 story_choices
+                story_choices = news_item.story_choices or news_item.choices or []
                 
                 # 提取效果字符串
                 effect_a = story_choices[0].get('effect', '') if len(story_choices) > 0 else ''

@@ -256,7 +256,7 @@ def main():
     print("[Init] StoryDirector 已初始化")
     
     # 初始化实况快照面板
-    from src.ui.live_snapshot_panel import get_snapshot_panel, LiveSnapshotData
+    from src.ui.live_snapshot_panel import get_snapshot_panel
     ctx.snapshot_panel = get_snapshot_panel(SCREEN_W, SCREEN_H)
     
     # 【大宋实况】新闻历史面板
@@ -267,25 +267,9 @@ def main():
     def on_history_item_click(item):
         """点击历史面板中的事件条目"""
         # 如果没有 snapshot_data，尝试从 item 属性动态构建
-        snapshot_data = item.snapshot_data
-        if not snapshot_data:
-            print(f"[大宋实况] 事件 {item.title} 缺少 snapshot_data，尝试动态构建...")
-            from src.ui.live_snapshot_panel import LiveSnapshotData
-            snapshot_data = LiveSnapshotData(
-                title=item.title or "未知事件",
-                description=item.description or "",
-                image_url=getattr(item, '_image_path', None) or "placeholder",
-                heat_score=item.heat_score if hasattr(item, 'heat_score') else 0,
-                tags=item.tags if hasattr(item, 'tags') else [],
-                comments=item.comments if hasattr(item, 'comments') else [],
-                choices=item.choices if hasattr(item, 'choices') else [],
-                actor_names=item.actor_names if hasattr(item, 'actor_names') else [],
-                news_item=item
-            )
-            # 缓存以便下次使用
-            item.snapshot_data = snapshot_data
-        
-        ctx.snapshot_panel.show(snapshot_data)
+        # 重构后：直接使用 LiveNewsItem，不再需要 LiveSnapshotData
+        # item 本身就是 LiveNewsItem，可以直接使用
+        ctx.snapshot_panel.show(item)
         ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
         ctx.live_news_panel.hide()  # 关闭历史面板
         log_game_event(f"[大宋实况] 从历史查看事件: {item.title[:20]}...", tag="LIVE")
@@ -303,26 +287,8 @@ def main():
     # 设置通知点击回调：点击后直接显示事件面板
     def on_notification_click(notification):
         """玩家点击右侧通知卡片 → 直接显示事件面板"""
-        # 动态构建 snapshot_data（与历史面板使用相同逻辑）
-        snapshot_data = notification.snapshot_data
-        if not snapshot_data:
-            from src.ui.live_snapshot_panel import LiveSnapshotData
-            snapshot_data = LiveSnapshotData(
-                title=notification.title or "未知事件",
-                description=notification.description or "",
-                image_url=getattr(notification, '_image_path', None) or "placeholder",
-                heat_score=notification.heat_score if hasattr(notification, 'heat_score') else 0,
-                tags=notification.tags if hasattr(notification, 'tags') else [],
-                comments=notification.comments if hasattr(notification, 'comments') else [],
-                choices=notification.choices if hasattr(notification, 'choices') else [],
-                actor_names=notification.actor_names if hasattr(notification, 'actor_names') else [],
-                news_item=notification
-            )
-            notification.snapshot_data = snapshot_data
-            log_game_event(f"[大宋实况] 动态构建 snapshot_data: {notification.title[:20]}...", tag="LIVE")
-        
-        # 直接展示事件面板，无需模式选择
-        ctx.snapshot_panel.show(snapshot_data)
+        # 重构后：notification 本身就是 LiveNewsItem，可以直接使用
+        ctx.snapshot_panel.show(notification)
         ctx.current_state = GAME_STATE_LIVE_SNAPSHOT
         log_game_event(f"[大宋实况] 玩家点击事件: {notification.title[:20]}...", tag="LIVE")
         
@@ -332,29 +298,23 @@ def main():
     # 设置快照面板的选项回调
     def on_snapshot_choice(choice_idx: int, choice_data: dict):
         """玩家在快照面板做出选择"""
-        news_item = None
-        if ctx.snapshot_panel.snapshot and ctx.snapshot_panel.snapshot.news_item:
-            news_item = ctx.snapshot_panel.snapshot.news_item
+        from src.ui.event_notification import FunctionalAction
+        
+        # 获取 news_item（重构后直接使用 news_item 属性）
+        news_item = getattr(ctx.snapshot_panel, 'news_item', None)
         
         # 检查动作类型
         action = choice_data.get('action', '')
         
         # 当面处理：启动对话演绎模式
-        if action == 'FACE_TO_FACE' and news_item:
+        if action == FunctionalAction.FACE_TO_FACE and news_item:
             # 尝试启动对话演绎模式
             if _start_event_dialog_mode(news_item, choice_idx, ctx):
                 log_game_event(f"[大宋实况] 玩家选择当面处理: {choice_data.get('text', '?')}", tag="LIVE")
                 return  # 对话模式会在结束后设置状态
         
-        # 快信处理后的具体选项：应用效果
-        if action not in ('FACE_TO_FACE', 'LETTER', 'BACK') and news_item:
-            # 应用选择效果
-            ctx.live_news_manager.apply_choice(news_item, choice_idx, ctx)
-            ctx.current_state = GAME_STATE_PLAYING
-            log_game_event(f"[大宋实况] 玩家快信处理: {choice_data.get('text', '?')}", tag="LIVE")
-            return
-        
-        # 其他情况（如返回按钮）不处理
+        # 其他情况（如返回按钮、快信处理等）不在这里处理
+        # 快信处理的故事选项已在 live_snapshot_panel 中直接调用 apply_choice
         ctx.current_state = GAME_STATE_PLAYING
     
     def _start_event_dialog_mode(news_item, choice_idx: int, ctx) -> bool:

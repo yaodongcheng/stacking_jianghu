@@ -55,6 +55,32 @@ class DilemmaType(Enum):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 功能性选项动作常量
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FunctionalAction:
+    """
+    功能性选项的动作常量
+    
+    这些是 UI 层面的导航/功能按钮，不是故事选项。
+    故事选项（如"派人调解"、"暗中观察"）没有 action 字段或 action 为空。
+    """
+    FACE_TO_FACE = "FACE_TO_FACE"   # 当面处理（亲自前往现场）
+    LETTER = "LETTER"               # 快信处理（远程处理）
+    BACK = "BACK"                   # 返回按钮
+    
+    @classmethod
+    def is_functional(cls, action: str) -> bool:
+        """判断是否为功能性选项"""
+        return action in (cls.FACE_TO_FACE, cls.LETTER, cls.BACK)
+    
+    @classmethod
+    def all_actions(cls) -> tuple:
+        """返回所有功能动作"""
+        return (cls.FACE_TO_FACE, cls.LETTER, cls.BACK)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 统一数据类
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -62,6 +88,11 @@ class DilemmaType(Enum):
 class LiveNewsItem:
     """
     统一事件数据类
+    
+    选项系统说明：
+      - story_choices: 故事选项（实质性选择，如"派人调解"、"暗中观察"）
+      - choices: UI 当前展示选项（动态变化，可能包含功能按钮）
+      - 功能按钮（当面处理/快信处理/返回）由 UI 层动态生成，不存储在数据中
     
     兼容字段映射：
       - news_id → id
@@ -88,8 +119,13 @@ class LiveNewsItem:
     location_x: float = 0
     location_y: float = 0
     
-    # 选项（最多3个）
+    # === 选项系统（重构核心）===
+    # story_choices: 故事选项（不变，来自事件生成）
+    story_choices: List[Dict] = field(default_factory=list)
+    # choices: UI 当前展示选项（动态变化）
     choices: List[Dict] = field(default_factory=list)
+    # 选项层级：1=处理方式选择，2=故事选项列表
+    choice_level: int = 1
     
     # 状态
     priority: int = 2
@@ -98,14 +134,15 @@ class LiveNewsItem:
     read: bool = False
     is_resolved: bool = False
     player_choice: Optional[str] = None
-    player_choice_idx: int = -1  # 玩家选择的选项索引
+    player_choice_idx: int = -1  # 玩家选择的选项索引（在 story_choices 中的索引）
     auto_popup: bool = False
     
-    # 小红书/抖音风格
+    # 小红书/抖音风格（从 LiveSnapshotData 合并）
     tags: List[str] = field(default_factory=list)
     comments: List[Dict] = field(default_factory=list)
     heat_score: int = 0
     image_prompt: str = ""
+    image_url: str = ""  # 图片URL（从 LiveSnapshotData 合并）
     
     # 运行时缓存
     _image_surface: object = field(default=None, repr=False)
@@ -169,6 +206,49 @@ class LiveNewsItem:
             self.id = f"event_{int(self.created_at * 1000)}"
         if not self.headline:
             self.headline = self.title
+        # 兼容旧代码：如果 choices 有值但 story_choices 为空，自动提取故事选项
+        if self.choices and not self.story_choices:
+            self.story_choices = [
+                c for c in self.choices 
+                if not FunctionalAction.is_functional(c.get('action', ''))
+            ]
+    
+    def setup_ui_choices(self, level: int = 1):
+        """
+        设置 UI 展示选项
+        
+        Args:
+            level: 1=第一级（当面/快信），2=第二级（故事选项列表）
+        """
+        self.choice_level = level
+        if level == 1:
+            # 第一级：当面处理 + 快信处理
+            self.choices = [
+                {"text": "当面处理", "action": FunctionalAction.FACE_TO_FACE, "_level": 1},
+                {"text": "快信处理", "action": FunctionalAction.LETTER, "_level": 1}
+            ]
+        else:
+            # 第二级：故事选项 + 返回按钮
+            self.choices = self.story_choices.copy()
+            self.choices.append({
+                "text": "← 返回",
+                "action": FunctionalAction.BACK,
+                "_level": 2
+            })
+    
+    def get_story_choice_index(self, ui_index: int) -> int:
+        """
+        将 UI 展示索引转换为 story_choices 中的索引
+        
+        Args:
+            ui_index: 在 choices 列表中的索引
+            
+        Returns:
+            在 story_choices 中的索引，如果不是故事选项返回 -1
+        """
+        if self.choice_level == 2 and ui_index < len(self.story_choices):
+            return ui_index
+        return -1
     
     def get_icon_color(self):
         """根据分类返回图标颜色"""
@@ -1081,7 +1161,7 @@ class EventNotificationManager:
                 consequence_summary=choice.get("consequence_preview", "")[:100],
                 tension_delta=float(choice.get("tension_delta", 0)),
                 phase=current_phase,
-                # 记录困境信息（如果事件中有）
+                # 记录狭窄环境启停（如果事件中有）
                 dilemma_type=event.dilemma_type.value if event.dilemma_type else "",
                 event_theme=getattr(event, 'event_theme', ''),
                 desire=getattr(seed, 'desire', ''),

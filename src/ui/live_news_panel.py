@@ -133,8 +133,11 @@ class LiveNewsPanel:
         - 1010:袁桐, 1011:孙小溪, 1012:鲁智深, 1013:弥乐, 1014:阿禅
         - 1015:洪小六, 1016:赵师爷, 1017:铁牛, 1018:钱掌柜, 1019:老李头
         - 1020:小翠, 1021:黑风大王, 1022:山贼甲, 1023:山贼乙, 1024:泼皮牛二
+        
+        重构说明：
+        - 不再需要 LiveSnapshotData，直接在 LiveNewsItem 上设置属性
+        - story_choices 存储故事选项
         """
-        from src.ui.live_snapshot_panel import LiveSnapshotData
         
         # 基础时间（当前时间），每个事件间隔5分钟
         base_time = time.time()
@@ -152,7 +155,7 @@ class LiveNewsPanel:
             actor_ids=[1006, 1024],  # 郁芊芊, 泼皮牛二
             actor_names=["郁芊芊", "泼皮牛二"],
             location="无更市甜水巷",
-            choices=[
+            story_choices=[
                 {"text": "帮助郁芊芊赶走泼皮", "effect": "JUSTICE:+20;FAME:+10"},
                 {"text": "暗中调解，各退一步", "effect": "INTEL:+15;GOLD:-30"},
                 {"text": "静观其变", "effect": "NEUTRAL"}
@@ -167,20 +170,10 @@ class LiveNewsPanel:
                 {"user": "高衙内", "text": "嘿嘿，有意思，本公子去看看", "type": "搞笑"},
             ],
             heat_score=25888,
-            image_prompt="A dramatic scene in ancient Chinese market..."
+            image_prompt="A dramatic scene in ancient Chinese market...",
+            image_url="placeholder"
         )
-        snapshot_1 = LiveSnapshotData(
-            title=test_news_1.title,
-            description=test_news_1.description,
-            image_url="placeholder",
-            heat_score=test_news_1.heat_score,
-            tags=test_news_1.tags,
-            comments=test_news_1.comments,
-            choices=test_news_1.choices,
-            actor_names=test_news_1.actor_names,
-            news_item=test_news_1
-        )
-        test_news_1.snapshot_data = snapshot_1
+        test_news_1.setup_ui_choices(level=1)  # 初始化 UI 选项
         test_news_1.is_resolved = False  # 未解决
         test_news_1.read = False
         test_news_1.created_at = base_time - 20 * 60  # 20分钟前
@@ -235,7 +228,7 @@ class LiveNewsPanel:
             actor_ids=[1021, 1022, 1023, 1024, 1015],
             actor_names=["黑风大王", "山贼甲", "山贼乙", "泼皮牛二", "洪小六"],
             location="无更市东街",
-            choices=[
+            story_choices=[
                 {"text": "上前制止", "effect": "FAME:+30"},
                 {"text": "暗中观察", "effect": "NEUTRAL"},
             ],
@@ -248,19 +241,9 @@ class LiveNewsPanel:
                 {"user": "郁芊芊", "text": "洪小六也在其中？他平时看着挺老实的", "type": "中立"},
             ],
             heat_score=15234,
+            image_url="placeholder"
         )
-        snapshot_2 = LiveSnapshotData(
-            title=test_news_2.title,
-            description=test_news_2.description or test_news_2.subtitle,
-            image_url="placeholder",
-            heat_score=test_news_2.heat_score,
-            tags=test_news_2.tags,
-            comments=test_news_2.comments,
-            choices=test_news_2.choices,
-            actor_names=test_news_2.actor_names,
-            news_item=test_news_2
-        )
-        test_news_2.snapshot_data = snapshot_2
+        test_news_2.setup_ui_choices(level=1)
         test_news_2.is_resolved = False  # 未解决
         test_news_2.read = False
         test_news_2.created_at = base_time - 15 * 60  # 15分钟前
@@ -311,7 +294,7 @@ class LiveNewsPanel:
             actor_ids=[1019],  # 老李头
             actor_names=["老李头"],
             location="无更市粮仓",
-            choices=[{"text": "组织救火", "effect": "FAME:+50"}],
+            story_choices=[{"text": "组织救火", "effect": "FAME:+50"}],
             priority=5,  # 最高优先级
             tags=["火灾", "紧急"],
             comments=[
@@ -321,19 +304,9 @@ class LiveNewsPanel:
                 {"user": "铁牛", "text": "俺来帮忙！水桶在哪？", "type": "支持"},
             ],
             heat_score=99999,
+            image_url="placeholder"
         )
-        snapshot_3 = LiveSnapshotData(
-            title=test_news_3.title,
-            description=test_news_3.description or test_news_3.subtitle,
-            image_url="placeholder",
-            heat_score=test_news_3.heat_score,
-            tags=test_news_3.tags,
-            comments=test_news_3.comments,
-            choices=test_news_3.choices,
-            actor_names=test_news_3.actor_names,
-            news_item=test_news_3
-        )
-        test_news_3.snapshot_data = snapshot_3
+        test_news_3.setup_ui_choices(level=1)
         test_news_3.is_resolved = False  # 未解决，显示在"当前"tab
         test_news_3.read = False
         test_news_3.created_at = base_time - 10 * 60  # 10分钟前
@@ -384,7 +357,7 @@ class LiveNewsPanel:
             actor_ids=[1013],  # 弥乐
             actor_names=["弥乐"],
             location="无更市全城",
-            choices=[{"text": "观测天象", "effect": "INTEL:+10"}],
+            story_choices=[{"text": "观测天象", "effect": "INTEL:+10"}],
             priority=2,
             tags=["天象", "异象"],
             comments=[
@@ -394,19 +367,9 @@ class LiveNewsPanel:
                 {"user": "阿禅", "text": "阿弥陀佛，愿众生平安", "type": "中立"},
             ],
             heat_score=5000,
+            image_url="placeholder"
         )
-        snapshot_4 = LiveSnapshotData(
-            title=test_news_4.title,
-            description=test_news_4.description or test_news_4.subtitle,
-            image_url="placeholder",
-            heat_score=test_news_4.heat_score,
-            tags=test_news_4.tags,
-            comments=test_news_4.comments,
-            choices=test_news_4.choices,
-            actor_names=test_news_4.actor_names,
-            news_item=test_news_4
-        )
-        test_news_4.snapshot_data = snapshot_4
+        test_news_4.setup_ui_choices(level=1)
         test_news_4.is_resolved = False  # 未解决
         test_news_4.read = False
         test_news_4.created_at = base_time - 5 * 60  # 5分钟前（最新）
