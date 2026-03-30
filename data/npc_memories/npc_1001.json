@@ -1,0 +1,107 @@
+{
+  "npc_id": 1001,
+  "npc_name": "无情",
+  "short_term": [
+    {
+      "id": "mem_1774837061344",
+      "memory_type": "conversation",
+      "content": "玩家对我说：「不认识我了？」",
+      "importance": 2,
+      "timestamp": 1774837061.3449275,
+      "real_timestamp": 1774837061.3449275,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1774837078010",
+      "memory_type": "conversation",
+      "content": "无情说：「阁下言重了。江湖上照面虽有，尚未正式通名，何来“忘”字？」",
+      "importance": 1,
+      "timestamp": 1774837078.010408,
+      "real_timestamp": 1774837078.010408,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "无情"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    },
+    {
+      "id": "mem_1774837078010",
+      "memory_type": "knowledge",
+      "content": "玩家再次问我是否不认识他。",
+      "importance": 3,
+      "timestamp": 1774837078.010408,
+      "real_timestamp": 1774837078.010408,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "对话",
+        "玩家"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 0
+    }
+  ],
+  "long_term": [
+    {
+      "id": "mem_1774836932340",
+      "memory_type": "event",
+      "content": "【剧情】关于「一段对话」的对话：骆大说：「无情，都是旧门旧户的人，何必把路走绝？」「我只要一句话：那批失货，盛捕头别再碰了。」；方承意说：「盛捕头若真清白，何妨叫满城人都听听旧事？」；无情说：「查的是劫货案，不是替你骆驼帮遮羞的家谱。」「只是此事若污了神侯府名声，正中你们下怀。」；孙二娘说：「啧，这不是逼人吞刀子么，退也不是，进也不是。」；赵师爷说：「出身若不清，查起案来，旁人难免犯嘀咕啊。」",
+      "importance": 4,
+      "timestamp": 1774836932.3406796,
+      "real_timestamp": 1774836932.3406796,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "事件"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    },
+    {
+      "id": "mem_1774836982538",
+      "memory_type": "event",
+      "content": "【剧情】关于「一段对话」的对话：玩家说：「骆大敢放话，无非欺人少见证。我把黑风线索，递给林教头。」；孙二娘说：「好家伙，这是借官外之力压江湖口风，倒有几分章法。」；方承意说：「绕过本侯去布线？阁下这一步，未免太不把人放眼里。」；无情说：「林教头若肯留意，骆大便不敢今夜就把脏水泼满街。」；林冲说：「线索我记下了。若真牵着黑风寨，我自会盯住骆驼帮的动静。」；骆大说：「哼，倒会搬人来镇场子。今日这话，我便先收半句。」；赵师爷说：「眼下是压住了，可方大人那边，怕不会就这么算了。」",
+      "importance": 4,
+      "timestamp": 1774836982.538029,
+      "real_timestamp": 1774836982.538029,
+      "related_npc_id": null,
+      "related_npc_name": "",
+      "emotion": "neutral",
+      "location": "",
+      "tags": [
+        "事件"
+      ],
+      "decay_rate": 1.0,
+      "access_count": 1
+    }
+  ],
+  "impressions": {
+    "9999": {
+      "name": "玩家",
+      "impression": "",
+      "affinity": 0,
+      "last_interaction": 1774837078.010408,
+      "interaction_count": 1
+    }
+  },
+  "core_beliefs": [],
+  "saved_at": 1774837088.234244
+}

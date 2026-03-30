@@ -148,7 +148,7 @@ class AISystem:
                 
                 # 清除当前行为
                 npc.action_queue.clear()
-                npc.target_obj = None  # 清除建筑目标
+                npc.set_target_obj(None)  # 清除建筑目标
                 
                 # 设置移动目标和状态
                 npc.state = STATE_MOVING

@@ -1139,8 +1139,10 @@ class NPC(CardBase):
         if self.hunger > 30:
             self._try_eat_from_inventory()
 
+        self.hunger = min(100, self.hunger)  # 饥饿值不得超过100
+
         # 饥饿扣血 - 提高阈值，让NPC更不容易饿晕
-        if self.hunger >= 90:  # 从80提高到90
+        if self.hunger >= 110:  # 从80提高到110 相当于暂时关闭饥饿
             self.hp -= 1
             self.dissatisfaction += 2
             if self.hp <= 0:
