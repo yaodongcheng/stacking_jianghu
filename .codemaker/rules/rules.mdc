@@ -16,6 +16,19 @@
 - 禁止在剧情中创建"一次性"临时角色
 - 剧情结束后，NPC 应保留在沙盒世界中继续存在
 
+**Data-Driven（数据驱动）原则**：
+- 所有游戏数据必须从 `data/` 下的 CSV 文件加载，禁止在代码中凭空捏造数据
+- 涉及的 CSV 包括：
+  - `npc_data.csv` — NPC 角色数据
+  - `dialog_config.csv` — 对话配置
+  - `event_data.csv` — 事件数据
+  - `event_dialog_config.csv` — 事件对话配置
+  - `items.csv` — 物品数据
+  - `recipes.csv` — 合成配方
+  - `quest_config.csv` — 任务配置
+  - `org_task_config.csv` — 组织任务配置
+- 需要新增数据时，必须通过 `src/tools/` 下的脚本生成 CSV，而非手写或硬编码
+
 **GameContext 中心化**：
 - `ctx` 对象是所有系统间共享数据的唯一入口
 - 避免在函数间传递超过 3 个参数，改用 `ctx`
@@ -28,60 +41,108 @@ aistory/
 ├── src/
 │   ├── context.py           # GameContext 定义
 │   ├── definitions.py       # 常量、枚举、类型定义
-│   ├── entities/            # 实体类 (Card, NPC, Building...)
+│   ├── utils.py             # 工具函数
+│   ├── user_config.py       # 用户配置
+│   │
+│   ├── entities/            # 实体类
+│   │   ├── base.py              # 卡牌基类
+│   │   ├── npc.py               # NPC实体
+│   │   ├── player.py            # 玩家实体
+│   │   ├── building.py          # 建筑实体
+│   │   └── resource.py          # 资源实体
 │   │
 │   ├── ai/                  # AI决策子系统
 │   │   ├── combat_ai.py         # 战斗AI
+│   │   ├── constants.py         # AI常量
 │   │   ├── event_processor.py   # 事件处理器
 │   │   ├── hatred_system.py     # 仇恨系统
 │   │   ├── organization_ai.py   # 组织AI
-│   │   └── spectate_ai.py       # 围观AI
+│   │   ├── spectate_ai.py       # 围观AI
+│   │   └── job_behaviors/       # 职业行为(8种)
+│   │       ├── base.py, registry.py
+│   │       ├── farmer.py, merchant.py, guard.py, official.py
+│   │       └── scholar.py, artisan.py, bandit.py, refugee.py
+│   │
+│   ├── aistory/             # AI叙事系统(四幕/命运节点)
+│   │   ├── story_director.py        # AI导演：FateNode管理、四幕编排、heat热度
+│   │   ├── rolling_story_generator.py  # 滚动故事生成：EventChoice、四幕事件生成
+│   │   ├── dilemma_deriver.py       # 困境推导器
+│   │   ├── dilemma_seed.py          # NPC困境种子(desire vs misgiving)
+│   │   ├── phase_evaluator.py       # 阶段评估器
+│   │   ├── ripple_engine.py         # 涟漪引擎(后果传播)
+│   │   └── shared_types.py          # 共享类型定义
 │   │
 │   ├── llm/                 # LLM集成子系统
 │   │   ├── chat_manager.py      # NPC对话管理
 │   │   ├── llm_service.py       # LLM服务封装
+│   │   ├── config.py            # LLM配置
 │   │   ├── npc_memory.py        # NPC记忆系统
-│   │   ├── prompt_builder.py    # Prompt构建
+│   │   ├── prompt_builder.py    # Prompt构建(含任务上下文注入)
+│   │   ├── npc_chat_integration.py  # NPC聊天集成
+│   │   ├── npc_actions.py       # NPC行为解析
 │   │   ├── event_dialog_generator.py  # 事件对话生成
+│   │   ├── event_memory_bridge.py     # 事件记忆桥接
 │   │   └── doubao_image.py      # 图像生成
 │   │
-│   ├── story/               # 剧情系统
+│   ├── story/               # 剧情指令系统
 │   │   └── story_directive_executor.py  # 剧情指令执行器
 │   │
 │   ├── ui/                  # UI子系统
 │   │   ├── manager.py           # UI管理器
+│   │   ├── base.py, constants.py, components.py  # 基础设施
 │   │   ├── panels.py            # 面板组件
+│   │   ├── sidebar.py           # 侧边栏(含"要务"区域)
 │   │   ├── chat_ui.py           # NPC对话UI
 │   │   ├── story_ui.py          # 剧情对话UI
 │   │   ├── event_notification.py    # 事件通知
 │   │   ├── live_news_panel.py    # 新闻面板
 │   │   ├── live_snapshot_panel.py   # 快照面板
 │   │   ├── fate_graph_ui.py      # 命运图谱UI
-│   │   └── settings_panel.py     # 设置面板
+│   │   ├── npc_detail_panel.py   # NPC详情面板
+│   │   ├── choice_tooltip.py    # 选项提示
+│   │   ├── visual_effects.py    # 视觉特效
+│   │   ├── settings_panel.py    # 设置面板
+│   │   ├── main_menu.py         # 主菜单
+│   │   └── creation.py, hit_test.py  # 创建界面、点击检测
 │   │
-│   ├── audio/               # 音频系统
-│   ├── aistory/             # 核心游戏逻辑
+│   ├── audio/sound_manager.py   # 音频系统
+│   ├── data/                    # 内嵌数据定义
+│   │   ├── building_defs.py     # 建筑定义
+│   │   └── character_seeds.py   # 角色种子数据
 │   │
+│   ├── # --- 核心游戏系统(顶层模块) ---
 │   ├── ai_system.py         # NPC AI 决策入口
+│   ├── aistory_integration.py   # AI叙事系统集成入口
 │   ├── atomic_actions.py    # AI 原子动作队列
 │   ├── camera.py            # 摄像机与坐标转换
 │   ├── combat_system.py     # 战斗逻辑
-│   ├── quest_system.py      # 任务系统
-│   ├── event_system.py      # 随机事件与时间系统
-│   ├── director_system.py   # AI导演系统
+│   ├── quest_system.py      # 任务系统(QuestManager、QuestData)
+│   ├── org_task_system.py   # 组织任务系统(OrgTaskSystem、OrgTask)
+│   ├── event_system.py      # 随机事件与时间系统(EventManager、_tick())
+│   ├── director_system.py   # AI导演系统(WorldObserver)
+│   ├── event_effect_preview.py  # 事件效果预览
 │   ├── recipe_system.py     # 卡牌堆叠配方
+│   ├── recipe_driven_ai.py  # 配方驱动AI
 │   ├── interaction.py       # 鼠标交互处理
 │   ├── render_system.py     # 渲染管线
 │   ├── world_loader.py      # 世界初始化
 │   ├── world_map.py         # 世界地图
 │   ├── social_system.py     # 社交关系系统
-│   ├── organization_system.py   # 组织系统
+│   ├── organization_system.py   # 组织系统(rank/晋升/merit)
 │   ├── faction_war_system.py    # 势力战争系统
+│   ├── faction_colors.py    # 势力颜色
 │   ├── rumor_system.py      # 谣言系统
 │   ├── economy_system.py    # 经济系统
 │   ├── item_system.py       # 物品系统
 │   ├── tech_system.py       # 科技系统
-│   └── utils.py             # 工具函数
+│   ├── npc_personality.py   # NPC性格系统(7维)
+│   ├── persuasion_system.py # 说服系统
+│   ├── movement_system.py   # 移动与占位系统
+│   ├── pathfinding.py       # 寻路
+│   ├── spatial_hash.py      # 空间哈希
+│   ├── grid_base.py         # 网格基类
+│   ├── building_selector.py # 建筑选择器
+│   └── data_loader.py      # CSV数据加载器
 │
 ├── data/
 │   ├── npc_data.csv         # NPC数据 (ID = 8000 + 行索引)
@@ -92,15 +153,16 @@ aistory/
 │   ├── recipes.csv          # 配方数据
 │   ├── quest_config.csv     # 任务配置
 │   ├── org_task_config.csv  # 组织任务配置
-│   └── npc_memories/        # NPC记忆存储目录
+│   └── npc_memories/        # NPC记忆存储目录 (JSON)
 │
-├── docs/                    # 文档目录
+├── openspec/                # 设计文档
+│   └── changes/dynamic-task-system/
+│       ├── design.md            # 动态任务系统设计愿景
+│       └── tasks.md             # 动态任务系统实施指南
+│
+├── docs/                    # 技术文档
 │   ├── designDoc.md             # 游戏设计文档 (GDD)
-│   ├── technical/               # 技术实现文档
-│   │   ├── ai-atomic-behavior.md
-│   │   ├── story-directive-spec.md
-│   │   └── ...
-│   └── notes/                   # 备忘笔记
+│   └── technical/               # 技术实现文档
 │
 └── assets/                  # 图像、字体资源
 ```
