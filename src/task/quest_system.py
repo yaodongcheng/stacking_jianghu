@@ -1,4 +1,13 @@
-# --- src/quest_system.py ---
+# --- src/task/quest_system.py ---
+"""
+任务系统 - 管理主线任务、对话、任务状态
+
+重构说明：
+- 此文件已移动到 src/task/ 目录
+- 任务基类 TaskBase 在同目录的 base.py
+- QuestManager 管理 QuestData 和 DialogData
+"""
+
 import csv
 import random
 import os
@@ -8,6 +17,28 @@ from src.utils import resource_path
 
 # 导入角色种子数据，用于动态构建 ID 映射
 from src.data.character_seeds import SEEDS
+
+# ======================== 从同目录模块导入 ========================
+from .display import TaskDisplayData
+from .base import (
+    TaskCategory,
+    TASK_PRIORITY as _TASK_PRIORITY,
+    TASK_TYPE_STYLES as _TASK_TYPE_STYLES,
+)
+
+# ======================== 向后兼容常量 ========================
+# 这些常量保持原有值，供其他模块使用
+TASK_TYPE_MAIN = TaskCategory.MAIN.value
+TASK_TYPE_SURVIVAL = TaskCategory.SURVIVAL.value
+TASK_TYPE_INTEL = TaskCategory.INTEL.value
+TASK_TYPE_FACTION = TaskCategory.FACTION.value
+
+# 任务优先级（转换为字符串键）
+TASK_PRIORITY = {k.value: v for k, v in _TASK_PRIORITY.items()}
+
+# 任务样式（转换为字符串键）
+TASK_TYPE_STYLES = {k.value: v for k, v in _TASK_TYPE_STYLES.items()}
+
 
 # ======================== NPC ID 映射系统 ========================
 # 从 SEEDS 动态构建，避免手动维护两份数据导致不一致
@@ -45,93 +76,9 @@ def get_npc_name_by_id(npc_id) -> str:
     return ID_TO_NAME.get(str(npc_id), f'NPC({npc_id})')
 
 
-# ======================== 任务类型系统 ========================
-# 用于多任务槽位展示
-
-# 任务类型枚举
-TASK_TYPE_MAIN = "MAIN"           # 主线任务 - 金色
-TASK_TYPE_SURVIVAL = "SURVIVAL"   # 生存任务 - 红色（最紧急）
-TASK_TYPE_INTEL = "INTEL"         # 情报委托 - 蓝色
-TASK_TYPE_FACTION = "FACTION"     # 势力任务 - 黄色
-
-# 任务类型优先级（数值越小越优先）
-TASK_PRIORITY = {
-    TASK_TYPE_SURVIVAL: 1,   # 生存最优先
-    TASK_TYPE_INTEL: 2,      # 情报次之
-    TASK_TYPE_FACTION: 3,    # 势力第三
-    TASK_TYPE_MAIN: 4,       # 主线最后
-}
-
-# 任务类型显示样式（供 UI 层引用）
-TASK_TYPE_STYLES = {
-    TASK_TYPE_SURVIVAL: {
-        'color': (255, 100, 80),          # 红色 - 紧急
-        'prefix': '!',                    # 感叹号前缀
-        'bg_color': (60, 30, 30),         # 深红背景
-        'label': '生存',
-    },
-    TASK_TYPE_INTEL: {
-        'color': (100, 180, 255),         # 蓝色 - 信息
-        'prefix': '?',                    # 问号前缀
-        'bg_color': (30, 40, 55),         # 深蓝背景
-        'label': '情报',
-    },
-    TASK_TYPE_FACTION: {
-        'color': (255, 200, 80),          # 黄色 - 势力
-        'prefix': '*',                    # 星号前缀
-        'bg_color': (50, 45, 30),         # 深黄背景
-        'label': '势力',
-    },
-    TASK_TYPE_MAIN: {
-        'color': (200, 150, 255),         # 紫金色 - 主线
-        'prefix': '▶',                    # 三角前缀
-        'bg_color': (45, 35, 55),         # 深紫背景
-        'label': '主线',
-    },
-}
-
-
-class TaskDisplayData:
-    """
-    单个任务的展示数据结构
-    用于 sidebar 等UI组件渲染
-    """
-    def __init__(self, task_type: str, text: str, 
-                 progress: str = "", is_complete: bool = False, 
-                 is_urgent: bool = False,
-                 # 详情弹窗用字段
-                 target_npc: str = "",           # 对象（目标NPC名字）
-                 objective: str = "",            # 任务目标（完成条件）
-                 reward: str = "",               # 任务成果（奖励）
-                 deadline_days: int = 0,         # 期限（剩余天数，0表示无期限）
-                 description: str = ""):          # 详细描述
-        self.type = task_type           # 任务类型：MAIN/SURVIVAL/INTEL/FACTION
-        self.text = text                # 任务描述文本（sidebar显示用）
-        self.progress = progress        # 进度文本，如 "1/3" 或 ""
-        self.is_complete = is_complete  # 是否已完成待交付
-        self.is_urgent = is_urgent      # 是否紧急（生存任务默认紧急）
-        
-        # 详情弹窗用字段
-        self.target_npc = target_npc    # 对象
-        self.objective = objective      # 任务目标
-        self.reward = reward            # 任务成果
-        self.deadline_days = deadline_days  # 期限
-        self.description = description  # 详细描述
-    
-    def to_dict(self):
-        """转换为字典，方便 UI 层使用"""
-        return {
-            'type': self.type,
-            'text': self.text,
-            'progress': self.progress,
-            'is_complete': self.is_complete,
-            'is_urgent': self.is_urgent,
-            'target_npc': self.target_npc,
-            'objective': self.objective,
-            'reward': self.reward,
-            'deadline_days': self.deadline_days,
-            'description': self.description,
-        }
+# ======================== TaskDisplayData ========================
+# 注意：TaskDisplayData 已移至 src/task/display.py
+# 这里保留导入（上面已导入），不需要再定义
 
 
 class QuestData:

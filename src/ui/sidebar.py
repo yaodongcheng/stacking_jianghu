@@ -2,7 +2,7 @@
 import pygame
 from src.definitions import *
 from src.entities import NPC, Resource
-from src.quest_system import (
+from src.task import (
     TASK_TYPE_MAIN, TASK_TYPE_SURVIVAL, TASK_TYPE_INTEL, TASK_TYPE_FACTION,
     TASK_PRIORITY, TASK_TYPE_STYLES, TaskDisplayData
 )
@@ -700,7 +700,7 @@ class TaskDetailPanel:
             self._last_print_time = current_time
             #print(f"[任务详情调试] 时限下一行Y: {self._last_deadline_y}, 弹窗底部Y: {self.rect.bottom}")
             if self.task.progress:
-                #print(f"[任务详情调试] 进度后Y: {content_y}")
+                pass  #print(f"[任务详情调试] 进度后Y: {content_y}")
     
     def _draw_info_row_wrapped(self, screen, font, x: int, y: int, max_w: int, label: str, value: str, main_color):
         """绘制一行信息（支持自动换行），返回下一行的Y坐标"""

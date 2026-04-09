@@ -540,7 +540,7 @@ action说明:
             - quest_role: NPC在任务中的角色 (giver/target/related/none)
         """
         try:
-            from src.quest_system import QuestManager, get_npc_name_by_id
+            from src.task import QuestManager, get_npc_name_by_id
             quest_mgr = QuestManager.get_instance()
             
             print(f"[PromptBuilder] _get_quest_context_for_npc: QuestManager实例={quest_mgr is not None}")
@@ -975,9 +975,9 @@ action说明:
                 
                 return "玩家"
             
-            # 尝试从quest_system获取NPC名字
+            # 尝试从task模块获取NPC名字
             try:
-                from src.quest_system import ID_TO_NAME
+                from src.task import ID_TO_NAME
                 if entity_id_str in ID_TO_NAME:
                     return ID_TO_NAME[entity_id_str]
             except:

@@ -26,8 +26,8 @@ def get_npc_name_by_id_global(npc_id):
     if npc_id_str in NPC_ID_NAME_MAP:
         return NPC_ID_NAME_MAP[npc_id_str]
     
-    # 2. 从种子 NPC 中查找（quest_system 的 ID_TO_NAME）
-    from src.quest_system import ID_TO_NAME
+    # 2. 从种子 NPC 中查找（task 模块的 ID_TO_NAME）
+    from src.task import ID_TO_NAME
     if npc_id_str in ID_TO_NAME:
         return ID_TO_NAME[npc_id_str]
     
@@ -70,7 +70,7 @@ def get_npc_id_by_name_global(npc_name: str):
             return int(npc_id_str)
     
     # 2. 从种子 NPC 中反向查找
-    from src.quest_system import ID_TO_NAME
+    from src.task import ID_TO_NAME
     for npc_id_str, name in ID_TO_NAME.items():
         if name == npc_name:
             return int(npc_id_str)

@@ -282,7 +282,7 @@ class NPCChatIntegration:
         """
         try:
             # 尝试获取任务管理器
-            from src.quest_system import QuestManager, get_npc_name_by_id
+            from src.task import QuestManager, get_npc_name_by_id
             quest_mgr = QuestManager.get_instance()
             
             if not quest_mgr:

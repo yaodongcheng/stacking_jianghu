@@ -20,7 +20,7 @@ from src.pathfinding import FloydPathfinder
 from src.ai_system import AISystem 
 from src.social_system import social_manager
 from src.economy_system import EconomySystem 
-from src.quest_system import QuestManager
+from src.task import QuestManager
 from src.ui.story_ui import StoryUI
 from src.data_loader import load_raw_npc_data, load_npcs_from_csv
 from src.ui.creation import CharacterCreationUI
