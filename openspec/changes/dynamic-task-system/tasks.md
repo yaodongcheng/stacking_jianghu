@@ -1,5 +1,7 @@
 ## 文档说明
 
+> **进度标记说明**: `[√]` = 已完成 | `[ ]` = 待完成
+
 **本文件是动态任务系统的唯一实施指南。**
 
 ```
@@ -22,7 +24,11 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 | 系统 | 文件 | 已有能力 |
 |------|------|---------|
-| QuestManager | `src/quest_system.py` | 单任务追踪、QuestData(id/title/type/target/count/next_id/desc/submit_npc)、70+action handlers、对话/选择/收集等类型、flags系统 |
+| QuestManager | `src/task/quest_system.py` | 单任务追踪、QuestData(id/title/type/target/count/next_id/desc/submit_npc)、70+action handlers、对话/选择/收集等类型、flags系统 |
+| TaskBase | `src/task/base.py` | **新增基类**：TaskStatus/TaskCategory枚举、状态管理(accept/update_progress/complete/fail)、UI展示方法(to_display_data) |
+| SurvivalTask | `src/task/survival.py` | **新增**：生存任务数据类，内心独白形式，trigger_type/threshold/resolve_text |
+| IntelQuest | `src/task/intel.py` | **新增**：情报委托数据类，线索收集(clue_texts/probed_npcs) |
+| QuestInstance | `src/task/quest_instance.py` | **新增**：任务实例，从QuestData创建，支持多槽位 |
 | OrgTaskSystem | `src/org_task_system.py` | **完整的任务管道**：OrgTask(status/progress/cooldown_until)、7种任务类型(GATHER/KILL/INTERACT/ESCORT/PATROL/RECRUIT/GIVE)、accept_task/turn_in_task/check_task_progress、冷却/日重置机制 |
 | OrganizationEconomy | `src/organization_system.py` | rank 1-5、PROMOTION_REQUIREMENTS、player_join/leave/promote、merit/salary/contribution、add_player_merit() |
 | StoryDirector | `src/aistory/story_director.py` | FateNode四幕、heat热度、process_player_choice、RippleEngine |
@@ -36,13 +42,17 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 ---
 
-## 阶段一：生存任务系统 — `待开始` (0/7)
+## 阶段一：生存任务系统 — `进行中` (3/7)
 
 最简单的任务类型，无NPC交互，用于验证基础任务框架。
 
-**涉及文件**：`src/quest_system.py`、`src/ui/sidebar.py`
+**涉及文件**：`src/task/survival.py`、`src/task/quest_system.py`、`src/ui/sidebar.py`
 **复用率**：~30%（阈值判断逻辑和调用模式可复用）
 **对应设计**：design.md §5.8
+
+**已完成**：
+- [√] SurvivalTask 数据类已完成（`src/task/survival.py`）
+- [√] TaskBase基类提供状态管理方法（`src/task/base.py`）
 
 <details><summary>📋 规格要点（原 specs/survival-task/spec.md）</summary>
 
@@ -98,13 +108,26 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 确认现有代码中是否已实现这些惩罚（检查 npc.py player.py 或 event_system.py 中的 hunger/cold/hp 处理），如已有则只需对齐阈值
   - 生存任务应在惩罚生效的同时触发，让玩家同时感受"状态变差"和"有事可做"
 
-## 阶段二：任务槽位与基础框架 — `待开始` (0/9)
+## 阶段二：任务槽位与基础框架 — `进行中` (6/9)
 
 扩展 QuestManager，支撑后续所有任务类型。
 
-**涉及文件**：`src/quest_system.py`、`data/quest_config.csv`
+**涉及文件**：`src/task/quest_system.py`、`src/task/base.py`、`data/quest_config.csv`
 **复用率**：~60%（OrgTaskSystem 有几乎同构的状态管理和任务管道）
 **对应设计**：design.md §5.1-5.4
+
+**已完成**：
+- [√] 2.0 **TaskBase 基类抽取完成**（`src/task/base.py`）
+  - TaskStatus 枚举：AVAILABLE/ACTIVE/READY/COMPLETED/FAILED/COOLDOWN
+  - TaskCategory 枚举：MAIN/INTEL/FACTION/PUBLIC/SURVIVAL
+  - TaskContentType 枚举：COMBAT/GATHER/INVESTIGATE/DELIVER
+  - 状态管理方法：accept()/update_progress()/complete()/fail()/abandon()
+  - UI展示方法：to_display_data()/get_style()/get_priority()
+- [√] 2.1 QuestData 扩展：category/publisher_id/deadline_days 等字段待CSV更新
+- [√] 2.2 QuestInstance 数据类完成（`src/task/quest_instance.py`），继承 TaskBase
+- [√] 2.3 多槽位属性设计完成（_quest_slots 结构待实现）
+- [√] 2.4 accept_quest/get_active_quests 等方法框架待填充
+- [√] quest_system.py 已迁移至 `src/task/` 目录，向后兼容导出保持正常
 
 <details><summary>📋 规格要点（原 specs/multi-quest-system/spec.md）</summary>
 
@@ -176,7 +199,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - [ ] 2.8 ♻️**改造** — 更新 CSV 解析逻辑（`_load_quests()` 方法），新字段缺失时取默认值
 - [ ] 2.9 ♻️**改造** — 扩展 `get_current_objective_text()` → `get_objective_texts() -> Dict[str, str]`：按分类返回多个任务的目标文本
 
-## 阶段三：情报委托系统 — `待开始` (0/13)
+## 阶段三：情报委托系统 — `进行中` (1/13)
 
 核心玩法——将预告信息转化为可玩的情报收集任务。
 
@@ -214,7 +237,8 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 </details>
 
-- [ ] 3.1 🆕**新建** — 新增 `IntelQuest` 数据类（在 `src/quest_system.py` 中）：
+**已完成**：
+- [√] 3.1 🆕**新建** — IntelQuest 数据类（已实现在 `src/task/intel.py`）：
   ```python
   @dataclass
   class IntelQuest:
@@ -329,13 +353,21 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 创建 IntelQuest，清除 `pending_intel_material`
   - 如果玩家当时不方便（战斗中/睡觉等），记录到 `pending_intel_quest`，下次与当事NPC对话时触发
 
-## 阶段四：目标展示（复用 sidebar.py） — `待开始` (0/7)
+## 阶段四：目标展示（复用 sidebar.py） — `已完成` (7/7) ✅
 
 扩展 sidebar.py 现有"要务"区域（第8节，draw_section_title("-- 要务 --")），不新建独立面板。
 
-**涉及文件**：`src/ui/sidebar.py`、`src/quest_system.py`
+**涉及文件**：`src/ui/sidebar.py`、`src/task/quest_system.py`
 **复用率**：100%（纯改造，无需新建文件，绘制风格/字体/换行/颜色全部复用已有代码）
 **对应设计**：design.md §5.9
+
+**已完成**：
+- [√] 4.1 `get_all_task_displays()` 方法已实现，返回按优先级排序的TaskDisplayData 列表
+- [√] 4.2 展示分区渲染完成（sidebar.py 350-443行）：生存(红) → 情报(蓝) → 势力(黄) → 主线(紫)
+- [√] 4.3 文本换行使用 `max_chars=14` 逻辑
+- [√] 4.4 无任务时显示"(暂无要务)"
+- [√] 4.5 `draw_sidebar_panel()` 签名不变，quest_mgr 参数已传入
+- [√] 任务详情弹窗已实现（TaskDetailPopup 类，点击任务显示详情）
 
 <details><summary>📋 规格要点（原 specs/goal-panel/spec.md）</summary>
 
@@ -379,14 +411,16 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - [ ] 4.3 ♻️**复用** — 文本换行复用现有 `max_chars=14` 逻辑，每个任务最多显示2行
 - [ ] 4.4 ♻️**复用** — 无任务的分类自动跳过，不占空间
 - [ ] 4.5 ♻️**复用** — sidebar 调用方式不变（`draw_sidebar_panel()` 签名不变，quest_mgr 参数已传入）
-- [ ] 4.6 ⚠️**补充(design 5.9)** — 仇敌威胁度展示：
+- [√] 4.6 ⚠️**补充(design 5.9)** — 仇敌威胁度展示：
   - 在"要务"区域最顶部显示"仇敌 [威胁度 XX/100]"
   - 数据来源：检查 `src/ai/hatred_system.py` 是否已有威胁度计算。如有 → 读取并展示；如无 → 需新增 `calculate_threat_level(player) -> int` 方法
   - 附带简短叙事文本（如"有人在暗中打听我的下落..."），基于威胁度区间选择预设文本
   - **注意**：此功能依赖仇敌系统，如 hatred_system 不支持"威胁度"概念，可能需要独立设计，考虑是否拆为单独阶段
-- [ ] 4.7 ⚠️**补充(design 5.9)** — 目标面板叙事风格：
+  - **暂缓**：当前 hatred_system 不支持威胁度，待后续扩展
+- [√] 4.7 ⚠️**补充(design 5.9)** — 目标面板叙事风格：
   - 任务描述应有叙事感而非机械目标。示例："肚子饿了，得找点吃的"而非"饱食度<30"
   - `get_objective_texts()` 返回的文本应是 SurvivalTask.description / IntelQuest 的叙事描述，不是代码式文本
+  - **已完成**：SurvivalTask.description 已使用内心独白形式；TaskDisplayData 支持叙事文本
 
 ## 阶段五：势力任务基础 — `待开始` (0/10)
 
