@@ -36,7 +36,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 ---
 
-## 阶段一：生存任务系统
+## 阶段一：生存任务系统 — `待开始` (0/7)
 
 最简单的任务类型，无NPC交互，用于验证基础任务框架。
 
@@ -95,10 +95,10 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 需等阶段八 EventChoice 加 triggers_task 字段后才可实现
 - [ ] 1.7 ⚠️**补充(design 5.8)** — 生存任务与gameplay惩罚同步：
   - SurvivalTask 的触发阈值应与 designDoc 定义的数值惩罚阈值一致（饱食度<30→行动效率×0.7+每日扣HP，寒冷≥80→每日扣HP）
-  - 确认现有代码中是否已实现这些惩罚（检查 player.py 或 event_system.py 中的 hunger/cold/hp 处理），如已有则只需对齐阈值
+  - 确认现有代码中是否已实现这些惩罚（检查 npc.py player.py 或 event_system.py 中的 hunger/cold/hp 处理），如已有则只需对齐阈值
   - 生存任务应在惩罚生效的同时触发，让玩家同时感受"状态变差"和"有事可做"
 
-## 阶段二：任务槽位与基础框架
+## 阶段二：任务槽位与基础框架 — `待开始` (0/9)
 
 扩展 QuestManager，支撑后续所有任务类型。
 
@@ -176,7 +176,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - [ ] 2.8 ♻️**改造** — 更新 CSV 解析逻辑（`_load_quests()` 方法），新字段缺失时取默认值
 - [ ] 2.9 ♻️**改造** — 扩展 `get_current_objective_text()` → `get_objective_texts() -> Dict[str, str]`：按分类返回多个任务的目标文本
 
-## 阶段三：情报委托系统
+## 阶段三：情报委托系统 — `待开始` (0/13)
 
 核心玩法——将预告信息转化为可玩的情报收集任务。
 
@@ -186,14 +186,13 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 <details><summary>📋 规格要点（原 specs/info-quest/spec.md）</summary>
 
-**四幕前的情报委托类型**：
+**情报委托触发时机**（见 design.md §5.5：由当事NPC在起幕余韵后自然触发，不是辰时随机找上门）：
 
-| 幕前 | 线索类型 | 委托示例 | 暗示的准备方向 |
+| 时机 | 线索类型 | 委托示例 | 暗示的准备方向 |
 |-----|---------|---------|--------------|
-| 起前 | 预告线索 | "留意张铁匠近况" | 关注即可，无特殊需求 |
-| 承前 | 准备线索 | "打听高府的来头" | 可能需要力量≥45 / 魅力≥40 / 金钱≥80 |
-| 转前 | 真相线索 | "查清高衙内的目的" | 可能需要金钱≥200 / 智力≥40+关键关系≥50 |
-| 合前 | 回响线索 | "了解张铁匠下一步打算" | 可能需要金钱≥100 / 魅力≥40 |
+| 起幕结束后 | 完整情报委托（3条线索） | "打听高府的来头" | 可能需要力量≥45 / 魅力≥40 / 金钱≥80 |
+| 承幕→转幕空白期 | 简化线索更新（NPC对话提及） | "高府又加派了人手" | 门槛升高暗示 |
+| 转幕→合幕空白期 | 通常不需要 | — | 合幕收尾，门槛回落 |
 
 **困境类型→线索方向映射**（3条线索应分别暗示不同准备方向）：
 
@@ -211,7 +210,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - 放弃委托：发布人好感仅微降（-5）
 - 凑齐3条线索后的内心总结应**并列呈现各条路的可能性，不偏向任何一条**
 
-**辰时触发**：辰时(07:00-09:00)情报委托NPC可能主动找上门发布委托。
+**触发方式**：起幕余韵对话结束后，当事NPC（FateNode主角NPC）基于听到的威胁，自然请求玩家帮忙打听（详见 3.13）。
 
 </details>
 
@@ -257,30 +256,80 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 读取玩家属性与下一幕各 EventChoice.requirement 的差距
   - 转化为NPC口吻文本（如"你这小身板...差得远"）
   - ♻️ LLM 调用管道（ChatManager 异步调用）已有
-- [ ] 3.8 ♻️**改造** — 在 StoryDirector 中新增 `generate_intel_quest(fate_node: FateNode, phase: DilemmaPhase) -> IntelQuest`：
-  - 根据 FateNode 的当前阶段和下一幕内容，生成 IntelQuest
-  - 从 fate_node.acts 中提取下一幕的选项门槛信息
-  - 调用 LLM 生成线索文本
-  - ♻️ **已有**：FateNode/四幕/phase 机制完整，在已有流程中插入生成点
-- [ ] 3.9 ♻️**改造** — 在 StoryDirector.`try_to_generate_beat()` 中，生成下一幕之前先触发情报委托生成
+- [ ] 3.8 ♻️**改造** — 在 StoryDirector 中改造起幕生成流程，使其同时输出选项骨架和情报素材：
+  - 改造 `try_to_generate_beat()`：当 phase == EMERGE 时，LLM prompt 中增加要求输出 scaffold + intel_material
+  - 改造 `_build_rolling_story_prompt()`：起幕 prompt 新增输出格式要求：
+    ```json
+    {
+      "event": { ... },
+      "scaffold": {
+        "routes": [
+          {"attr": "strength", "base_threshold": 20, "label": "武力对抗"},
+          {"attr": "money",    "base_threshold": 30, "label": "金钱调解"},
+          {"attr": "wit",      "base_threshold": 15, "label": "暗中调查"}
+        ],
+        "fallback": {"label": "妥协退让"}
+      },
+      "intel_material": {
+        "clues": ["线索1文本", "线索2文本", "线索3文本"],
+        "target_npc_ids": ["npc_001", "npc_002", "npc_003"]
+      }
+    }
+    ```
+  - scaffold 存入 `seed.choice_scaffold`
+  - intel_material 暂存到 `seed.pending_intel_material`，等起幕结束后触发情报委托
+  - ♻️ **已有**：FateNode/四幕/phase 机制完整，_build_rolling_story_prompt() 已有完整的 prompt 组装框架
+- [ ] 3.8a 🆕**新建** — 新增 `ChoiceScaffold` 数据类（在 `src/aistory/dilemma_seed.py` 中）：
+  ```python
+  @dataclass
+  class ScaffoldRoute:
+      attr: str                    # 考验的属性名（如 "strength"），保底为 null
+      base_threshold: int          # 基础门槛值
+      label: str                   # 路线标签（如 "武力对抗"）
+
+  @dataclass
+  class ChoiceScaffold:
+      routes: List[ScaffoldRoute]  # 3条核心路线
+      fallback: ScaffoldRoute      # 保底路线（attr=null）
+  ```
+- [ ] 3.8b ♻️**改造** — 在 `NPCDilemmaSeed` 中新增字段：
+  ```python
+  class NPCDilemmaSeed:
+      # 现有字段...
+      choice_scaffold: Optional[ChoiceScaffold] = None     # 选项骨架（起幕时生成）
+      player_committed_route: Optional[str] = None          # 玩家当前主路（每幕选择后更新）
+      pending_intel_material: Optional[Dict] = None         # 待触发的情报素材
+  ```
+- [ ] 3.8c ♻️**改造** — 在 StoryDirector.`process_player_choice()` 中，选择后更新 `seed.player_committed_route`：
+  - 将玩家选中的 EventChoice 的 requirement 中的主属性与 scaffold.routes 匹配
+  - 如匹配到某条路线 → `seed.player_committed_route = route.attr`
+  - 如选了保底（requirement 为 null）→ committed_route 不变
+- [ ] 3.9 ♻️**改造** — 在 StoryDirector 中，起幕的 `process_player_choice()` 完成后触发情报委托生成：
+  - 从 `seed.pending_intel_material` 取出线索和目标NPC
+  - 创建 IntelQuest（复用 3.1 的数据类）
+  - 清除 `seed.pending_intel_material`
 - [ ] 3.10 ♻️**复用** — 节奏控制：根据 `_calculate_simple_heat()` 的值调节情报委托提前量 — heat 值已有
-- [ ] 3.11 ⚠️**补充(design 5.5)** — 困境类型→线索方向映射：在 `generate_intel_quest()` 中加入映射逻辑：
-  - 经济困境 → 线索覆盖：金钱 / 关系 / 智力
-  - 武力冲突 → 线索覆盖：力量 / 金钱 / 调查
-  - 人际纠纷 → 线索覆盖：魅力 / 金钱 / 关系网
-  - 知识谜题 → 线索覆盖：智力 / 物品 / 关系
-  - 势力斗争 → 线索覆盖：声望 / 金钱 / 情报
-  - 将此映射写入 LLM prompt，确保生成的3条线索分别暗示不同准备方向
+- [ ] 3.11 ⚠️**补充(design 5.5+4.4)** — 困境类型→骨架路线维度映射：在起幕 prompt 中写入映射，约束 LLM 输出的 scaffold 路线属性：
+  - 经济困境 → scaffold 路线覆盖：money / 关系(affinity) / wit
+  - 武力冲突 → scaffold 路线覆盖：strength / money / wit
+  - 人际纠纷 → scaffold 路线覆盖：charm / money / 关系(affinity)
+  - 知识谜题 → scaffold 路线覆盖：wit / 物品(item) / 关系(affinity)
+  - 势力斗争 → scaffold 路线覆盖：fame / money / wit
+  - 此映射同时约束 scaffold.routes 的 attr 值和 intel_material.clues 的暗示方向
+  - 3条线索必须与3条路线一一对应（线索1暗示路线A的方向，以此类推）
 - [ ] 3.12 ⚠️**补充(design 5.5)** — 情报委托设计约束（写入逻辑/注释）：
   - 同时最多1个情报委托（阶段二槽位已保证）
   - 不完成无惩罚 — 事件照常触发，玩家只是缺少准备信息
   - 放弃委托：发布人好感仅微降（-5），在 `abandon_quest("INTEL")` 中实现
-- [ ] 3.13 ⚠️**补充(design 3.2)** — 辰时情报NPC主动找上门：
-  - 在 EventManager.`_tick()` 辰时(07:00-09:00) 检查是否有待发布的情报委托
-  - 如有，情报委托NPC主动走向玩家（复用 `npc.set_movement_target()`），到达后触发对话发布委托
-  - 玩家不在线/睡觉时记录到 `pending_intel_quest`，醒来后触发
+- [ ] 3.13 ⚠️**补充(design 5.5)** — 情报委托由当事NPC在余韵后触发：
+  - 在 StoryDirector.`process_player_choice()` 的余韵对话（choice_dialogues）结束后，检查 `seed.pending_intel_material`
+  - 如有 → 当事NPC（`fate_node.npc_id`）主动发起对话，请求玩家帮忙打听
+  - 对话内容由 LLM 在起幕生成时一并输出（intel_material 中包含委托对话文本）
+  - 发布人 = 当事NPC（不是旁观者NPC）
+  - 创建 IntelQuest，清除 `pending_intel_material`
+  - 如果玩家当时不方便（战斗中/睡觉等），记录到 `pending_intel_quest`，下次与当事NPC对话时触发
 
-## 阶段四：目标展示（复用 sidebar.py）
+## 阶段四：目标展示（复用 sidebar.py） — `待开始` (0/7)
 
 扩展 sidebar.py 现有"要务"区域（第8节，draw_section_title("-- 要务 --")），不新建独立面板。
 
@@ -339,7 +388,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 任务描述应有叙事感而非机械目标。示例："肚子饿了，得找点吃的"而非"饱食度<30"
   - `get_objective_texts()` 返回的文本应是 SurvivalTask.description / IntelQuest 的叙事描述，不是代码式文本
 
-## 阶段五：势力任务基础
+## 阶段五：势力任务基础 — `待开始` (0/10)
 
 扩展现有组织系统，增加上司分配任务机制。
 
@@ -418,7 +467,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - threat 40-60（风暴前）→ 拉拢备战类，期限3-5天
   - threat >= 60（正面对抗）→ 战争动员类，期限5-7天
 
-## 阶段六：势力任务完整
+## 阶段六：势力任务完整 — `待开始` (0/6)
 
 晋升机制、自创势力、与人生困境事件交叉。
 
@@ -459,7 +508,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 原势力所有成员好感-10
   - 冷却期：退出后7天内不可再加入同一势力
 
-## 阶段七：公开委托系统
+## 阶段七：公开委托系统 — `待开始` (0/11)
 
 江湖告示板 + 玩家/NPC双向发布。
 
@@ -542,7 +591,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - NPC 信誉标记下降（用 flags `npc_{id}_commission_fail_count`）
   - 高失败次数的NPC今后接取委托概率降低
 
-## 阶段八：事件任务联动
+## 阶段八：事件任务联动 — `待开始` (0/14)
 
 事件系统与任务系统的双向协同。
 
@@ -598,11 +647,58 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   @dataclass
   class EventChoice:
       # 现有字段: text, requirement, cost, effect, transfer, tension_delta, ...
+      # 已有可复用字段: hidden（隐藏选项）, unlock_condition（解锁条件）— 对应 design.md 转幕"满足前置条件可解锁第3选项"
       # 新增：
       triggers_task: Optional[Dict] = None  # {"task_type": "战斗", "source_type": "生存任务", "title": "...", "publisher": "PLAYER", "description": "..."}
   ```
   - ♻️ 更新 `_parse_event_card()` 中的 JSON 解析逻辑 — 已有解析框架
   - ♻️ 更新 LLM prompt（`_build_rolling_story_prompt()`）中的选项格式说明
+- [ ] 8.1a ⚠️**补充(design 4.4+6.10)** — 骨架约束注入：在 `_build_rolling_story_prompt()` 中，当 phase != EMERGE 且 `seed.choice_scaffold` 存在时，注入骨架约束段：
+  - 新增 `_build_scaffold_constraint(seed, player, phase) -> str` 方法：
+    ```python
+    def _build_scaffold_constraint(self, seed, player, phase):
+        """生成骨架约束 prompt 段，注入后续幕的 LLM prompt"""
+        scaffold = seed.choice_scaffold
+        committed = seed.player_committed_route
+        
+        # 门槛倍率表
+        multipliers = {
+            "ESCALATE": (2.0, 1.5),  # (主路, 侧路)
+            "CLIMAX":   (3.0, 2.0),
+            "SETTLE":   (1.5, 1.0),
+        }
+        main_mult, side_mult = multipliers[phase]
+        
+        constraint = "## 选项设计约束（基于选项骨架，必须遵守）\n\n"
+        constraint += "本困境的核心考验维度已确定，生成的选项必须与以下路线对应：\n\n"
+        
+        for route in scaffold.routes:
+            is_main = (route.attr == committed)
+            mult = main_mult if is_main else side_mult
+            threshold = int(route.base_threshold * mult)
+            tag = "← 主路" if is_main else ""
+            constraint += f"- 路线「{route.label}」: requirement 包含 PLAYER:{route.attr}:>=:{threshold} {tag}\n"
+        
+        # 保底（转幕无保底）
+        if phase != "CLIMAX":
+            constraint += f"- 保底「{scaffold.fallback.label}」: requirement 为 null\n"
+        
+        constraint += f"\n玩家上一幕选择了「{committed}」路线。\n"
+        constraint += f"玩家当前状态：strength={player.strength}, money={player.money}, "
+        constraint += f"wit={player.wit}, charm={player.charm}\n"
+        
+        return constraint
+    ```
+  - 在 `_build_rolling_story_prompt()` 的 user_prompt 中（玩家状态段之后）插入此约束段
+  - ♻️ **已有**：prompt 组装框架（system_prompt + user_prompt 结构），在已有位置插入新段即可
+- [ ] 8.1b ⚠️**补充(design 4.4+5.5)** — 起幕 prompt 扩展输出骨架 + 叙事钩子：
+  - 在 `_build_rolling_story_prompt()` 中，当 phase == EMERGE 时，在 JSON 输出模板中新增 `scaffold`、`intel_material` 和 `narrative_hook` 字段要求
+  - 新增 prompt 指令：
+    - "除了生成事件内容，还需输出选项骨架（3条核心路线 + 保底）和情报委托素材（3条线索文本 + 建议持有NPC）"
+    - "choice_dialogues（余韵对话）中必须包含对下一幕威胁的自然预告（如反派撂狠话、旁观者提醒），作为情报委托的叙事钩子"
+    - "余韵最后一句应为当事NPC请求玩家帮忙打听，作为情报委托的自然触发点"
+  - 新增 prompt 约束："3条线索必须分别对应3条路线，每条线索暗示对应路线的准备方向"
+  - ♻️ 复用困境类型→维度映射（3.11 的映射表）来约束 LLM 输出的路线属性
 - [ ] 8.2 ♻️**改造** — 在 StoryDirector.`process_player_choice()` 中：
   - 检查选中的 EventChoice.triggers_task
   - 如有值 → 不执行 `_apply_direct_consequences()`，改为生成 QuestInstance
@@ -642,8 +738,19 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 在 EventManager.`_tick()` 辰时(07:00-09:00) 触发 `update_bulletin_board()`
   - 清理过期委托 + NPC发布新委托 + 预告信息更新
   - 与 3.13（情报NPC找上门）和 7.7（每日清理）协调，确保辰时统一执行
+- [ ] 8.13 ⚠️**补充(design 6.11)** — 行为标签统计与口碑传播：
+  - 在 `StoryDirector.process_player_choice()` 中，解析玩家选中 EventChoice 的 requirement 字段，提取主属性维度（strength/agility/wit/charm/money/favor）
+  - 记录到玩家行为历史（可存入世界事实库或 player flags）
+  - 新增 `_calculate_behavior_tags(player) -> List[str]` 方法：统计最近 N 次选择中各维度使用频率，取 Top1-2 形成标签（如"偏武力"、"善计谋"）
+  - 行为标签写入世界事实库（`fact_type="PLAYER_BEHAVIOR"`），通过谣言系统（`rumor_system.py`）在NPC间传播
+  - ♻️ **已有**：`rumor_system.py` 的谣言传播机制、世界事实库的 record_fact（阶段九A）
+  - ♻️ **复用 RumorSystem**：在 `RumorType` 枚举中新增 `PLAYER_BEHAVIOR` 类型，复用 `RumorSystem.create_rumor()` 创建行为标签谣言，复用 `known_by` + `spread_range` 控制传播范围
+- [ ] 8.14 ⚠️**补充(design 6.11)** — 行为标签影响NPC反应：
+  - 在 `PromptBuilder` 中新增 `_get_player_reputation_context() -> str`：将行为标签转化为NPC对玩家的预期描述（如"此人惯用武力"→NPC对话中体现戒备/依赖）
+  - 注入NPC的LLM上下文，影响NPC对话语气和态度
+  - ♻️ **已有**：`PromptBuilder` 的上下文注入框架
 
-## 阶段九A：共享叙事记忆与感知过滤
+## 阶段九A：共享叙事记忆与感知过滤 — `待开始` (0/13)
 
 世界事实库 + 感知过滤器，为所有系统提供统一的叙事状态源和NPC信息边界。
 
@@ -672,6 +779,12 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 </details>
 
 **世界事实库**
+
+> ⚠️ **边界说明**：项目已有 `src/llm/npc_memory.py`（NPCMemorySystem），管理 NPC 对玩家的个人印象（对话级记忆，含短期/长期/衰减）。NarrativeMemory 与其分工不同：
+> - **NPCMemorySystem** = NPC 个体视角的主观记忆（"我觉得玩家是好人"、"上次对话他提到了..."）
+> - **NarrativeMemory** = 世界级事实的客观记录 + 感知过滤（"Day 3 张铁匠被高府施压"、"谁知道此事"）
+> - 两者不应合并：NPCMemorySystem 是 LLM 对话的上下文来源，NarrativeMemory 是系统决策的数据源
+> - 交互点：NarrativeMemory 通过感知过滤输出的事实，可写入 NPCMemorySystem 的 KNOWLEDGE 类型记忆
 
 - [ ] 9A.1 🆕**新建** — 新建 `src/narrative_memory.py`，定义核心数据结构：
   ```python
@@ -760,15 +873,28 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 在 `npc_post_commission()` 中，NPC只能基于自己感知到的信息发布委托
   - 不知道外来威胁的NPC不会发布"求保护"委托
   - ♻️ 已有需求金字塔驱动逻辑，在此基础上增加信息可用性检查
+- [ ] 9A.11 ⚠️**补充(design 5.5.1)** — 信息时效性支持：
+  - 在 `WorldFact` 中新增 `expires_at: Optional[int] = None` 字段（过期时间戳，null=永不过期）
+  - 在 `NarrativeMemory.query_facts()` 中过滤已过期的事实（`expires_at` 非空且小于当前时间戳时跳过）
+  - 情报委托的线索可设置时效（如"青龙帮明晚动手"→设置 expires_at = 当前+12时辰）
+  - 过期线索不再影响事件选项解锁
+- [ ] 9A.12 ⚠️**补充(design 5.5.1)** — 信息排他性与选择性透露：
+  - 在 `NarrativeMemory` 新增 `get_player_exclusive_info() -> List[WorldFact]`：返回只有玩家知道（`_npc_awareness` 中无其他NPC感知到）的事实
+  - 在 `RollingStoryGenerator._build_rolling_story_prompt()` 中，将玩家排他信息注入 LLM prompt，指示 LLM 生成"选择性透露"类选项（告诉谁/保密/借此交换）
+  - ♻️ **已有**：LLM prompt 组装框架，在已有位置插入排他信息段
+- [ ] 9A.13 ⚠️**补充(design 5.5.1)** — 信息拼图配方：
+  - 在 `recipes.csv` 中新增线索卡+线索卡的配方类型（如 `clue_A + clue_B = intel_AB`）
+  - 在 `recipe_system.py` 中处理线索合成结果：合成后的完整情报写入世界事实库，可能解锁新事件选项
+  - 合成逻辑通过 `IntelQuest` 的线索ID关联判定哪些线索可以拼合
 
-## 阶段九B：整合测试
+## 阶段九B：整合测试 — `待开始` (0/22)
 
 全系统联调验证。
 
 **涉及文件**：可在 `tests/` 目录下新建测试文件
 
 - [ ] 9B.1 生存任务：模拟 player.hunger=80 → 触发生存任务 → player.hunger=20 → 自动消失
-- [ ] 9B.2 情报委托：模拟 FateNode EMERGE前 → 生成IntelQuest → 打探3个NPC → 凑齐线索 → 交付
+- [ ] 9B.2 情报委托：模拟 FateNode EMERGE 生成 → 验证同时输出 scaffold + intel_material → 起幕选择后触发 IntelQuest → 打探3个NPC → 凑齐线索 → 交付
 - [ ] 9B.3 势力任务：模拟卯时 → 上司派任务 → 执行 → 完成 → merit增加 → 达标 → 晋升考核
 - [ ] 9B.4 公开委托：玩家发布委托 → NPC接取 → 完成/超时；NPC发布 → 玩家接取 → 完成
 - [ ] 9B.5 triggers_task：创建含 triggers_task 的 EventChoice → process_player_choice → 验证任务生成
@@ -780,6 +906,15 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - [ ] 9B.11 感知过滤：模拟事件+NPC分布 → 验证亲眼所见/间接听闻/逻辑推断/公共知识四条路径的判定正确性
 - [ ] 9B.12 感知过滤+情报委托：验证目标NPC的感知途径影响线索质量（WITNESSED精确 vs HEARD模糊）
 - [ ] 9B.13 感知过滤+NPC对话：验证NPC对话中不会透露其未感知到的信息（LLM上下文注入正确性）
+- [ ] 9B.14 选项骨架生成：模拟起幕生成 → 验证 LLM 同时输出 event + scaffold + intel_material → scaffold 存入 seed → intel_material 存入 seed
+- [ ] 9B.15 骨架约束注入：模拟承幕生成（seed 中已有 scaffold + committed_route="strength"）→ 验证 prompt 中包含骨架约束段 → 验证生成的 EventChoice.requirement 维度匹配 scaffold 路线
+- [ ] 9B.16 门槛递进计算：验证 calculate_threshold 在各 phase 下的倍率正确：ESCALATE(2.0/1.5)、CLIMAX(3.0/2.0)、SETTLE(1.5/1.0)
+- [ ] 9B.17 committed_route 更新：模拟玩家在承幕选了 money 路线 → 验证 seed.player_committed_route 更新为 "money" → 转幕的骨架约束中 money 为主路
+- [ ] 9B.18 骨架+情报一致性端到端：完整模拟起幕生成→情报委托→玩家准备→承幕生成→验证线索暗示的维度与承幕选项的 requirement 维度一致
+- [ ] 9B.19 行为标签统计：模拟玩家连续5次选择 strength 路线的选项 → 验证行为标签生成"偏武力" → 验证标签写入世界事实库
+- [ ] 9B.20 行为标签影响NPC：验证行为标签注入NPC的LLM上下文 → NPC对话中体现对玩家行为模式的认知
+- [ ] 9B.21 信息时效性：创建 expires_at=当前+1天的 WorldFact → 推进游戏时间超过过期点 → 验证 query_facts 不再返回该事实
+- [ ] 9B.22 信息排他性+选择性透露：创建只有玩家知道的 WorldFact → 验证 get_player_exclusive_info() 返回该事实 → 验证事件生成 prompt 中包含"选择性透露"选项指令
 
 ---
 
@@ -796,8 +931,8 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 | 阶段五：势力任务基础 | ~70% | 睡觉缓存、上司分配 | OrgTaskSystem 全套管道、rank 体系、merit | 扩展 OrgTaskSystem 即可 |
 | 阶段六：势力任务完整 | ~70% | 自创势力 | 晋升体系、effect 格式、sidebar | 仅自创势力需全新逻辑 |
 | 阶段七：公开委托 | ~30% | 告示板 UI、NPC 委托 AI | UI 风格、结算管道、日重置模式 | 全新玩法，管道复用 |
-| 阶段八：事件联动 | ~90% | 无新文件 | EventChoice 加字段、process_player_choice 加分支 | 几乎全是改造 |
-| 阶段九A：共享叙事记忆 | ~40% | NarrativeMemory、WorldFact、感知过滤器 | 涟漪系统传播逻辑、PromptBuilder注入框架、heat计算 | 事实库新建，LLM注入复用 |
+| 阶段八：事件联动 | ~90% | 无新文件 | EventChoice 加字段、process_player_choice 加分支、行为标签统计 | 几乎全是改造 |
+| 阶段九A：共享叙事记忆 | ~40% | NarrativeMemory、WorldFact、感知过滤器、信息时效/排他 | 涟漪系统传播逻辑、PromptBuilder注入框架、heat计算 | 事实库新建，LLM注入复用 |
 
 ### 真正需要新建的系统功能（按优先级）
 
@@ -811,6 +946,8 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 | **中** | NarrativeMemory 世界事实库 | 高 | 九A | 事实记录/查询/感知过滤，全系统共享的叙事状态源 |
 | **中** | 感知过滤器 | 中 | 九A | 四种感知途径判定 + LLM上下文注入 |
 | **低** | 自创势力 | 中 | 六 | 数据结构可复用，逻辑需新建 |
+| **低** | 行为标签统计 | 低 | 八 | 统计玩家选择模式 + 谣言传播，复用已有系统 |
+| **低** | 信息时效/排他/选择性透露 | 中 | 九A | WorldFact 扩展 + LLM prompt 注入 |
 
 ### 重复造轮子风险清单
 
