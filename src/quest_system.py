@@ -98,12 +98,25 @@ class TaskDisplayData:
     """
     def __init__(self, task_type: str, text: str, 
                  progress: str = "", is_complete: bool = False, 
-                 is_urgent: bool = False):
+                 is_urgent: bool = False,
+                 # 详情弹窗用字段
+                 target_npc: str = "",           # 对象（目标NPC名字）
+                 objective: str = "",            # 任务目标（完成条件）
+                 reward: str = "",               # 任务成果（奖励）
+                 deadline_days: int = 0,         # 期限（剩余天数，0表示无期限）
+                 description: str = ""):          # 详细描述
         self.type = task_type           # 任务类型：MAIN/SURVIVAL/INTEL/FACTION
-        self.text = text                # 任务描述文本
+        self.text = text                # 任务描述文本（sidebar显示用）
         self.progress = progress        # 进度文本，如 "1/3" 或 ""
         self.is_complete = is_complete  # 是否已完成待交付
         self.is_urgent = is_urgent      # 是否紧急（生存任务默认紧急）
+        
+        # 详情弹窗用字段
+        self.target_npc = target_npc    # 对象
+        self.objective = objective      # 任务目标
+        self.reward = reward            # 任务成果
+        self.deadline_days = deadline_days  # 期限
+        self.description = description  # 详细描述
     
     def to_dict(self):
         """转换为字典，方便 UI 层使用"""
@@ -113,6 +126,11 @@ class TaskDisplayData:
             'progress': self.progress,
             'is_complete': self.is_complete,
             'is_urgent': self.is_urgent,
+            'target_npc': self.target_npc,
+            'objective': self.objective,
+            'reward': self.reward,
+            'deadline_days': self.deadline_days,
+            'description': self.description,
         }
 
 
@@ -2963,7 +2981,12 @@ class QuestManager:
                 tasks.append(TaskDisplayData(
                     task_type=TASK_TYPE_SURVIVAL,
                     text="饥饿度测试(调试)",
-                    is_urgent=False
+                    is_urgent=False,
+                    target_npc="自己",
+                    objective="找到食物恢复饥饿值",
+                    reward="恢复体力",
+                    deadline_days=0,
+                    description="肚子饿了，需要找点吃的填饱肚子。"
                 ))
             
             # 寒冷警告（超过阈值才显示）
@@ -2979,7 +3002,12 @@ class QuestManager:
         tasks.append(TaskDisplayData(
             task_type=TASK_TYPE_INTEL,
             text="打探鱼西施的消息",
-            progress="1/3"
+            progress="1/3",
+            target_npc="鱼西施",
+            objective="向3个不同的NPC打听鱼西施的近况",
+            reward="鱼西施的好感度+20，铜钱500",
+            deadline_days=7,
+            description="鱼西施最近行踪神秘，有人想知道她最近在和谁来往。"
         ))
         
         # ===== 3. 势力任务（模拟数据） =====
@@ -2988,7 +3016,12 @@ class QuestManager:
         tasks.append(TaskDisplayData(
             task_type=TASK_TYPE_FACTION,
             text="帮帮主收集铜钱",
-            progress="50/100"
+            progress="50/100",
+            target_npc="帮主",
+            objective="收集100枚铜钱交给帮主",
+            reward="帮派贡献+10，铜钱200",
+            deadline_days=5,
+            description="帮主需要资金扩充帮派势力，急需铜钱。"
         ))
         
         # ===== 4. 主线任务 =====
@@ -3007,7 +3040,12 @@ class QuestManager:
             # 【调试】无主线任务时显示模拟数据
             tasks.append(TaskDisplayData(
                 task_type=TASK_TYPE_MAIN,
-                text="主线任务测试(调试)"
+                text="主线任务测试(调试)",
+                target_npc="村长",
+                objective="前往村长家接取任务",
+                reward="经验值+100，铜钱200",
+                deadline_days=0,
+                description="这是游戏的主线任务，请前往村长家了解详情。"
             ))
         
         # 按优先级排序

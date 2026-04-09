@@ -638,6 +638,14 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if ctx.input_delay > 0:
                     continue
+                
+                # 【任务详情弹窗】优先处理弹窗点击
+                from src.ui.sidebar import handle_task_detail_click, is_task_detail_visible
+                if is_task_detail_visible():
+                    if handle_task_detail_click(mx, my):
+                        click_event = False
+                        continue  # 弹窗已处理点击，不再传递
+                
                 click_event = True
                 # 小地图点击/拖拽起始（优先处理，不穿透到游戏世界）
                 if camera and camera.handle_minimap_click(mx, my):
@@ -664,9 +672,9 @@ def main():
                                 # 如果点击位置被UI覆盖，不触发玩家移动
                                 ui_blocked = is_ui_blocking(mx, my)
                                 in_sidebar = mx >= (SCREEN_W - SIDEBAR_W)
-                                print(f"[点击调试] mx={mx}, my={my}, in_sidebar={in_sidebar}, ui_blocked={ui_blocked}, SCREEN_W-SIDEBAR_W={SCREEN_W - SIDEBAR_W}")
+                                #print(f"[点击调试] mx={mx}, my={my}, in_sidebar={in_sidebar}, ui_blocked={ui_blocked}, SCREEN_W-SIDEBAR_W={SCREEN_W - SIDEBAR_W}")
                                 if ui_blocked:
-                                    print("[点击调试] UI阻挡，不处理玩家移动")
+                                    #print("[点击调试] UI阻挡，不处理玩家移动")
                                     pass  # UI阻挡，不处理玩家移动
                                 # [!] 重伤状态禁止移动，显示提示
                                 elif ctx.player.safety == SAFETY_DOWNED:

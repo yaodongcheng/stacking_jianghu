@@ -110,7 +110,8 @@ class UIPanelsMixin:
         
         npcs = [c for c in all_cards if hasattr(c, 'job')] # 简单筛选
         result = draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr,
-                           self.font_ui, self.font_big, self.font_small, mx, my, click_event)
+                           self.font_ui, self.font_big, self.font_small, mx, my, click_event,
+                           self.screen_w, self.screen_h)
         return result
 
       

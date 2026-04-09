@@ -264,6 +264,14 @@ class RenderSystem:
                     self.ui_manager._npc_detail_tab = sidebar_result[1]
             elif sidebar_result == 'OPEN_FOLLOWER_PANEL' and ctx.current_state == GAME_STATE_PLAYING:
                 ctx.current_state = GAME_STATE_FOLLOWER_PANEL
+            elif sidebar_result == 'TASK_CLICKED':
+                # 任务详情弹窗已显示，不需要额外处理
+                pass
+        
+        # 绘制任务详情弹窗（如果有）
+        from src.ui.sidebar import draw_task_detail_panel, is_task_detail_visible
+        if is_task_detail_visible():
+            draw_task_detail_panel(self.screen, self.ui_manager.font_ui)
 
 
     def _draw_modals(self, ctx, mx, my, click_event, event=None):
