@@ -2,6 +2,10 @@
 import pygame
 from src.definitions import *
 from src.entities import NPC, Resource
+from src.quest_system import (
+    TASK_TYPE_MAIN, TASK_TYPE_SURVIVAL, TASK_TYPE_INTEL, TASK_TYPE_FACTION,
+    TASK_PRIORITY, TASK_TYPE_STYLES, TaskDisplayData
+)
 
 def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_font, big_font, small_font, mx=0, my=0, click_event=False):
     """
@@ -336,23 +340,83 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
 
     draw_divider()
     
-    # 8. 当前任务
+    # 8. 当前任务 — 多任务分类展示
     draw_section_title("-- 要务 --", (255, 215, 0))
     
-    obj_text = quest_mgr.get_current_objective_text(player, all_cards)
-    is_complete = "[√]" in obj_text
-    obj_color = (100, 255, 100) if is_complete else (200, 205, 215)
+    # 获取多任务数据（已按优先级排序）
+    task_list = quest_mgr.get_all_task_displays(player, all_cards)
     
-    max_chars = 14
-    lines = [obj_text[i:i+max_chars] for i in range(0, len(obj_text), max_chars)]
-    for line in lines[:3]:
-        obj_surf = small_font.render(line, True, obj_color)
-        screen.blit(obj_surf, (pad_x, cur_y))
+    if not task_list:
+        empty_surf = small_font.render("(暂无要务)", True, (100, 105, 115))
+        screen.blit(empty_surf, (pad_x, cur_y))
         cur_y += 18
-    if len(lines) > 3:
-        more_surf = small_font.render("...", True, (120, 125, 135))
-        screen.blit(more_surf, (pad_x, cur_y))
-        cur_y += 18
+    else:
+        # 按类型分组显示
+        current_type = None
+        for task in task_list:
+            # 获取任务样式
+            style = TASK_TYPE_STYLES.get(task.type, TASK_TYPE_STYLES[TASK_TYPE_MAIN])
+            
+            # 如果是新类型，先绘制类型标题行
+            if task.type != current_type:
+                # 如果不是第一个类型，先留出间距
+                if current_type is not None:
+                    cur_y += 8  # 类型之间的间距
+                
+                current_type = task.type
+                
+                # 类型标题背景
+                type_label = style.get('label', task.type)
+                
+                # 先渲染文本，获取实际高度用于居中对齐
+                type_text = f"[{type_label}]"
+                type_surf = small_font.render(type_text, True, style['color'])
+                text_h = type_surf.get_height()
+                
+                # 背景矩形（高度根据文本调整，保证垂直居中）
+                bg_h = text_h + 6  # 文本高度 + 上下各3像素边距
+                type_bg_rect = pygame.Rect(pad_x - 4, cur_y, content_w + 8, bg_h)
+                
+                # 只有非主线任务才有背景色（主线 bg_color 为 None）
+                bg_color = style.get('bg_color')
+                if bg_color:
+                    pygame.draw.rect(screen, bg_color, type_bg_rect, border_radius=2)
+                    # 左侧颜色条
+                    pygame.draw.rect(screen, style['color'], (pad_x - 4, cur_y, 3, bg_h))
+                
+                # 类型标题文本（垂直居中于背景）
+                text_y = cur_y + (bg_h - text_h) // 2
+                screen.blit(type_surf, (pad_x + 8, text_y))
+                cur_y += bg_h + 4  # 背景高度 + 下方间距
+            
+            # 任务内容行（缩进显示）
+            # 构建完整文本
+            full_text = task.text
+            if task.progress:
+                full_text = f"{task.text} ({task.progress})"
+            
+            # 完成状态前缀
+            if task.is_complete:
+                prefix = "√ "
+                text_color = (100, 255, 100)
+            elif task.is_urgent:
+                prefix = "! "
+                text_color = (255, 100, 100)
+            else:
+                prefix = "· "
+                text_color = style['color']
+            
+            # 截断过长文本（最多12个中文字符，约24个英文字符）
+            if len(full_text) > 12:
+                display_text = full_text[:12] + "..."
+            else:
+                display_text = full_text
+            
+            # 绘制任务文本（缩进4像素）
+            task_text = f"{prefix}{display_text}"
+            task_surf = small_font.render(task_text, True, text_color)
+            screen.blit(task_surf, (pad_x + 8, cur_y))
+            cur_y += 18
 
     # 9. 悬停提示
     if is_hover:
@@ -361,3 +425,56 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
         screen.blit(hint_surf, (rect.centerx - hint_surf.get_width() // 2, rect.bottom - 22))
     
     return result
+
+
+# ======================== 调试打印功能 ========================
+# 用于追踪要务显示内容变化
+
+_last_task_print_time = 0      # 上次打印时间
+_last_task_content = None      # 上次打印的内容
+_TASK_PRINT_INTERVAL = 5000    # 打印间隔（毫秒）
+
+def debug_print_tasks(quest_mgr, player, all_cards, current_time_ms):
+    """
+    每隔5秒打印一次当前要务内容（内容变化时才打印）
+    
+    在游戏主循环中调用此函数：
+        from src.ui.sidebar import debug_print_tasks
+        debug_print_tasks(quest_mgr, player, all_cards, pygame.time.get_ticks())
+    """
+    global _last_task_print_time, _last_task_content
+    
+    # 检查是否到达打印间隔
+    if current_time_ms - _last_task_print_time < _TASK_PRINT_INTERVAL:
+        return
+    
+    _last_task_print_time = current_time_ms
+    
+    # 获取任务列表
+    task_list = quest_mgr.get_all_task_displays(player, all_cards)
+    
+    # 构建内容字符串
+    lines = []
+    if not task_list:
+        lines.append("[要务调试] 暂无任务")
+    else:
+        for task in task_list:
+            style = TASK_TYPE_STYLES.get(task.type, TASK_TYPE_STYLES[TASK_TYPE_MAIN])
+            label = style.get('label', task.type)
+            progress = f" ({task.progress})" if task.progress else ""
+            status = "[√]" if task.is_complete else "[!]" if task.is_urgent else ""
+            lines.append(f"  [{label}] {status}{task.text}{progress}")
+    
+    content_str = "\n".join(lines)
+    
+    # 如果内容与上次相同，跳过打印
+    if content_str == _last_task_content:
+        return
+    
+    _last_task_content = content_str
+    
+    # 打印分隔线和内容
+    print("\n" + "=" * 40)
+    print(f"[要务调试] {current_time_ms // 1000}秒")
+    print(content_str)
+    print("=" * 40)

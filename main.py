@@ -442,6 +442,10 @@ def main():
         perf.frame_start()  # 【性能监控】帧开始
         dt = clock.tick(60)
         
+        # 【调试】每隔5秒打印要务内容（变化时才打印）
+        from src.ui.sidebar import debug_print_tasks
+        debug_print_tasks(ctx.quest_manager, ctx.player, ctx.all_cards, pygame.time.get_ticks())
+        
         # 【UI层级系统】每帧开始时清空上一帧的UI区域
         clear_ui_zones()
         

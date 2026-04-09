@@ -44,6 +44,78 @@ def get_npc_name_by_id(npc_id) -> str:
         return '未指定'
     return ID_TO_NAME.get(str(npc_id), f'NPC({npc_id})')
 
+
+# ======================== 任务类型系统 ========================
+# 用于多任务槽位展示
+
+# 任务类型枚举
+TASK_TYPE_MAIN = "MAIN"           # 主线任务 - 金色
+TASK_TYPE_SURVIVAL = "SURVIVAL"   # 生存任务 - 红色（最紧急）
+TASK_TYPE_INTEL = "INTEL"         # 情报委托 - 蓝色
+TASK_TYPE_FACTION = "FACTION"     # 势力任务 - 黄色
+
+# 任务类型优先级（数值越小越优先）
+TASK_PRIORITY = {
+    TASK_TYPE_SURVIVAL: 1,   # 生存最优先
+    TASK_TYPE_INTEL: 2,      # 情报次之
+    TASK_TYPE_FACTION: 3,    # 势力第三
+    TASK_TYPE_MAIN: 4,       # 主线最后
+}
+
+# 任务类型显示样式（供 UI 层引用）
+TASK_TYPE_STYLES = {
+    TASK_TYPE_SURVIVAL: {
+        'color': (255, 100, 80),          # 红色 - 紧急
+        'prefix': '!',                    # 感叹号前缀
+        'bg_color': (60, 30, 30),         # 深红背景
+        'label': '生存',
+    },
+    TASK_TYPE_INTEL: {
+        'color': (100, 180, 255),         # 蓝色 - 信息
+        'prefix': '?',                    # 问号前缀
+        'bg_color': (30, 40, 55),         # 深蓝背景
+        'label': '情报',
+    },
+    TASK_TYPE_FACTION: {
+        'color': (255, 200, 80),          # 黄色 - 势力
+        'prefix': '*',                    # 星号前缀
+        'bg_color': (50, 45, 30),         # 深黄背景
+        'label': '势力',
+    },
+    TASK_TYPE_MAIN: {
+        'color': (200, 150, 255),         # 紫金色 - 主线
+        'prefix': '▶',                    # 三角前缀
+        'bg_color': (45, 35, 55),         # 深紫背景
+        'label': '主线',
+    },
+}
+
+
+class TaskDisplayData:
+    """
+    单个任务的展示数据结构
+    用于 sidebar 等UI组件渲染
+    """
+    def __init__(self, task_type: str, text: str, 
+                 progress: str = "", is_complete: bool = False, 
+                 is_urgent: bool = False):
+        self.type = task_type           # 任务类型：MAIN/SURVIVAL/INTEL/FACTION
+        self.text = text                # 任务描述文本
+        self.progress = progress        # 进度文本，如 "1/3" 或 ""
+        self.is_complete = is_complete  # 是否已完成待交付
+        self.is_urgent = is_urgent      # 是否紧急（生存任务默认紧急）
+    
+    def to_dict(self):
+        """转换为字典，方便 UI 层使用"""
+        return {
+            'type': self.type,
+            'text': self.text,
+            'progress': self.progress,
+            'is_complete': self.is_complete,
+            'is_urgent': self.is_urgent,
+        }
+
+
 class QuestData:
     def __init__(self, row):
         self.id = row['id']
@@ -2855,7 +2927,94 @@ class QuestManager:
             
         return ""
     
-
+    def get_all_task_displays(self, player=None, all_cards=[]) -> list:
+        """
+        获取所有任务的展示数据（按优先级排序）
+        
+        返回 TaskDisplayData 列表，按优先级排序：
+        生存 > 情报 > 势力 > 主线
+        
+        目前返回模拟数据，后续阶段填充真实数据
+        """
+        tasks = []
+        
+        # ===== 1. 生存任务（模拟数据） =====
+        # TODO: 阶段一实现真实检测逻辑
+        if player:
+            hunger = getattr(player, 'hunger', 0)
+            cold = getattr(player, 'cold', 0)
+            
+            # 【调试模式】始终显示一个生存任务，方便测试 UI
+            # 后续删除此调试代码
+            if hunger >= 70:
+                tasks.append(TaskDisplayData(
+                    task_type=TASK_TYPE_SURVIVAL,
+                    text="得找点吃的",
+                    is_urgent=True
+                ))
+            elif hunger >= 50:
+                tasks.append(TaskDisplayData(
+                    task_type=TASK_TYPE_SURVIVAL,
+                    text="肚子有些饿了",
+                    is_urgent=False
+                ))
+            else:
+                # 【调试】低饥饿时也显示，方便看 UI 效果
+                tasks.append(TaskDisplayData(
+                    task_type=TASK_TYPE_SURVIVAL,
+                    text="饥饿度测试(调试)",
+                    is_urgent=False
+                ))
+            
+            # 寒冷警告（超过阈值才显示）
+            if cold >= 70:
+                tasks.append(TaskDisplayData(
+                    task_type=TASK_TYPE_SURVIVAL,
+                    text="快冻僵了",
+                    is_urgent=True
+                ))
+        
+        # ===== 2. 情报委托（模拟数据） =====
+        # TODO: 阶段三实现真实数据
+        tasks.append(TaskDisplayData(
+            task_type=TASK_TYPE_INTEL,
+            text="打探鱼西施的消息",
+            progress="1/3"
+        ))
+        
+        # ===== 3. 势力任务（模拟数据） =====
+        # TODO: 阶段五实现真实数据
+        # 【调试】启用模拟数据，方便测试 UI
+        tasks.append(TaskDisplayData(
+            task_type=TASK_TYPE_FACTION,
+            text="帮帮主收集铜钱",
+            progress="50/100"
+        ))
+        
+        # ===== 4. 主线任务 =====
+        # 从现有方法获取主线任务数据
+        main_text = self.get_current_objective_text(player, all_cards)
+        if main_text:
+            is_complete = "[√]" in main_text
+            # 清理前缀符号
+            clean_text = main_text.replace("[!]", "").replace("[√]", "").replace(">>", "").strip()
+            tasks.append(TaskDisplayData(
+                task_type=TASK_TYPE_MAIN,
+                text=clean_text,
+                is_complete=is_complete
+            ))
+        else:
+            # 【调试】无主线任务时显示模拟数据
+            tasks.append(TaskDisplayData(
+                task_type=TASK_TYPE_MAIN,
+                text="主线任务测试(调试)"
+            ))
+        
+        # 按优先级排序
+        tasks.sort(key=lambda t: TASK_PRIORITY.get(t.type, 99))
+        
+        return tasks
+    
     def get_quest_title(self):
         q = self.get_current_quest()
         return q.title if q else ""
