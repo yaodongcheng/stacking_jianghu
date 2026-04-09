@@ -10,17 +10,22 @@ from src.quest_system import (
 def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_font, big_font, small_font, mx=0, my=0, click_event=False):
     """
     玩家信息面板 v3 - 精简美化版
+    
+    返回值：
+        None - 无操作
+        'OPEN_PLAYER_DETAIL' - 打开角色卡（默认tab）
+        ('OPEN_PLAYER_DETAIL', tab_index) - 打开角色卡并切换到指定tab
     """
     result = None
-    
-    if click_event and rect.collidepoint(mx, my):
-        result = 'OPEN_PLAYER_DETAIL'
     
     is_hover = rect.collidepoint(mx, my)
     
     pad_x = rect.x + 12
     cur_y = rect.y + 10
     content_w = rect.width - 24
+    
+    # 记录各区域的Y坐标范围，用于判断点击位置
+    click_zones = {}  # {区域名: (y_start, y_end, 返回值)}
     
     # 背景
     pygame.draw.rect(screen, (28, 32, 38), rect)
@@ -145,16 +150,14 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
     
     draw_divider()
     
-    # 4. 六维属性
+    # 4. 六维属性（属性名与角色卡 npc_detail_panel 保持一致）
     draw_section_title("-- 属性 --", (180, 200, 230))
     
     attrs = [
-        ('武力', getattr(player, 'attr_force', 50)),
-        ('智谋', getattr(player, 'attr_intellect', 50)),
-        ('魅力', getattr(player, 'attr_charisma', 50)),
-        ('勇气', getattr(player, 'attr_courage', 50)),
-        ('敏捷', getattr(player, 'attr_agility', 50)),
-        ('运气', getattr(player, 'attr_luck', 50)),
+        ('力量', getattr(player, 'strength', 50)),
+        ('敏捷', getattr(player, 'agility', 50)),
+        ('智力', getattr(player, 'wit', 50)),
+        ('魅力', getattr(player, 'charm', 50)),
     ]
     
     col_w = (content_w - 10) // 2
@@ -238,8 +241,9 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
         cur_y += 18
     
     draw_divider()
+    zone_rela_y_start = cur_y  # 人际区域从分隔线之后开始（标题之前）
     
-    # 6. 人际关系
+    # 6. 人际关系（点击打开角色卡→关系tab）
     draw_section_title("-- 人际 --", (180, 200, 230))
     
     followers = []
@@ -304,8 +308,9 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
             cur_y += 16
     
     draw_divider()
+    zone_bag_y_start = cur_y  # 背包区域从分隔线之后开始（标题之前）
     
-    # 7. 背包
+    # 7. 背包（点击打开角色卡→背包tab）
     draw_section_title("-- 背包 --", (180, 200, 230))
     
     inventory = getattr(player, 'inventory', {})
@@ -339,9 +344,11 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
         cur_y += 16
 
     draw_divider()
+    zone_task_y_start = cur_y  # 要务区域从分隔线之后开始（标题之前）
     
     # 8. 当前任务 — 多任务分类展示
     draw_section_title("-- 要务 --", (255, 215, 0))
+    cur_y += 6  # 要务标题和第一个任务类型之间的间距
     
     # 获取多任务数据（已按优先级排序）
     task_list = quest_mgr.get_all_task_displays(player, all_cards)
@@ -361,7 +368,7 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
             if task.type != current_type:
                 # 如果不是第一个类型，先留出间距
                 if current_type is not None:
-                    cur_y += 8  # 类型之间的间距
+                    cur_y += 12  # 类型之间的间距（增大）
                 
                 current_type = task.type
                 
@@ -374,7 +381,8 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
                 text_h = type_surf.get_height()
                 
                 # 背景矩形（高度根据文本调整，保证垂直居中）
-                bg_h = text_h + 6  # 文本高度 + 上下各3像素边距
+                # 上下各留4像素边距 + 额外2像素让视觉更舒适
+                bg_h = text_h + 10
                 type_bg_rect = pygame.Rect(pad_x - 4, cur_y, content_w + 8, bg_h)
                 
                 # 只有非主线任务才有背景色（主线 bg_color 为 None）
@@ -418,11 +426,28 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
             screen.blit(task_surf, (pad_x + 8, cur_y))
             cur_y += 18
 
-    # 9. 悬停提示
-    if is_hover:
-        pygame.draw.rect(screen, (80, 120, 180), rect, 2, border_radius=4)
-        hint_surf = small_font.render("点击打开详情", True, (150, 200, 255))
-        screen.blit(hint_surf, (rect.centerx - hint_surf.get_width() // 2, rect.bottom - 22))
+    # ══════════════════════════════════════════════════════════════
+    # 点击区域判断（在不同区域点击有不同行为）
+    # ══════════════════════════════════════════════════════════════
+    # 已记录的Y坐标：
+    # zone_rela_y_start: 人际区域内容起始Y
+    # zone_bag_y_start: 背包区域内容起始Y  
+    # zone_task_y_start: 要务区域内容起始Y
+    
+    if click_event and rect.collidepoint(mx, my) and result is None:
+        # 判断点击位置（从下往上判断）
+        if my >= zone_task_y_start:
+            # 点击了要务区域 → 不打开角色卡
+            pass
+        elif zone_bag_y_start <= my < zone_task_y_start:
+            # 点击了背包区域 → 打开角色卡（背包tab=1）
+            result = ('OPEN_PLAYER_DETAIL', 1)
+        elif zone_rela_y_start <= my < zone_bag_y_start:
+            # 点击了人际区域 → 打开角色卡（关系tab=3）
+            result = ('OPEN_PLAYER_DETAIL', 3)
+        else:
+            # 点击了其他区域（状态/属性等） → 打开角色卡（属性tab=0）
+            result = ('OPEN_PLAYER_DETAIL', 0)
     
     return result
 

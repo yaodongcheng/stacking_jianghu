@@ -351,3 +351,46 @@ if DEBUG_MODE:
 | 剧情指令实现 | `docs/technical/story-directive-impl.md` | 指令执行器实现总结 |
 | 事件扩写Prompt | `docs/technical/event-expansion-prompt.md` | LLM对话扩写模板 |
 | 命运线UI | `docs/technical/fate-line-ui.md` | 命运图谱交互设计 |
+
+---
+
+## 8. 常见踩坑记录
+
+### 8.1 UI区域注册时机问题
+
+**问题描述**：
+点击 sidebar 区域会触发玩家移动，即使 sidebar 已经在渲染时调用了 `register_ui_zone()`。
+
+**根本原因**：
+游戏主循环的执行顺序是：
+1. `clear_ui_zones()` - 清空所有UI区域
+2. 事件处理循环 - 处理点击事件，此时调用 `is_ui_blocking()` 判断
+3. 渲染阶段 - 各UI组件绘制时才调用 `register_ui_zone()`
+
+**问题**：
+如果在渲染阶段才注册 UI 区域，那么事件处理时 `is_ui_blocking()` 返回 `False`，因为此时 UI 区域还未注册。
+
+**解决方案**：
+在事件处理之前预先注册 UI 区域。参考 `main.py` 中的 `_preregister_system_menu_zones()` 函数：
+
+```python
+# main.py 主循环中
+# 【UI层级系统】每帧开始时清空上一帧的UI区域
+clear_ui_zones()
+
+# 【UI层级系统修复】预先注册系统功能菜单的UI区域，确保事件处理时能正确检测
+# 这必须在事件处理循环之前执行，否则点击按钮时UI区域还未注册，会导致点击穿透
+_preregister_system_menu_zones(SCREEN_W, SCREEN_H, renderer.system_menu_expanded)
+
+# 【UI层级系统修复】预先注册sidebar区域，防止点击sidebar时触发玩家移动
+from src.ui.hit_test import register_ui_zone, UI_LAYER_WIDGET
+sidebar_rect = pygame.Rect(SCREEN_W - SIDEBAR_W, TOPBAR_H, SIDEBAR_W, SCREEN_H - TOPBAR_H)
+register_ui_zone(sidebar_rect, UI_LAYER_WIDGET, "sidebar")
+
+# ... 然后进入事件处理循环
+```
+
+**关键点**：
+- 所有需要阻挡玩家移动的 UI 区域，必须在事件处理之前注册
+- 注册代码放在 `clear_ui_zones()` 之后、事件处理循环之前
+- 参考 `src/ui/hit_test.py` 中的 `register_ui_zone()` 和 `is_ui_blocking()` 函数

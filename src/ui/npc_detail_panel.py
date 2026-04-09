@@ -1092,7 +1092,7 @@ class UIDialogsMixin:
         hp_color = (100, 255, 100) if npc.hp > npc.max_hp * 0.5 else (255, 200, 100) if npc.hp > npc.max_hp * 0.2 else (255, 100, 100)
         screen.blit(self.font_small.render(hp_text, True, hp_color), (x_left, y))
         
-        food_text = f"饱食: {getattr(npc, 'food', 0)}"
+        food_text = f"饱食: {100 - getattr(npc, 'hunger', 0)}"  # hunger是饥饿值，饱食度=100-饥饿值
         screen.blit(self.font_small.render(food_text, True, (200, 200, 200)), (x_right, y))
         y += line_h
         

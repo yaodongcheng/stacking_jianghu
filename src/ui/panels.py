@@ -103,6 +103,11 @@ class UIPanelsMixin:
             'OPEN_PLAYER_DETAIL' | None
         """
         rect = pygame.Rect(self.screen_w - SIDEBAR_W, TOPBAR_H, SIDEBAR_W, self.screen_h - TOPBAR_H)
+        
+        # 注册 sidebar 为 UI 区域，防止点击时触发玩家移动
+        from src.ui.hit_test import register_ui_zone, UI_LAYER_WIDGET
+        register_ui_zone(rect, UI_LAYER_WIDGET, "sidebar")
+        
         npcs = [c for c in all_cards if hasattr(c, 'job')] # 简单筛选
         result = draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr,
                            self.font_ui, self.font_big, self.font_small, mx, my, click_event)

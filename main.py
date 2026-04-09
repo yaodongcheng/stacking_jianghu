@@ -453,6 +453,11 @@ def main():
         # 这必须在事件处理循环之前执行，否则点击按钮时UI区域还未注册，会导致点击穿透
         _preregister_system_menu_zones(SCREEN_W, SCREEN_H, renderer.system_menu_expanded)
         
+        # 【UI层级系统修复】预先注册sidebar区域，防止点击sidebar时触发玩家移动
+        from src.ui.hit_test import register_ui_zone, UI_LAYER_WIDGET
+        sidebar_rect = pygame.Rect(SCREEN_W - SIDEBAR_W, TOPBAR_H, SIDEBAR_W, SCREEN_H - TOPBAR_H)
+        register_ui_zone(sidebar_rect, UI_LAYER_WIDGET, "sidebar")
+        
         # 【新增】确保所有事件演员保持在 STATE_EVENT 状态
         if hasattr(ctx, 'event_actors') and ctx.event_actors:
             for actor in ctx.event_actors:
@@ -657,7 +662,11 @@ def main():
                             if ctx.current_state == GAME_STATE_PLAYING:
                                 # 【UI层级系统】检测是否被UI阻挡
                                 # 如果点击位置被UI覆盖，不触发玩家移动
-                                if is_ui_blocking(mx, my):
+                                ui_blocked = is_ui_blocking(mx, my)
+                                in_sidebar = mx >= (SCREEN_W - SIDEBAR_W)
+                                print(f"[点击调试] mx={mx}, my={my}, in_sidebar={in_sidebar}, ui_blocked={ui_blocked}, SCREEN_W-SIDEBAR_W={SCREEN_W - SIDEBAR_W}")
+                                if ui_blocked:
+                                    print("[点击调试] UI阻挡，不处理玩家移动")
                                     pass  # UI阻挡，不处理玩家移动
                                 # [!] 重伤状态禁止移动，显示提示
                                 elif ctx.player.safety == SAFETY_DOWNED:

@@ -249,11 +249,21 @@ class RenderSystem:
         sidebar_result = self.ui_manager.draw_sidebar(self.screen, ctx.player, ctx.all_cards, ctx.tech_manager, ctx.quest_manager, mx, my, click_event)
         
         # 处理侧边栏点击
-        if sidebar_result == 'OPEN_PLAYER_DETAIL' and ctx.current_state == GAME_STATE_PLAYING:
-            ctx.active_event_npc = ctx.player
-            ctx.current_state = GAME_STATE_NPC_DETAIL
-        elif sidebar_result == 'OPEN_FOLLOWER_PANEL' and ctx.current_state == GAME_STATE_PLAYING:
-            ctx.current_state = GAME_STATE_FOLLOWER_PANEL
+        if sidebar_result:
+            if sidebar_result == 'OPEN_PLAYER_DETAIL' and ctx.current_state == GAME_STATE_PLAYING:
+                ctx.active_event_npc = ctx.player
+                ctx.current_state = GAME_STATE_NPC_DETAIL
+                # 默认打开属性tab
+                self.ui_manager._npc_detail_tab = 0
+            elif isinstance(sidebar_result, tuple) and sidebar_result[0] == 'OPEN_PLAYER_DETAIL':
+                # 带tab索引的打开请求
+                if ctx.current_state == GAME_STATE_PLAYING:
+                    ctx.active_event_npc = ctx.player
+                    ctx.current_state = GAME_STATE_NPC_DETAIL
+                    # 设置UI管理器的tab索引
+                    self.ui_manager._npc_detail_tab = sidebar_result[1]
+            elif sidebar_result == 'OPEN_FOLLOWER_PANEL' and ctx.current_state == GAME_STATE_PLAYING:
+                ctx.current_state = GAME_STATE_FOLLOWER_PANEL
 
 
     def _draw_modals(self, ctx, mx, my, click_event, event=None):
