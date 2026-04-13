@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
+from .display import TaskDisplayData
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 枚举定义
@@ -325,7 +326,6 @@ class TaskBase:
         转换为 TaskDisplayData（供 sidebar 使用）
         子类可覆盖此方法提供更多详情
         """
-        from .display import TaskDisplayData
         style = self.get_style()
         return TaskDisplayData(
             task_type=self.category.value,
