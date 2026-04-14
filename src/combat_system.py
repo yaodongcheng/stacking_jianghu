@@ -218,9 +218,7 @@ class CombatManager:
                 
                 # 检测黑风大王：黑风寨的首领
                 is_heifeng_leader = (victim_org == 'heifeng_zhai' and victim_role == 'LEADER')
-                # 或者通过名字识别
-                from src.definitions import NPC_HEIFENG_DAWANG
-                if is_heifeng_leader or NPC_HEIFENG_DAWANG in victim_name:
+                if is_heifeng_leader:
                     self._on_heifeng_leader_defeated(attacker, victim)
             
             # [!] 立即广播 COMBAT_END：不依赖胜利方下一帧的 aggro_target 检查。

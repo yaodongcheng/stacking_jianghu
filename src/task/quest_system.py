@@ -91,6 +91,7 @@ class QuestData:
         self.next_id = row['next']
         self.desc = row['desc']
         self.submit_npc = row.get('submit_npc', '9000')
+        self.scenario = row.get('scenario', '')
         
         # 【新增】分支任务支持
         # CHOICE类型任务可以有多个后续分支

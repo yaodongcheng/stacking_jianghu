@@ -815,19 +815,12 @@ class WorldLoader:
                 # ════════════════════════════════════════════════════════════════
                 # 土匪/山贼/黑风寨 → 城外四周游荡（但避开城东门开局剧情区域）
                 # 乞丐/流氓 → 城南贫民窟散养
-                # 泼皮牛二/狗蛋由剧情系统单独生成，这里跳过
                 # ════════════════════════════════════════════════════════════════
                 # 【修复】heifeng_zhai（黑风寨）成员应该在城外，不是城内
-                is_outlaw = (npc.job == 'BANDIT' or 
-                             org == 'BANDIT_ZHAI' or 
+                is_outlaw = (npc.job == 'BANDIT' or
+                             org == 'BANDIT_ZHAI' or
                              org == 'heifeng_zhai')
-                
-                # 泼皮牛二和泼皮狗蛋由剧情系统征调，这里跳过
-                from src.definitions import NPC_POPI_NIUER, NPC_POPI_GOUDAN
-                if npc.name in [NPC_POPI_NIUER, NPC_POPI_GOUDAN]:
-                    print(f"[WorldLoader] 跳过 {npc.name}，由剧情系统征调")
-                    continue
-                
+
                 if is_outlaw:
                     # 山贼/黑风寨分布在城外野外的边缘区域
                     # 【修复】距离城墙至少 600px，确保在 bandit_zones 范围内

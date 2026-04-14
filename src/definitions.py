@@ -216,15 +216,6 @@ MERCHANT_STATE_RESTOCKING = "RESTOCK"  # 补货中
 SCENARIO_TUTORIAL = "SCENARIO_TUTORIAL"
 SCENARIO_SANDBOX = "SCENARIO_SANDBOX"
 
-# ═══════════════════════════════════════════════════════════════
-# NPC 名字常量（与 character_seeds.py 保持一致，避免硬编码字符串散落各处）
-# ═══════════════════════════════════════════════════════════════
-NPC_HEIFENG_DAWANG = '黑风大王'   # 黑风寨首领
-NPC_POPI_NIUER = '泼皮牛二'       # 泼皮1
-NPC_POPI_GOUDAN = '泼皮狗蛋'      # 泼皮2
-NPC_YU_XISHI = '鱼西施'           # 卖鱼姑娘
-NPC_CUNZHANG = '村长'             # 新手教程村长（特殊NPC，ID=9000）
-
 
 # --- 新增职业 ---
 JOB_SCHOLAR = 'SCHOLAR'  # 士
@@ -278,7 +269,7 @@ QS_FINISHED = "FINISHED"
 DEBUG_COMBAT = False  # 战斗相关调试打印，默认关闭
 DEBUG_RECIPE_AI = False  # NPC配方驱动AI调试（去建筑合成配方），默认关闭
 DEBUG_ORG_AGGRO = False  # NPC组织仇恨感知调试（感知友方被攻击），默认关闭
-DEBUG_SKIP_YUXISHI = True  # 【调试】跳过鱼西施主线，直接进入自由模式
+DEBUG_SKIP_YUXISHI = False  # 【调试】跳过鱼西施主线，直接进入自由模式
 DEBUG_LIVE_NEWS_TEST_EVENT = False  # 【调试】在大宋实况-历史版面显示测试事件
 
 DEBUG_FATE_GRAPH_TEST_DATA = False  # 命运图谱是否使用测试数据

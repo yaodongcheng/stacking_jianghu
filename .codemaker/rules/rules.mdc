@@ -22,7 +22,6 @@
   - `npc_data.csv` — NPC 角色数据
   - `dialog_config.csv` — 对话配置
   - `event_data.csv` — 事件数据
-  - `event_dialog_config.csv` — 事件对话配置
   - `items.csv` — 物品数据
   - `recipes.csv` — 合成配方
   - `quest_config.csv` — 任务配置
@@ -148,7 +147,6 @@ aistory/
 │   ├── npc_data.csv         # NPC数据 (ID = 8000 + 行索引)
 │   ├── dialog_config.csv    # 对话配置
 │   ├── event_data.csv       # 事件数据
-│   ├── event_dialog_config.csv  # 事件对话配置
 │   ├── items.csv            # 物品数据
 │   ├── recipes.csv          # 配方数据
 │   ├── quest_config.csv     # 任务配置
@@ -338,6 +336,8 @@ if DEBUG_MODE:
 6. **言行一致**：任务设计一定要言行一致——文案写了什么，游戏有办法表现出来的（状态变化、资源流转、卡牌位移等）就要都表现出来，不要凭空说无实际意义的内容。
 
 7. **【禁止使用Emoji】**：游戏引擎无法正确渲染emoji字符，所有UI文本、日志输出、代码注释中禁止使用任何emoji符号。需要图标时请使用单个汉字或ASCII符号替代（如：用"火"代替🔥，用"战"代替⚔️，用"钱"代替💰）。
+
+8. **主线任务数据驱动**：主线剧情任务（包括开局体验 Day 1-7）全部通过 `data/quest_config.csv` + `data/dialog_config.csv` 数据配置驱动，禁止为特定剧情编写一次性的硬编码编排类（如 `OpeningSequencer`）。所有任务复用 `quest_system.py` 的 `check_progress()` → `advance_quest()` 通用管道。需要新增任务能力时，优先在 `check_progress()` 中扩展新的 quest type（如 `WAIT_TIME`、`AFFINITY_CHECK`），使其可被任意任务复用。CSV 文件由 `tools/make_quest_csv.py` 脚本生成，方便批量管理和版本控制。
 
 ---
 

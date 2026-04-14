@@ -23,6 +23,7 @@ os.makedirs('../data', exist_ok=True)
 # 字段说明:
 # - id: 任务唯一标识
 # - title: 任务标题（显示在UI上）
+# - scenario: 所属剧本（TUTORIAL=生存教程, SANDBOX=沙盒模式）
 # - type: 任务类型
 #     DIALOG: 纯对话任务，对话结束即完成
 #     GATHER: 采集任务，需要收集指定物品
@@ -36,6 +37,8 @@ os.makedirs('../data', exist_ok=True)
 #     REACH: 到达区域任务，target=区域名/坐标，count=判定半径(像素)
 #     DELIVER: 交付物品任务，target=物品名，count=数量
 #     SURVIVE: 存活任务，target=DAY，count=天数
+#     WAIT_TIME: 等待指定时间，target格式"day:时辰"如"1:亥"，到达该天该时辰自动完成
+#     AFFINITY_CHECK: 好感检查，target=NPC名(或ANY表示任意NPC)，count=好感阈值
 #     FREE: 自由模式，无完成条件
 # - target: 目标（物品名/NPC名/建筑类型/区域名等）
 # - count: 数量要求 或 判定参数
@@ -54,93 +57,123 @@ quests = [
     # ═══════════════════════════════════════════════════════════════
     
     # --- 序幕：街头事件（自动触发，无需NPC交付）---
-    ['Q_YUXISHI_TRIGGER', '街头风波', 'DIALOG', 'NONE', 0, 'Q_YUXISHI_CHOICE', '你在街边目睹了一场欺凌', '9999'],
-    ['Q_YUXISHI_CHOICE', '抉择时刻', 'CHOICE', 'NONE', 0, 'GOOD:Q_YUXISHI_GOOD|EVIL:Q_YUXISHI_EVIL', '正义或邪恶？', '9999'],
-    
+    ['Q_YUXISHI_TRIGGER', '街头风波', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_YUXISHI_CHOICE', '你在街边目睹了一场欺凌', '9999'],
+    ['Q_YUXISHI_CHOICE', '抉择时刻', 'SANDBOX', 'CHOICE', 'NONE', 0, 'GOOD:Q_YUXISHI_GOOD|EVIL:Q_YUXISHI_EVIL', '正义或邪恶？', '9999'],
+
     # --- 正义路线：出手相救 ---
-    ['Q_YUXISHI_GOOD', '仗义出手', 'DIALOG', 'NONE', 0, 'Q_BULLY_INTRO', '你选择出手相救', '9999'],
-    
+    ['Q_YUXISHI_GOOD', '仗义出手', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_BULLY_INTRO', '你选择出手相救', '9999'],
+
     # --- 邪恶路线：助纣为虐 ---
-    ['Q_YUXISHI_EVIL', '落井下石', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '你选择同流合污', '9999'],
-    
+    ['Q_YUXISHI_EVIL', '落井下石', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '你选择同流合污', '9999'],
+
     # --- 第一幕：结下梁子 ---
-    ['Q_BULLY_INTRO', '结怨', 'DIALOG', 'NONE', 0, 'Q_FAREWELL', '泼皮落败而逃', '9999'],
-    
+    ['Q_BULLY_INTRO', '结怨', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FAREWELL', '泼皮落败而逃', '9999'],
+
     # --- 第二幕：落脚与帮忙（与鱼西施对话链）---
     # Q_FAREWELL: 了解背景，接受暂住邀请
-    ['Q_FAREWELL', '落脚', 'DIALOG', 'NONE', 0, 'Q_CATCH_FISH', '与鱼西施交谈', '鱼西施'],
-    
+    ['Q_FAREWELL', '落脚', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_CATCH_FISH', '与鱼西施交谈', '鱼西施'],
+
     # Q_CATCH_FISH: 帮鱼西施捕鱼（采集任务）
-    ['Q_CATCH_FISH', '帮忙捕鱼', 'GATHER', '生鱼', 3, 'Q_DELIVER_FISH', '去河滩捕3条鱼', '鱼西施'],
-    
+    ['Q_CATCH_FISH', '帮忙捕鱼', 'SANDBOX', 'GATHER', '生鱼', 3, 'Q_DELIVER_FISH', '去河滩捕3条鱼', '鱼西施'],
+
     # Q_DELIVER_FISH: 交付鱼获得报酬（交付任务 - 需要将3条生鱼堆叠到鱼西施身上）
-    ['Q_DELIVER_FISH', '交付鱼', 'DELIVER', '生鱼', 3, 'Q_WALK_BACK', '把3条生鱼交给鱼西施', '鱼西施'],
-    
+    ['Q_DELIVER_FISH', '交付鱼', 'SANDBOX', 'DELIVER', '生鱼', 3, 'Q_WALK_BACK', '把3条生鱼交给鱼西施', '鱼西施'],
+
     # --- 第三幕：遭遇报复 ---
     # Q_WALK_BACK: 回城路上 - 玩家需要移动到城门附近（伏击点），到达后触发埋伏
     # REACH类型：target是目标区域名/坐标，count是判定半径（像素）
-    ['Q_WALK_BACK', '回城休息', 'REACH', 'AMBUSH_POINT', 200, 'Q_AMBUSH', '天色已晚，回城里休息吧', '9999'],
-    
+    ['Q_WALK_BACK', '回城休息', 'SANDBOX', 'REACH', 'AMBUSH_POINT', 200, 'Q_AMBUSH', '天色已晚，回城里休息吧', '9999'],
+
     # Q_AMBUSH: 遭遇埋伏 - 玩家到达伏击点后自动触发
-    ['Q_AMBUSH', '遭遇埋伏', 'DIALOG', 'NONE', 0, 'Q_WAKE_UP', '泼皮的报复', '9999'],
-    ['Q_WAKE_UP', '苏醒', 'DIALOG', 'NONE', 0, 'Q_RECOVER', '在鱼西施家中醒来', '鱼西施'],
-    
+    ['Q_AMBUSH', '遭遇埋伏', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_WAKE_UP', '泼皮的报复', '9999'],
+    ['Q_WAKE_UP', '苏醒', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_RECOVER', '在鱼西施家中醒来', '鱼西施'],
+
     # --- 第四幕：恢复与准备 ---
     # Q_RECOVER: 恢复体力 - EAT类型的count是饥饿阈值，饥饿值<50即完成
-    ['Q_RECOVER', '恢复体力', 'EAT', '', 50, 'Q_SAVE_MONEY', '吃点东西恢复体力', '鱼西施'],
-    
+    ['Q_RECOVER', '恢复体力', 'SANDBOX', 'EAT', '', 50, 'Q_SAVE_MONEY', '吃点东西恢复体力', '鱼西施'],
+
     # Q_SAVE_MONEY: 积攒资金
-    ['Q_SAVE_MONEY', '积攒盘缠', 'RESOURCE_TOTAL', 'MONEY', 50, 'Q_SEEK_HELP', '积攒50铜钱', '鱼西施'],
-    
+    ['Q_SAVE_MONEY', '积攒盘缠', 'SANDBOX', 'RESOURCE_TOTAL', 'MONEY', 50, 'Q_SEEK_HELP', '积攒50铜钱', '鱼西施'],
+
     # --- 第五幕：寻找帮手 ---
     # Q_SEEK_HELP: 鱼西施提供线索
-    ['Q_SEEK_HELP', '寻求帮助', 'DIALOG', 'NONE', 0, 'Q_FIND_HUNTER', '鱼西施告知有人可以帮忙', '鱼西施'],
-    
+    ['Q_SEEK_HELP', '寻求帮助', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIND_HUNTER', '鱼西施告知有人可以帮忙', '鱼西施'],
+
     # Q_FIND_HUNTER: 找到猎户张三
-    ['Q_FIND_HUNTER', '寻访猎户', 'INTERACT', '猎户张三', 1, 'Q_BEFRIEND', '找到并与猎户张三交谈', '猎户张三'],
-    
+    ['Q_FIND_HUNTER', '寻访猎户', 'SANDBOX', 'INTERACT', '猎户张三', 1, 'Q_BEFRIEND', '找到并与猎户张三交谈', '猎户张三'],
+
     # Q_BEFRIEND: 结交张三（招募任务）
-    ['Q_BEFRIEND', '结交', 'RECRUIT', '猎户张三', 1, 'Q_PLAN_REVENGE', '招募张三为同伴', '猎户张三'],
-    
+    ['Q_BEFRIEND', '结交', 'SANDBOX', 'RECRUIT', '猎户张三', 1, 'Q_PLAN_REVENGE', '招募张三为同伴', '猎户张三'],
+
     # --- 第六幕：复仇 ---
     # Q_PLAN_REVENGE: 商议计划
-    ['Q_PLAN_REVENGE', '商议对策', 'DIALOG', 'NONE', 0, 'Q_FIGHT_BULLY', '与张三商议对策', '猎户张三'],
-    
+    ['Q_PLAN_REVENGE', '商议对策', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIGHT_BULLY', '与张三商议对策', '猎户张三'],
+
     # Q_FIGHT_BULLY: 击败泼皮
-    ['Q_FIGHT_BULLY', '讨回公道', 'COMBAT', '泼皮牛二', 1, 'Q_TRUTH', '击败泼皮牛二', '猎户张三'],
-    
+    ['Q_FIGHT_BULLY', '讨回公道', 'SANDBOX', 'COMBAT', '泼皮牛二', 1, 'Q_TRUTH', '击败泼皮牛二', '猎户张三'],
+
     # --- 第七幕：真相大白 ---
     # Q_TRUTH: 得知幕后黑手
-    ['Q_TRUTH', '真相', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '得知背后的势力', '鱼西施'],
-    
+    ['Q_TRUTH', '真相', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '得知背后的势力', '鱼西施'],
+
     # --- 自由探索 ---
-    ['Q_FREE_PLAY', '闯荡江湖', 'FREE', 'NONE', 0, '', '自由探索汴京', '9999'],
-    
+    ['Q_FREE_PLAY', '闯荡江湖', 'SANDBOX', 'FREE', 'NONE', 0, '', '自由探索汴京', '9999'],
+
+    # ═══════════════════════════════════════════════════════════════
+    # 【城镇模式】Day 1-7 开局主线 —— 在城中站稳脚跟
+    # ═══════════════════════════════════════════════════════════════
+    # 主线4阶段：活下来→有收入→有根基→有势力
+    # 通过 WAIT_TIME 在 Day 1 亥时触发，复用已有 quest type 驱动推进
+
+    # --- 主线触发：Day 1 亥时内心独白 ---
+    ['Q_SETTLE_WAIT', '等待夜幕', 'SANDBOX', 'WAIT_TIME', '1:亥', 0, 'Q_SETTLE_INTRO', '天色渐暗...', '9999'],
+    ['Q_SETTLE_INTRO', '内心独白', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_SETTLE_P1', '总算活过了今天...', '9999'],
+
+    # --- 阶段1：活下来（吃饱+找到住处） ---
+    ['Q_SETTLE_P1', '填饱肚子', 'SANDBOX', 'EAT', '', 50, 'Q_SETTLE_P1B', '得找点吃的填肚子', '9999'],
+    ['Q_SETTLE_P1B', '找到住处', 'SANDBOX', 'HAVE_UNIT', 'HOUSE', 1, 'Q_SETTLE_P2', '得找个遮风挡雨的地方', '9999'],
+
+    # --- 阶段2：有收入（攒到50铜） ---
+    ['Q_SETTLE_P2', '攒些盘缠', 'SANDBOX', 'RESOURCE_TOTAL', 'MONEY', 50, 'Q_SETTLE_P3', '得有个稳定的来钱路子', '9999'],
+
+    # --- 阶段3：有根基（任一NPC好感≥50） ---
+    ['Q_SETTLE_P3', '扎下根来', 'SANDBOX', 'AFFINITY_CHECK', 'ANY', 50, 'Q_SETTLE_P4', '得在这里交到靠得住的朋友', '9999'],
+
+    # --- 阶段4：有势力（加入势力） ---
+    ['Q_SETTLE_P4', '找到靠山', 'SANDBOX', 'ORG_RANK', '', 1, 'Q_SETTLE_DONE', '得找到靠得住的组织', '9999'],
+    ['Q_SETTLE_DONE', '站稳脚跟', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '终于在这座城站稳了脚跟', '9999'],
+
+    # --- Day 1 酒馆互动（生存驱动→社交引导） ---
+    # 玩家进入酒馆后触发，与主线并行的支线
+    # 完成后：饥饿值降低+老板娘好感提升，引导玩家体会"帮人=资源"
+    ['Q_TAVERN_HELP', '搬酒箱', 'SANDBOX', 'INTERACT', '酒馆老板娘', 1, 'Q_TAVERN_MEAL', '帮老板娘搬两箱酒', '酒馆老板娘'],
+    ['Q_TAVERN_MEAL', '吃顿热饭', 'SANDBOX', 'DIALOG', 'NONE', 0, '', '管你一顿饭', '9999'],
+
     # ═══════════════════════════════════════════════════════════════
     # 【生存模式】村庄重建主线（保留原有）
     # ═══════════════════════════════════════════════════════════════
-    ['Q_PROLOGUE', '序章', 'DIALOG', 'NONE', 0, 'Q0_FIND_ELDER', '穿越时空...', '9999'],
-    ['Q0_FIND_ELDER', '初醒', 'DIALOG', '9000', 1, 'Q1_FOOD', '与村长交谈', '9000'],
-    ['Q1_FOOD', '寻找食物', 'GATHER', '浆果', 2, 'Q2_WOOD', '采集浆果', '9000'],
-    ['Q2_WOOD', '筹备柴火', 'GATHER', '木材', 2, 'Q2_DROP_WOOD', '采集木材', '9000'],
-    ['Q2_DROP_WOOD', '准备营地', 'HAVE_UNIT', '木材', 1, 'Q3_CAMPFIRE', '放置木材', '9000'],
-    ['Q3_CAMPFIRE', '点燃希望', 'HAVE_UNIT', 'CAMPFIRE', 1, 'Q4_COOK', '搭建篝火', '9000'],
-    ['Q4_COOK', '第一顿热饭', 'GATHER', '烤果', 1, 'Q5_SHELTER', '烹饪食物', '9000'],
-    ['Q5_SHELTER', '遮风挡雨', 'HAVE_UNIT', 'HOUSE', 1, 'Q6_MARKET_MATS', '建造民居', '9000'],
-    ['Q6_MARKET_MATS', '筹备集市', 'GATHER', '木材', 5, 'Q7_MARKET', '囤积木材', '9000'],
-    ['Q7_MARKET', '恢复贸易', 'HAVE_UNIT', 'MARKET', 1, 'Q8_SELL', '建造集市', '9000'],
-    ['Q8_SELL', '第一桶金', 'RESOURCE_TOTAL', 'MONEY', 10, 'Q9_GRANARY', '赚取铜钱', '9000'],
-    ['Q9_GRANARY', '广积粮', 'HAVE_UNIT', 'GRANARY', 1, 'Q10_REFUGEE', '建造粮仓', '9000'],
-    ['Q10_REFUGEE', '接纳流民', 'DIALOG', 'NONE', 0, 'Q11_FARMER', '与村长商议', '9000'],
-    ['Q11_FARMER', '恢复农耕', 'HAVE_UNIT', 'FARMER', 1, 'Q12_FARM', '安置农夫', '9000'],
-    ['Q12_FARM', '开垦荒地', 'HAVE_UNIT', 'FARM', 1, 'Q13_GUARD', '开垦农田', '9000'],
-    ['Q13_GUARD', '组建护卫', 'HAVE_UNIT', 'GUARD', 1, 'Q_SURVIVE_10', '招募护卫', '9000'],
-    ['Q_SURVIVE_10', '坚守', 'SURVIVE', 'DAY', 10, 'Q_FREE', '存活10天', '9000'],
-    ['Q_FREE', '自由模式', 'FREE', 'NONE', 0, '', '自由探索', '9999'],
+    ['Q_PROLOGUE', '序章', 'TUTORIAL', 'DIALOG', 'NONE', 0, 'Q0_FIND_ELDER', '穿越时空...', '9999'],
+    ['Q0_FIND_ELDER', '初醒', 'TUTORIAL', 'DIALOG', '9000', 1, 'Q1_FOOD', '与村长交谈', '9000'],
+    ['Q1_FOOD', '寻找食物', 'TUTORIAL', 'GATHER', '浆果', 2, 'Q2_WOOD', '采集浆果', '9000'],
+    ['Q2_WOOD', '筹备柴火', 'TUTORIAL', 'GATHER', '木材', 2, 'Q2_DROP_WOOD', '采集木材', '9000'],
+    ['Q2_DROP_WOOD', '准备营地', 'TUTORIAL', 'HAVE_UNIT', '木材', 1, 'Q3_CAMPFIRE', '放置木材', '9000'],
+    ['Q3_CAMPFIRE', '点燃希望', 'TUTORIAL', 'HAVE_UNIT', 'CAMPFIRE', 1, 'Q4_COOK', '搭建篝火', '9000'],
+    ['Q4_COOK', '第一顿热饭', 'TUTORIAL', 'GATHER', '烤果', 1, 'Q5_SHELTER', '烹饪食物', '9000'],
+    ['Q5_SHELTER', '遮风挡雨', 'TUTORIAL', 'HAVE_UNIT', 'HOUSE', 1, 'Q6_MARKET_MATS', '建造民居', '9000'],
+    ['Q6_MARKET_MATS', '筹备集市', 'TUTORIAL', 'GATHER', '木材', 5, 'Q7_MARKET', '囤积木材', '9000'],
+    ['Q7_MARKET', '恢复贸易', 'TUTORIAL', 'HAVE_UNIT', 'MARKET', 1, 'Q8_SELL', '建造集市', '9000'],
+    ['Q8_SELL', '第一桶金', 'TUTORIAL', 'RESOURCE_TOTAL', 'MONEY', 10, 'Q9_GRANARY', '赚取铜钱', '9000'],
+    ['Q9_GRANARY', '广积粮', 'TUTORIAL', 'HAVE_UNIT', 'GRANARY', 1, 'Q10_REFUGEE', '建造粮仓', '9000'],
+    ['Q10_REFUGEE', '接纳流民', 'TUTORIAL', 'DIALOG', 'NONE', 0, 'Q11_FARMER', '与村长商议', '9000'],
+    ['Q11_FARMER', '恢复农耕', 'TUTORIAL', 'HAVE_UNIT', 'FARMER', 1, 'Q12_FARM', '安置农夫', '9000'],
+    ['Q12_FARM', '开垦荒地', 'TUTORIAL', 'HAVE_UNIT', 'FARM', 1, 'Q13_GUARD', '开垦农田', '9000'],
+    ['Q13_GUARD', '组建护卫', 'TUTORIAL', 'HAVE_UNIT', 'GUARD', 1, 'Q_SURVIVE_10', '招募护卫', '9000'],
+    ['Q_SURVIVE_10', '坚守', 'TUTORIAL', 'SURVIVE', 'DAY', 10, 'Q_FREE', '存活10天', '9000'],
+    ['Q_FREE', '自由模式', 'TUTORIAL', 'FREE', 'NONE', 0, '', '自由探索', '9999'],
 ]
 
 
-quest_headers = ['id', 'title', 'type', 'target', 'count', 'next', 'desc', 'submit_npc']
+quest_headers = ['id', 'title', 'scenario', 'type', 'target', 'count', 'next', 'desc', 'submit_npc']
 
 # ═══════════════════════════════════════════════════════════════
 # 对话配置 (Dialog Config)
@@ -374,7 +407,111 @@ dialogs = [
     ['Q_FREE_PLAY', 'NARRATOR', '【新手引导完成】', '', ''],
     ['Q_FREE_PLAY', 'NARRATOR', '你已经学会了生存、战斗、招募同伴的基本技能。', '', ''],
     ['Q_FREE_PLAY', 'NARRATOR', '现在，汴京城任你闯荡！', '', ''],
-    
+
+    # ═══════════════════════════════════════════════════════════════
+    # 【城镇模式】Day 1-7 开局主线对话
+    # ═══════════════════════════════════════════════════════════════
+
+    # --- Q_SETTLE_INTRO: 内心独白（Day 1 亥时，主线开启的核心情感节拍）---
+    ['Q_SETTLE_INTRO', 'NARRATOR', '夜幕笼罩了汴京城。街上的喧嚣渐渐退去，只剩几盏昏黄的灯笼在风中摇晃。', '', 'FADE_TO_BLACK:0.3'],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '你靠在墙角，浑身酸痛，望着头顶陌生的星空。', '', 'FADE_FROM_BLACK:0.5'],
+    ['Q_SETTLE_INTRO', '我', '......总算活过了今天。', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '肚子还在隐隐作痛。白天在街上转了整整一天，这座城的每条巷子都透着拒人千里的冷漠。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '不认识任何人...身上也没几个钱...', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '远处传来更夫的梆子声，一下一下，敲在寂静的夜里。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '可我不能一直这样。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '那些人...迟早会找到这里。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '我必须在这座城站稳脚跟。找到住处，找到活路，找到靠得住的人。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '否则等他们追上来的时候，我连跑都没地方跑。', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '你攥紧了拳头。夜风灌进单薄的衣衫，但心里燃起了一团火。', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '【主线任务开启】在城中站稳脚跟', '', ''],
+
+    # --- Q_SETTLE_P1: 填饱肚子（EAT任务，submit_npc=9999自动完成）---
+    ['Q_SETTLE_P1', 'NARRATOR', '天刚蒙蒙亮，你的肚子就开始抗议了。', '', ''],
+    ['Q_SETTLE_P1', '我', '再不吃点东西，怕是连路都走不动了。', '', ''],
+    ['Q_SETTLE_P1', 'NARRATOR', '城里到处飘着早点的香气，可口袋里的几个铜板让你不敢乱花。', '', ''],
+    ['Q_SETTLE_P1', 'NARRATOR', '【提示】想办法填饱肚子——去酒馆帮忙换顿饭，到集市打零工赚点吃食钱，或者出城碰碰运气采些野果。', '', ''],
+    ['Q_SETTLE_P1_REMIND', 'NARRATOR', '肚子又叫了...什么体面不体面的，先活下去再说。', '', ''],
+    ['Q_SETTLE_P1_END', 'NARRATOR', '热乎乎的食物下肚，整个人总算缓过劲来。', '', ''],
+    ['Q_SETTLE_P1_END', '我', '吃饱了...现在得想想住的问题。总不能天天睡大街。', '', ''],
+
+    # --- Q_SETTLE_P1B: 找到住处（HAVE_UNIT任务，submit_npc=9999自动完成）---
+    ['Q_SETTLE_P1B', 'NARRATOR', '申时，日头偏西，街上的影子拉得老长。', '', ''],
+    ['Q_SETTLE_P1B', '我', '天快黑了...昨晚缩在城隍庙后头冻了一宿，今天可不能再那样了。', '', ''],
+    ['Q_SETTLE_P1B', 'NARRATOR', '客栈门口挂着牌子——"住宿一晚十文"。你摸了摸干瘪的钱袋。', '', ''],
+    ['Q_SETTLE_P1B', '我', '得另想办法。找个便宜的落脚点，或者...看看有没有好心人愿意收留。', '', ''],
+    ['Q_SETTLE_P1B', 'NARRATOR', '【提示】找到住处——花钱住客栈，或者跟好感足够的NPC打听有没有空屋子。', '', ''],
+    ['Q_SETTLE_P1B_REMIND', 'NARRATOR', '天色越来越暗了，得赶紧找个住的地方。', '', ''],
+    ['Q_SETTLE_P1B_END', 'NARRATOR', '终于有了个能遮风挡雨的地方。虽然简陋，但比露宿街头强了不知多少。', '', ''],
+    ['Q_SETTLE_P1B_END', '我', '住的地方有了...可这点家底撑不了几天。得找个稳定的来钱路子。', '', ''],
+
+    # --- Q_SETTLE_P2: 攒些盘缠（RESOURCE_TOTAL任务，submit_npc=9999自动完成）---
+    ['Q_SETTLE_P2', 'NARRATOR', '有了栖身之所，下一个问题迫在眉睫——钱。', '', ''],
+    ['Q_SETTLE_P2', '我', '房租、吃饭、日常开销...坐吃山空不是办法。', '', ''],
+    ['Q_SETTLE_P2', 'NARRATOR', '你路过告示板，上面贴着几张委托：搬货、采药、跑腿...活儿不轻松，报酬也不高，但总算是个开始。', '', ''],
+    ['Q_SETTLE_P2', '我', '先攒点家底。等手头宽裕了，再图别的。', '', ''],
+    ['Q_SETTLE_P2', 'NARRATOR', '【提示】通过接委托、打工、采集卖货等方式，积攒到50铜钱。', '', ''],
+    ['Q_SETTLE_P2_REMIND', 'NARRATOR', '钱袋还是瘪瘪的，继续干活吧。', '', ''],
+    ['Q_SETTLE_P2_END', 'NARRATOR', '钱袋终于有了些分量。你拈了拈铜钱，心里踏实了不少。', '', ''],
+    ['Q_SETTLE_P2_END', '我', '赚钱的门路有了...可在这城里，一个外乡人势单力薄。', '', ''],
+    ['Q_SETTLE_P2_END', '我', '得交到几个靠得住的朋友才行。', '', ''],
+
+    # --- Q_SETTLE_P3: 扎下根来（AFFINITY_CHECK任务，submit_npc=9999自动完成）---
+    ['Q_SETTLE_P3', 'NARRATOR', '吃穿住行勉强有了着落，但你心里清楚：在这座城里，一个人什么都不是。', '', ''],
+    ['Q_SETTLE_P3', '我', '这些天做委托，倒是认识了几个人。可点头之交，关键时候靠不住。', '', ''],
+    ['Q_SETTLE_P3', '我', '得真正跟人交心。帮人家的忙，也让人家愿意帮我。', '', ''],
+    ['Q_SETTLE_P3', 'NARRATOR', '【提示】与NPC深入交往——帮忙做事、经常聊天，让任意一人对你的好感达到50。', '', ''],
+    ['Q_SETTLE_P3_REMIND', 'NARRATOR', '一个人扛不住事。得找到能交心的朋友。', '', ''],
+    ['Q_SETTLE_P3_END', 'NARRATOR', '有人开始主动跟你打招呼，有人愿意多聊两句私房话，有人遇到难事第一个想到你。', '', ''],
+    ['Q_SETTLE_P3_END', '我', '在这城里，总算不是孤身一人了。', '', ''],
+    ['Q_SETTLE_P3_END', '我', '可光靠几个朋友...万一那些人来了，还是不够看。得找个有势力的组织。', '', ''],
+
+    # --- Q_SETTLE_P4: 找到靠山（ORG_RANK任务，submit_npc=9999自动完成）---
+    ['Q_SETTLE_P4', 'NARRATOR', '这些天在城里走动，你渐渐看清了水面下的暗流。', '', ''],
+    ['Q_SETTLE_P4', '我', '开封府、商会、太学、丐帮...各方势力盘根错节。', '', ''],
+    ['Q_SETTLE_P4', '我', '一个人终究是一个人。得加入一股势力，有了组织，才有底气。', '', ''],
+    ['Q_SETTLE_P4', 'NARRATOR', '【提示】打听城中各方势力的来历，选择一个加入。', '', ''],
+    ['Q_SETTLE_P4_REMIND', 'NARRATOR', '想在这城里长久待下去，得有个靠山。', '', ''],
+    ['Q_SETTLE_P4_END', 'NARRATOR', '你穿上了组织的衣裳，身后有了一帮兄弟。走在街上，连路人看你的眼神都不一样了。', '', ''],
+    ['Q_SETTLE_P4_END', '我', '终于有了靠山。这座城，我总算站住脚了。', '', ''],
+
+    # --- Q_SETTLE_DONE: 站稳脚跟（DIALOG完成标记）---
+    ['Q_SETTLE_DONE', 'NARRATOR', '夜里，你站在屋檐下，望着万家灯火的汴京城。', '', ''],
+    ['Q_SETTLE_DONE', '我', '住处有了，收入稳了，朋友交了，靠山也找到了。', '', ''],
+    ['Q_SETTLE_DONE', 'NARRATOR', '跟刚进城那天比，简直是天壤之别。那时连下顿饭在哪儿都不知道。', '', ''],
+    ['Q_SETTLE_DONE', '我', '可我知道...这只是个开始。', '', ''],
+    ['Q_SETTLE_DONE', 'NARRATOR', '远处城门方向，似乎有几个陌生人的身影在夜色中一闪而过。', '', ''],
+    ['Q_SETTLE_DONE', '我', '他们...快来了。', '', ''],
+    ['Q_SETTLE_DONE', 'NARRATOR', '【主线第一阶段完成】在城中站稳脚跟', '', 'COMPLETE_SETTLE'],
+
+    # --- Q_TAVERN_HELP: 搬酒箱（INTERACT任务，Day 1 社交引导）---
+    # 接取对话
+    ['Q_TAVERN_HELP', 'NARRATOR', '你推开酒馆的门，一股热气裹着酒香扑面而来。', '', ''],
+    ['Q_TAVERN_HELP', 'NARRATOR', '柜台后面一个三十来岁的妇人正擦着桌子，抬眼打量了你一下。', '', ''],
+    ['Q_TAVERN_HELP', '酒馆老板娘', '小伙子，看你这样子是赶路来的吧？灰头土脸的。', '', ''],
+    ['Q_TAVERN_HELP', '我', '是...刚到汴京，人生地不熟。', '', ''],
+    ['Q_TAVERN_HELP', '酒馆老板娘', '嗐，一看就是。', '', ''],
+    ['Q_TAVERN_HELP', '酒馆老板娘', '这样吧，后院有两箱酒，我一个人搬不动。你帮我搬进来，管你一顿饭。', '', ''],
+    ['Q_TAVERN_HELP', '我', '行！小事一桩！', '', ''],
+    ['Q_TAVERN_HELP', '酒馆老板娘', '酒箱在后院角落里，别磕着碰着了。', '', ''],
+    # 提醒对话
+    ['Q_TAVERN_HELP_REMIND', '酒馆老板娘', '酒箱在后院呢，两箱，搬进来放柜台边上就行。', '', ''],
+    # 完成对话
+    ['Q_TAVERN_HELP_END', '酒馆老板娘', '嚯，挺利索！比我以前雇的那些小工强多了。', '', ''],
+    ['Q_TAVERN_HELP_END', '酒馆老板娘', '来，坐下歇歇。热汤面马上好。', '', ''],
+
+    # --- Q_TAVERN_MEAL: 吃顿热饭（DIALOG任务，核心教学——帮人=关系=资源）---
+    ['Q_TAVERN_MEAL', 'NARRATOR', '一大碗热腾腾的汤面端上来，面上卧着两个荷包蛋。', '', 'SET_HUNGER:40'],
+    ['Q_TAVERN_MEAL', '我', '嗯......！', '', ''],
+    ['Q_TAVERN_MEAL', 'NARRATOR', '你狼吞虎咽地扒完了面，连汤都喝得精光。好久没吃过这么热乎的东西了。', '', ''],
+    ['Q_TAVERN_MEAL', '酒馆老板娘', '慢着点吃，又没人跟你抢。', '', ''],
+    ['Q_TAVERN_MEAL', '酒馆老板娘', '一个人在外头不容易。你这个年纪，家里人呢？', '', 'AFFINITY_酒馆老板娘:10'],
+    ['Q_TAVERN_MEAL', '我', '......路上走散了。', '', ''],
+    ['Q_TAVERN_MEAL', '酒馆老板娘', '唉...这年头，什么事都有。', '', ''],
+    ['Q_TAVERN_MEAL', '酒馆老板娘', '你要是没地方住，今晚先在后院将就一宿吧，别睡大街上。', '', ''],
+    ['Q_TAVERN_MEAL', '我', '老板娘...太感谢了。', '', ''],
+    ['Q_TAVERN_MEAL', '酒馆老板娘', '客气什么。以后有啥干不动的活儿，你来帮忙，我不亏待你。', '', ''],
+
     # ═══════════════════════════════════════════════════════════════
     # 【生存模式】村庄重建主线对话（保留原有）
     # ═══════════════════════════════════════════════════════════════

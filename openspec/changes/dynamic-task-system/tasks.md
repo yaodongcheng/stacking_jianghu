@@ -11,6 +11,8 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 每个阶段包含：**规格要点**（关键规则/阈值/映射表）+ **实施任务**（checklist）。
 
+**开发原则**：主线剧情任务全部通过 `data/quest_config.csv` + `data/dialog_config.csv` 数据配置驱动，禁止为特定剧情编写一次性的硬编码编排类。所有任务复用 `quest_system.py` 的 `check_progress()` → `advance_quest()` 通用管道。需要新增任务能力时，在 `check_progress()` 中扩展新的 quest type（如 `WAIT_TIME`、`AFFINITY_CHECK`），使其可被任意任务复用。CSV 由 `tools/make_quest_csv.py` 脚本生成。
+
 ---
 
 ## 实施阶段总览
@@ -48,7 +50,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 **涉及文件**：`src/task/survival.py`、`src/task/quest_system.py`、`src/ui/sidebar.py`
 **复用率**：~30%（阈值判断逻辑和调用模式可复用）
-**对应设计**：design.md §5.8
+**对应设计**：design.md §5.8 + §2.3（Day 1 任务出场时序中的生存任务触发）
 
 **已完成**：
 - [√] SurvivalTask 数据类已完成（`src/task/survival.py`）
@@ -548,7 +550,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 **涉及文件**：新建 `src/ui/bulletin_board_ui.py`、`src/quest_system.py`、`src/ai/organization_ai.py`
 **复用率**：~30%（核心是全新玩法，但 UI 模式和结算管道可复用）
-**对应设计**：design.md §5.7
+**对应设计**：design.md §5.7 + §2.4（敌方渗透对委托报酬的影响）
 
 <details><summary>📋 规格要点（原 specs/public-commission/spec.md）</summary>
 
@@ -624,6 +626,16 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 委托重回告示板（status 重置为 AVAILABLE）
   - NPC 信誉标记下降（用 flags `npc_{id}_commission_fail_count`）
   - 高失败次数的NPC今后接取委托概率降低
+- [ ] 7.12 ⚠️**补充(design 2.4)** — 敌方渗透对委托报酬的影响：
+  - 根据威胁度（threat_level）动态调整NPC发布委托的报酬：
+    - threat < 15：正常报酬
+    - 15-30：报酬 × 0.8（渗透期）
+    - 30-50：报酬 × 0.6，部分NPC商铺被控制后不再发布委托（挤压期）
+    - 50-70：报酬 × 0.4，委托大幅减少（垄断期）
+    - ≥70：城外类委托不可用（封锁期）
+  - 在 `npc_post_commission()` 中读取威胁度，调整 reward_gold
+  - 食物/服务价格也随威胁度上涨（影响生存成本）
+  - 设计意图：玩家通过日常做委托就能感受到敌方渗透的影响，不需要额外通知
 
 ## 阶段八：事件任务联动 — `待开始` (0/14)
 
@@ -631,7 +643,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 
 **涉及文件**：`src/aistory/rolling_story_generator.py`、`src/aistory/story_director.py`、`src/event_system.py`
 **复用率**：~90%（几乎全部是在已有系统上加字段/加分支，无需新文件）
-**对应设计**：design.md §6.2-6.8
+**对应设计**：design.md §6.2-6.8 + §5.8a（主线任务阶段推进） + §2.4（敌方渗透影响） + §8（Day 1-7 开局体验流）
 
 <details><summary>📋 规格要点（原 specs/event-task-coordination/spec.md + specs/quest-generator/spec.md）</summary>
 
@@ -783,6 +795,22 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
   - 在 `PromptBuilder` 中新增 `_get_player_reputation_context() -> str`：将行为标签转化为NPC对玩家的预期描述（如"此人惯用武力"→NPC对话中体现戒备/依赖）
   - 注入NPC的LLM上下文，影响NPC对话语气和态度
   - ♻️ **已有**：`PromptBuilder` 的上下文注入框架
+- [ ] 8.15 ⚠️**补充(design 5.8a+8)** — 主线任务"在城中站稳脚跟"的阶段推进：
+  - Day 1 亥时通过内心独白触发主线任务（不是系统强塞，是情感驱动的）
+  - 主线任务分4个阶段：活下来→有收入→有根基（NPC好感≥50）→有势力
+  - 在 `QuestManager` 中实现 `check_main_quest_phase(player)` 方法：
+    - 检查住所状态 → 阶段1完成
+    - 检查经济稳定（铜钱≥50持续2天）→ 阶段2完成
+    - 检查社交网络（任一NPC好感≥50）→ 阶段3完成
+    - 检查势力状态 → 阶段4完成
+  - 每个阶段完成时 `ctx.ft_manager.add_text()` 显示内心独白反馈
+  - ♻️ **已有**：QuestManager 的主线任务追踪、sidebar 目标展示
+- [ ] 8.16 ⚠️**补充(design 8)** — Day 2 首次小冲突事件（选项锁定教学）：
+  - AI导演在 Day 2 申时前后触发一个低级冲突事件
+  - 选项设计：至少2个选项的 requirement 门槛略高于玩家初始属性（如 strength≥15, wit≥12）
+  - 保底选项（旁观）无门槛
+  - 设计意图：玩家第一次看到"能力不够=选项被锁"，产生"我要变强"的内在动机
+  - 不触发任何任务——纯叙事种子
 
 ## 阶段九A：共享叙事记忆与感知过滤 — `待开始` (0/13)
 
@@ -950,6 +978,216 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 - [ ] 9B.21 信息时效性：创建 expires_at=当前+1天的 WorldFact → 推进游戏时间超过过期点 → 验证 query_facts 不再返回该事实
 - [ ] 9B.22 信息排他性+选择性透露：创建只有玩家知道的 WorldFact → 验证 get_player_exclusive_info() 返回该事实 → 验证事件生成 prompt 中包含"选择性透露"选项指令
 
+**Day 1-7 开局体验端到端验收**（依赖阶段十完成）
+
+- [ ] 9B.23 Day 1 验收：
+  - 玩家初始状态正确（HP 70, hunger≥70, money 5, 无住所）
+  - 进城后生存任务自动触发（饱食度<30 → "肚子快饿扁了"）
+  - 去酒馆可触发 Q_TAVERN_HELP → 完成后饥饿值降低、老板娘好感+10
+  - 亥时 Q_SETTLE_WAIT 完成 → Q_SETTLE_INTRO 触发内心独白 → 主线面板出现"在城中站稳脚跟"
+- [ ] 9B.24 Day 2 验收：
+  - 辰时告示板刷新，出现 2-3 个简单委托（搬货/采药等）
+  - 玩家可接取并完成委托，获得铜钱+好感
+  - 申时 E_TEACH_CONFLICT 触发，至少2个选项因能力不足灰显（strength<15, wit<12）
+  - 保底选项（旁观）可选，冲突不触发任何任务
+  - 铜钱≥30后生存任务消失
+- [ ] 9B.25 Day 3-4 验收：
+  - 告示板每日辰时刷新新委托
+  - 某NPC好感达30时，闲聊中透露敌方渗透信息（prompt注入正确）
+  - 住所升级（好感≥40触发或HAVE_UNIT检测）→ 主线 Q_SETTLE_P1B 完成
+  - 主线推进到 Q_SETTLE_P2（攒些盘缠）
+- [ ] 9B.26 Day 5-7 验收：
+  - Day 5：FateNode 起幕触发（天数≥5 检查通过）
+  - 起幕余韵后触发情报委托（如情报系统已实现）
+  - Day 6：目标NPC打探获线索，委托报酬下降（threat_level=18 → 报酬×0.8）
+  - Day 7：凑齐3线索 → 内心总结 → 交付（如情报系统已实现）
+- [ ] 9B.27 Day 1-7 整体验收：
+  - 任务类型出场顺序：生存(D1) → 委托(D2) → 主线推进(D4) → 情报(D5)
+  - 势力任务 Day 1-7 不出现
+  - 主线 Q_SETTLE_* 全程追踪，至少完成到 Q_SETTLE_P2
+  - 玩家体验弧完整：饥寒交迫→勉强糊口→逐步融入→有所牵挂
+
+---
+
+## 阶段十：开局体验编排（Day 1-7） — `进行中` (2/13)
+
+通过 quest_config.csv 数据配置和少量 quest type 扩展，编排 Day 1-7 开局体验。
+不新建独立编排模块，复用已有任务管道。
+
+**前置依赖**：阶段一（生存任务）、阶段二（任务框架）、阶段七（公开委托·部分 7.1-7.3）、阶段八（事件联动·部分 8.15+8.16）
+**不依赖**：阶段五/六（势力任务，Day 1-7 不出现）、阶段九A（叙事记忆，可降级）
+**涉及文件**：`data/quest_config.csv`、`data/dialog_config.csv`、`tools/make_quest_csv.py`、
+  `src/task/quest_system.py`、`src/entities/player.py`、
+  `src/event_system.py`、`src/llm/prompt_builder.py`、`src/aistory/story_director.py`
+**对应设计**：design.md §8（开局体验流）+ §2.3（任务出场时序）+ §1.1（玩家初始状态）+ §2.4（敌方渗透影响）
+
+<details><summary>Day 1-7 关键路径依赖图</summary>
+
+```
+Day 1-7 关键路径：
+├── 必须完成：阶段一（生存任务）→ 阶段二（多槽位）→ 阶段十（本阶段）
+├── 部分完成：阶段七（委托·仅需 7.1-7.3）
+├── 部分完成：阶段八（事件联动·仅需 8.15+8.16）
+├── 部分完成：阶段三（情报委托·需 3.1-3.6，Day 5 起）
+├── 不需要：阶段五/六（势力任务）
+├── 不需要：阶段九A（叙事记忆）
+└── 最后验证：阶段九B（9B.23-9B.27）
+```
+
+</details>
+
+**已完成**：
+- [√] 10.1 数据配置 — quest_config.csv 主线任务链 + 酒馆互动（`tools/make_quest_csv.py`）
+- [√] 10.2 数据配置 — quest type 文档更新（WAIT_TIME / AFFINITY_CHECK）
+
+**已完成说明**：
+> 10.1 通过 `tools/make_quest_csv.py` 生成，已包含：
+> - 主线任务链 Q_SETTLE_*（8条 quest）：WAIT_TIME(Day1亥时) → DIALOG(内心独白) → EAT(填肚子) → HAVE_UNIT(找住处) → RESOURCE_TOTAL(攒50铜) → AFFINITY_CHECK(交朋友) → ORG_RANK(加入势力) → DIALOG(完成)
+> - 酒馆互动 Q_TAVERN_*（2条 quest）：INTERACT(搬酒箱) → DIALOG(吃顿热饭)
+> - 配套对话共 79 条 dialog 条目（含环境描写、内心独白、NPC对白）
+> - 对话 action 包括：SET_HUNGER:40、AFFINITY_酒馆老板娘:10、FADE_TO_BLACK/FROM_BLACK、COMPLETE_SETTLE 等
+
+- [ ] 10.3 ♻️**改造** — 玩家初始状态对齐（`src/entities/player.py`）：
+  - `self.money = 200` → `self.money = 5`
+  - 确认 `self.hp = 70`（逃难受伤）、hunger 值应≥70（对应饱食度≤20，饥饿警告）
+  - 确认 `self.cold = 40`（衣衫褴褛，偏冷）
+  - 确认所有NPC初始好感=0、所有能力属性初始=10
+  - 对应：design.md §1.1
+
+- [ ] 10.4 🆕**新增 quest type** — `WAIT_TIME`（`src/task/quest_system.py`）：
+  在 `check_progress()` 中新增 WAIT_TIME 类型处理：
+  ```python
+  # quest_config.csv 示例：type=WAIT_TIME, target=1:亥, count=0
+  # 含义：等到 Day 1 的亥时自动完成
+  elif qtype == 'WAIT_TIME':
+      day_str, hour_str = quest.target.split(':')
+      target_day = int(day_str)
+      target_hour = HOUR_MAP[hour_str]  # 亥=21, 辰=7, 申=15 等
+      if player.day >= target_day and current_hour >= target_hour:
+          return True
+  ```
+  - 复用 check_progress() 的通用框架，只加一个 elif 分支
+  - HOUR_MAP 映射12时辰到24小时制（已有时辰系统可复用）
+  - 通用 type，后续任何"等到特定时间"的任务都可复用
+  - ⚠️**补充**：在 `advance_quest()` 的 `auto_activate` 列表中加入 `'WAIT_TIME'`（当前只有 GOAL/RESOURCE_TOTAL/FREE，WAIT_TIME 也应自动激活）
+  - ⚠️**补充**：submit_npc='9999' 的自动推进逻辑（当前仅 REACH 类型有），需扩展为所有 submit_npc='9999' 的类型共用，包括 WAIT_TIME/EAT/AFFINITY_CHECK/ORG_RANK/RESOURCE_TOTAL
+  - 对应：design.md §8 Day 1 亥时触发
+
+- [ ] 10.5 🆕**新增 quest type** — `AFFINITY_CHECK`（`src/task/quest_system.py`）：
+  在 `check_progress()` 中新增 AFFINITY_CHECK 类型处理：
+  ```python
+  # quest_config.csv 示例：type=AFFINITY_CHECK, target=ANY, count=50
+  elif qtype == 'AFFINITY_CHECK':
+      threshold = quest.count
+      if quest.target == 'ANY':
+          return any(npc.affinity_to_player >= threshold for npc in all_npcs)
+      else:
+          npc = find_npc_by_name(quest.target)
+          return npc and npc.affinity_to_player >= threshold
+  ```
+  - 通用 type，后续任何"好感达标"的主线推进都可复用
+  - ⚠️**补充**：在 `advance_quest()` 的 `auto_activate` 列表中加入 `'AFFINITY_CHECK'`
+  - 对应：design.md §8 Day 4 住所升级 + §5.8a 主线阶段3
+
+- [ ] 10.5b 🆕**新增 quest type** — `ORG_RANK`（`src/task/quest_system.py`）：
+  Q_SETTLE_P4 使用了此类型但 `check_progress()` 中尚无实现：
+  ```python
+  # quest_config.csv 示例：type=ORG_RANK, target=ANY, count=1
+  elif qtype == 'ORG_RANK':
+      player_rank = getattr(player, 'player_org_rank', 0)
+      if player_rank >= (quest.count or 1):
+          return True
+  ```
+  - ⚠️**补充**：在 `advance_quest()` 的 `auto_activate` 列表中加入 `'ORG_RANK'`
+  - 对应：Q_SETTLE_P4（加入势力）
+
+- [ ] 10.6 ♻️**改造** — quest_system.py 初始任务衔接：
+  - 城镇模式启动时，设置 `_active_quest_id = 'Q_SETTLE_WAIT'`
+  - 需与现有沙盒模式（Q_YUXISHI_TRIGGER）和生存模式（Q_PROLOGUE）共存
+  - 在 `world_loader.py` 初始化时根据游戏模式选择初始任务链
+  - 旧序章链（鱼西施/泼皮牛二）保留为沙盒模式，Q_SETTLE_* 作为城镇模式主线
+
+- [ ] 10.7 ♻️**改造** — EventManager 支持按天数+时辰触发预设事件（`src/event_system.py`）：
+  新增配置化的定时事件表（通用机制，非一次性代码）：
+  ```python
+  SCHEDULED_EVENTS = {
+      (2, '申'): 'E_TEACH_CONFLICT',  # Day 2 申时：教学冲突
+      # 后续可扩展更多定时事件
+  }
+  ```
+  在 `_tick()` 中检查当前 (day, hour) 是否在表中，有则触发
+  表可后续迁移到 `data/scheduled_events.csv`
+
+- [ ] 10.8 🆕**数据配置** — Day 2 教学冲突事件（`data/event_data.csv` + `data/event_dialog_config.csv`）：
+  复用 event_data.csv + event_dialog_config.csv 的完整事件管道：
+  ```
+  E_TEACH_CONFLICT,街头欺凌,壮汉在欺负小贩
+    选项A [挺身而出]: requirement=PLAYER:strength:>=:15 → 灰显
+    选项B [智取]: requirement=PLAYER:wit:>=:12 → 灰显
+    选项C [旁观]: 无门槛，可选
+  ```
+  - 不触发任何任务——纯叙事种子，教学"能力不够=选项被锁"
+  - 通过 `tools/` 下的事件脚本生成（参考已有事件数据生成方式）
+  - 对应：design.md §8 Day 2 申时
+
+- [ ] 10.9 ♻️**改造** — PromptBuilder 闲聊内容注入（`src/llm/prompt_builder.py`）：
+  在 NPC 上下文注入中增加"敌方渗透信息"素材池：
+  - 条件：NPC 好感≥30 且 player.day≥3
+  - 注入内容按NPC职业/位置选择（3-5条素材）：
+    - 商人NPC："最近城里不太平，来了几个外地人，价钱压得特别低..."
+    - 酒馆NPC："前阵子来了几个生面孔，出手阔绰，问东问西的..."
+    - 手艺人NPC："东街新开的铺子压价厉害，赵掌柜都快撑不住了..."
+  - ♻️ 复用 `_get_quest_context_for_npc()` 上下文注入框架
+  - 素材可放 `data/gossip_pool.csv` 或直接定义在 prompt_builder 中
+  - 对应：design.md §8 Day 3
+
+- [ ] 10.10 ♻️**改造** — FateNode 天数前置条件（`src/aistory/story_director.py`）：
+  在 `try_to_generate_beat()` 中新增检查：
+  ```python
+  if player.day < 5:
+      return None  # 开局前4天不触发NPC人生困境
+  ```
+  - Day 5 起仍由 heat 机制驱动，首个 FateNode 可适当降低 heat 门槛
+  - 对应：design.md §8 Day 5 + §2.3
+
+- [ ] 10.11 ♻️**改造** — 敌方渗透基础数值（复用阶段七 7.12 框架）：
+  - 实现 threat_level 基础值：Day 1-4 = 5（平静期），Day 5-7 = 18（渗透期）
+  - 在 `npc_post_commission()`（7.3）中接入：`reward_gold *= (1 - threat_modifier)`
+  - 在物价中接入：`price *= (1 + cost_modifier)`
+  - 玩家体感："昨天做委托赚50铜，今天只能赚40铜了"
+  - 对应：design.md §2.4 + §8 Day 6
+
+- [ ] 10.13 ♻️**改造** — Q_TAVERN_HELP 触发方式（`data/quest_config.csv` + `data/dialog_config.csv`）：
+  酒馆支线与主线（Q_SETTLE_*）并行，**不需要独立触发系统**。
+  利用现有 dialog_config.csv 的 action 字段驱动 NPC 演出行为：
+  - Q_TAVERN_HELP 的 dialog action 中包含 NPC 移动指令（酒馆老板娘走向玩家）
+  - 触发条件：玩家 hunger ≥ 50 且距酒馆区域足够近时，由主线推进自动触发或通过 INTERACT 接取
+  - 对话结束后 action 执行 SET_HUNGER:40 + AFFINITY_酒馆老板娘:10
+  - ⚠️ 核心原则：所有 NPC 主动行为（走向玩家、搭话）都通过 dialog_config.csv 的 action 字段实现，不另建独立的主动行为系统
+  - 对应：design.md §8 Day 1 酒馆互动
+
+- [ ] 10.14 ♻️**改造** — 清理 `get_all_task_displays()` 调试/模拟数据（`src/task/quest_system.py`）：
+  当前 `get_all_task_displays()` 中存在不应上线的硬编码调试数据：
+  - 删除 line 1397-1408 的调试模式（hunger < 50 时不应仍显示生存任务提示）
+  - 删除 line 1420-1443 的模拟情报任务/势力任务数据（假数据会误导验证）
+  - 保留真实的 hunger >= 70 / hunger >= 50 判断逻辑
+  - cold 阈值应从 `>= 70` 改为 `>= 60`（对齐 design.md 和阶段一规格的阈值表）
+
+- [ ] 10.15 ♻️**改造** — 新增 quest type 的进度展示文本（`src/task/quest_system.py`）：
+  在 `get_current_objective_text()` 中为新增的三种 quest type 补充进度展示：
+  ```python
+  # WAIT_TIME: 显示等待目标时间
+  if qtype == 'WAIT_TIME':
+      return f"等待至 Day {target_day} {hour_name}时"
+  # AFFINITY_CHECK: 显示当前最高好感 / 目标
+  if qtype == 'AFFINITY_CHECK':
+      return f"结交朋友（好感 {current_max}/{threshold}）"
+  # ORG_RANK: 显示当前等级 / 目标
+  if qtype == 'ORG_RANK':
+      return f"加入势力（等级 {current_rank}/{target_rank}）"
+  ```
+  - 确保 sidebar "要务"区域能正确显示这些任务的当前进度
+
 ---
 
 ## 附录：复用分析总结
@@ -967,6 +1205,7 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 | 阶段七：公开委托 | ~30% | 告示板 UI、NPC 委托 AI | UI 风格、结算管道、日重置模式 | 全新玩法，管道复用 |
 | 阶段八：事件联动 | ~90% | 无新文件 | EventChoice 加字段、process_player_choice 加分支、行为标签统计 | 几乎全是改造 |
 | 阶段九A：共享叙事记忆 | ~40% | NarrativeMemory、WorldFact、感知过滤器、信息时效/排他 | 涟漪系统传播逻辑、PromptBuilder注入框架、heat计算 | 事实库新建，LLM注入复用 |
+| 阶段十：开局体验编排 | ~80% | WAIT_TIME/AFFINITY_CHECK 2个quest type、闲聊素材池、定时事件表 | quest_config.csv管道、dialog_config.csv、event_data.csv、check_progress()框架、PromptBuilder注入 | 数据配置为主，代码改动极少 |
 
 ### 真正需要新建的系统功能（按优先级）
 
@@ -982,6 +1221,8 @@ tasks.md   → 实施指南（"怎么做、改哪里"）— 开发时只看这�
 | **低** | 自创势力 | 中 | 六 | 数据结构可复用，逻辑需新建 |
 | **低** | 行为标签统计 | 低 | 八 | 统计玩家选择模式 + 谣言传播，复用已有系统 |
 | **低** | 信息时效/排他/选择性透露 | 中 | 九A | WorldFact 扩展 + LLM prompt 注入 |
+| **低** | WAIT_TIME/AFFINITY_CHECK quest type | 低 | 十 | check_progress() 中各加一个 elif 分支 |
+| **低** | EventManager 定时事件表 | 低 | 十 | _tick() 中查表触发，通用机制 |
 
 ### 重复造轮子风险清单
 

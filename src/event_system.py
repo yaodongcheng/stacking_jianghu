@@ -6,46 +6,6 @@ from src.definitions import *
 from src.utils import log_game_event, resource_path
 from src.entities import NPC,Player
 
-class DialogLine:
-    """
-    事件对话行数据结构
-    类似quest_system中的DialogLine，但用于事件对话
-    """
-    def __init__(self, dialog_id, speaker, text, action):
-        self.dialog_id = dialog_id
-        self.speaker = speaker
-        self.text = text
-        self.action = action
-        self.bg_img = ''  # 事件对话通常不需要背景图
-        self.speaker_id = None  # 后续会根据speaker名称查找ID
-    
-    def prepare_speaker_id(self, npc_a, npc_b, player):
-        """
-        根据speaker字段确定说话人的ID
-        支持：NARRATOR(旁白), SELF({A}), OTHER({B}), PLAYER(我), 或具体NPC名
-        """
-        if self.speaker == 'NARRATOR' or self.speaker == '旁白':
-            self.speaker_id = None  # 旁白无ID
-            self.speaker = 'NARRATOR'
-        elif self.speaker == 'SELF' or self.speaker == '{A}':
-            if npc_a:
-                self.speaker_id = getattr(npc_a, 'id', None)
-                self.speaker = npc_a.name  # 替换为实际名字
-        elif self.speaker == 'OTHER' or self.speaker == '{B}':
-            if npc_b:
-                self.speaker_id = getattr(npc_b, 'id', None)
-                self.speaker = npc_b.name
-            else:
-                self.speaker_id = None
-                self.speaker = '某人'
-        elif self.speaker == 'PLAYER' or self.speaker == '我':
-            self.speaker_id = 9999  # 玩家ID
-            self.speaker = '我'
-        else:
-            # 尝试从场景中查找匹配名字的NPC
-            # 这里先留空，后续由story_ui在绘制时动态匹配
-            self.speaker_id = None
-
 class EventDefinition:
     def __init__(self, data):
         self.id = int(data.get('id', 0))
@@ -79,10 +39,9 @@ class EventDefinition:
         self.dialog_c_id = data.get('dialog_c_id', '')  # 选项C后续对话
 
 class EventManager:
-    def __init__(self, filepath, npc_pool_data, dialog_filepath='data/event_dialog_config.csv'):
+    def __init__(self, filepath, npc_pool_data):
         self.events = self.load_events(filepath)
-        self.event_dialogs = self.load_event_dialogs(dialog_filepath)  # 【新增】加载事件对话
-        
+
         # --- 时间系统 ---
         self.time_speed = 1 
         self._stored_speed = 0 
@@ -149,46 +108,6 @@ class EventManager:
         except Exception as e:
             print(f"[EventSys] 加载事件失败: {e}")
         return events
-    
-    def load_event_dialogs(self, filepath):
-        """
-        加载事件对话配置
-        返回: {dialog_id: [DialogLine, ...]}
-        """
-        from collections import defaultdict
-        dialogs = defaultdict(list)
-        
-        try:
-            path = resource_path(filepath)
-            with open(path, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                # 假设结构：Row 0=Keys, Row 1=Types, Row 2=CN Headers, Row 3+=Data
-                if len(rows) > 3:
-                    keys = rows[0]
-                    for row in rows[3:]:
-                        if not row or len(row) < 2: continue
-                        # 补全缺失列
-                        while len(row) < len(keys):
-                            row.append('')
-                        data = dict(zip(keys, row))
-                        
-                        # 创建对话行对象（类似quest_system中的DialogLine）
-                        dialog_line = DialogLine(
-                            dialog_id=data.get('dialog_id', ''),
-                            speaker=data.get('speaker', 'NARRATOR'),
-                            text=data.get('text', ''),
-                            action=data.get('action', '')
-                        )
-                        dialogs[dialog_line.dialog_id].append(dialog_line)
-            
-            print(f"[EventSys] 已加载 {len(dialogs)} 组事件对话")
-        except FileNotFoundError:
-            print(f"[EventSys] 事件对话文件不存在: {filepath}，事件将使用传统模式")
-        except Exception as e:
-            print(f"[EventSys] 加载事件对话失败: {e}")
-        
-        return dialogs
 
     def set_speed(self, speed):
         self.time_speed = speed
