@@ -185,23 +185,37 @@ def bad_function(ui_manager, ft_manager, quest_manager, player, all_cards, ...):
 
 ### 2.2 实体集合
 
-所有活动实体存储在 `ctx.all_cards` 列表中：
+所有活动实体存储在 `ctx.all_cards` 列表中（运行时约 100~200 个元素，线性遍历代价极低）：
 
 ```python
 # 遍历 NPC
 for card in ctx.all_cards:
     if card.card_type == TYPE_NPC and hasattr(card, 'npc_data'):
         # 处理 NPC
+```
 
-# 查找特定 NPC (通过 ID)
-def find_npc_by_id(all_cards, npc_id):
-    for card in all_cards:
-        if card.card_type == TYPE_NPC:
-            if card.id == npc_id:
-                return card
-            if hasattr(card, 'npc_data') and card.npc_data.id == npc_id:
-                return card
-    return None
+**通用 NPC 查找函数（统一放在 `src/task/actions/_helpers.py`，优先使用）**：
+
+```python
+from src.task.actions._helpers import find_npc_by_id, find_npc_by_name, find_npcs_by_names
+
+# 按 ID 查找，返回 card 对象或 None（O(n) 遍历 all_cards）
+npc = find_npc_by_id(all_cards, 8001)
+
+# 按名字查找，返回 card 对象或 None（O(n) 遍历 all_cards）
+npc = find_npc_by_name(all_cards, "张三")
+
+# 按名字批量查找，返回 {name: card} 字典（单次 O(n) 遍历，找齐即停）
+npc_dict = find_npcs_by_names(all_cards, ["张三", "李四"])
+```
+
+**仅需 ID↔名字 字符串互查时（不需要 card 对象），使用全局映射表（字典 O(1)）**：
+
+```python
+from src.data_loader import get_npc_name_by_id_global, get_npc_id_by_name_global
+
+name = get_npc_name_by_id_global(8001)      # ID -> 名字（O(1) 字典查询）
+npc_id = get_npc_id_by_name_global("张三")   # 名字 -> ID (int 或 None)
 ```
 
 ### 2.3 NPC ID 规则

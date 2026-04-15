@@ -203,14 +203,26 @@ def main():
             screen_w=SCREEN_W, screen_h=SCREEN_H,
             world_w=world_size[0], world_h=world_size[1]
         )
-        # 开局立刻将视口中心对准玩家，避免玩家出现在屏幕外
-        camera.snap_to(ctx.player.rect.centerx, ctx.player.rect.centery)
+        # 开局将视口中心对准东门，玩家出生在东门外远处（屏幕右侧），
+        # 这样 PLAYER_WALK_TO:EAST_GATE 时有从右向左走的表现空间。
+        east_gate = ctx.world_map.gates.get('EAST')
+        if east_gate and scenario_type == SCENARIO_SANDBOX:
+            camera.snap_to(east_gate.centerx, east_gate.centery)
+        else:
+            camera.snap_to(ctx.player.rect.centerx, ctx.player.rect.centery)
         renderer.camera = camera
     else:
         camera = None
 
     log_game_event(f"=== 游戏启动 === 初始人口: {len(ctx.all_cards)}")
-    
+
+    # 6. 屏幕特效管理器（淡入淡出 + 昼夜遮罩）
+    from src.task.actions.cinematic import ScreenEffectsManager
+    ctx.screen_effects = ScreenEffectsManager(SCREEN_W, SCREEN_H)
+    # 沙盒模式开场全黑（等待 FADE_FROM_BLACK 渐亮）
+    if scenario_type == SCENARIO_SANDBOX:
+        ctx.screen_effects.set_full_black()
+
     # 【新增】用于追踪剧情状态变化，检测剧情结束时释放事件NPC
     _prev_story_blocking = False
     
@@ -1003,8 +1015,8 @@ def main():
                     # 非剧情期间：所有人正常更新
                     ticks = ctx.event_manager.time_speed 
                     for _ in range(ticks):
-                        # [已禁用] 事件系统暂时关闭，等待重构
-                        # ctx.event_manager.update(ctx.all_cards, ctx.player, ctx.world_map, ctx.tech_manager)
+                        # 时间系统驱动：推进游戏时间、流民生成、随机事件等
+                        ctx.event_manager.update(ctx.all_cards, ctx.player, ctx.world_map, ctx.tech_manager)
                         perf.begin('movement_system')  # 【性能监控】
                         ctx.movement_system.update(ctx.all_cards, ctx.world_map, dt_ms=dt)
                         perf.end('movement_system')
@@ -1196,6 +1208,12 @@ def main():
         # 【性能监控】绘制性能面板并记录帧结束
         perf.draw(screen)
         perf.frame_end(clock.get_fps())
+
+        # ══════════════════════════════════════════════════════════════════════
+        # 【屏幕特效】昼夜遮罩 + 淡入淡出（由 ScreenEffectsManager 统一管理）
+        # ══════════════════════════════════════════════════════════════════════
+        ctx.screen_effects.update_day_night(ctx.event_manager.get_day_progress())
+        ctx.screen_effects.draw(screen)
 
         pygame.display.flip()
         

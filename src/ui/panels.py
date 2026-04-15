@@ -54,9 +54,10 @@ class UIPanelsMixin:
         
         pygame.draw.rect(screen, col_bar, (bar_x, bar_y, fill_w, bar_h), border_radius=5)
         
-        # 3. 具体时刻文字
-        hour = int(progress * 24)
-        time_str = f"{hour:02d}:00"
+        # 3. 具体时刻文字（十二时辰显示）
+        SHICHEN_NAMES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
+        shichen_idx = min(int(progress * 12), 11)
+        time_str = f"{SHICHEN_NAMES[shichen_idx]}时"
         txt_time = self.font_ui.render(time_str, True, (200, 200, 200))
         screen.blit(txt_time, (bar_x + bar_w + 15, 20))
 

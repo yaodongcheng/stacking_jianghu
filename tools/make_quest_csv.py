@@ -53,80 +53,14 @@ os.makedirs('../data', exist_ok=True)
 
 quests = [
     # ═══════════════════════════════════════════════════════════════
-    # 【沙盒模式】鱼西施主线剧情
+    # 【沙盒模式】开局主线 —— 在城中站稳脚跟
     # ═══════════════════════════════════════════════════════════════
-    
-    # --- 序幕：街头事件（自动触发，无需NPC交付）---
-    ['Q_YUXISHI_TRIGGER', '街头风波', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_YUXISHI_CHOICE', '你在街边目睹了一场欺凌', '9999'],
-    ['Q_YUXISHI_CHOICE', '抉择时刻', 'SANDBOX', 'CHOICE', 'NONE', 0, 'GOOD:Q_YUXISHI_GOOD|EVIL:Q_YUXISHI_EVIL', '正义或邪恶？', '9999'],
-
-    # --- 正义路线：出手相救 ---
-    ['Q_YUXISHI_GOOD', '仗义出手', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_BULLY_INTRO', '你选择出手相救', '9999'],
-
-    # --- 邪恶路线：助纣为虐 ---
-    ['Q_YUXISHI_EVIL', '落井下石', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '你选择同流合污', '9999'],
-
-    # --- 第一幕：结下梁子 ---
-    ['Q_BULLY_INTRO', '结怨', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FAREWELL', '泼皮落败而逃', '9999'],
-
-    # --- 第二幕：落脚与帮忙（与鱼西施对话链）---
-    # Q_FAREWELL: 了解背景，接受暂住邀请
-    ['Q_FAREWELL', '落脚', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_CATCH_FISH', '与鱼西施交谈', '鱼西施'],
-
-    # Q_CATCH_FISH: 帮鱼西施捕鱼（采集任务）
-    ['Q_CATCH_FISH', '帮忙捕鱼', 'SANDBOX', 'GATHER', '生鱼', 3, 'Q_DELIVER_FISH', '去河滩捕3条鱼', '鱼西施'],
-
-    # Q_DELIVER_FISH: 交付鱼获得报酬（交付任务 - 需要将3条生鱼堆叠到鱼西施身上）
-    ['Q_DELIVER_FISH', '交付鱼', 'SANDBOX', 'DELIVER', '生鱼', 3, 'Q_WALK_BACK', '把3条生鱼交给鱼西施', '鱼西施'],
-
-    # --- 第三幕：遭遇报复 ---
-    # Q_WALK_BACK: 回城路上 - 玩家需要移动到城门附近（伏击点），到达后触发埋伏
-    # REACH类型：target是目标区域名/坐标，count是判定半径（像素）
-    ['Q_WALK_BACK', '回城休息', 'SANDBOX', 'REACH', 'AMBUSH_POINT', 200, 'Q_AMBUSH', '天色已晚，回城里休息吧', '9999'],
-
-    # Q_AMBUSH: 遭遇埋伏 - 玩家到达伏击点后自动触发
-    ['Q_AMBUSH', '遭遇埋伏', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_WAKE_UP', '泼皮的报复', '9999'],
-    ['Q_WAKE_UP', '苏醒', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_RECOVER', '在鱼西施家中醒来', '鱼西施'],
-
-    # --- 第四幕：恢复与准备 ---
-    # Q_RECOVER: 恢复体力 - EAT类型的count是饥饿阈值，饥饿值<50即完成
-    ['Q_RECOVER', '恢复体力', 'SANDBOX', 'EAT', '', 50, 'Q_SAVE_MONEY', '吃点东西恢复体力', '鱼西施'],
-
-    # Q_SAVE_MONEY: 积攒资金
-    ['Q_SAVE_MONEY', '积攒盘缠', 'SANDBOX', 'RESOURCE_TOTAL', 'MONEY', 50, 'Q_SEEK_HELP', '积攒50铜钱', '鱼西施'],
-
-    # --- 第五幕：寻找帮手 ---
-    # Q_SEEK_HELP: 鱼西施提供线索
-    ['Q_SEEK_HELP', '寻求帮助', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIND_HUNTER', '鱼西施告知有人可以帮忙', '鱼西施'],
-
-    # Q_FIND_HUNTER: 找到猎户张三
-    ['Q_FIND_HUNTER', '寻访猎户', 'SANDBOX', 'INTERACT', '猎户张三', 1, 'Q_BEFRIEND', '找到并与猎户张三交谈', '猎户张三'],
-
-    # Q_BEFRIEND: 结交张三（招募任务）
-    ['Q_BEFRIEND', '结交', 'SANDBOX', 'RECRUIT', '猎户张三', 1, 'Q_PLAN_REVENGE', '招募张三为同伴', '猎户张三'],
-
-    # --- 第六幕：复仇 ---
-    # Q_PLAN_REVENGE: 商议计划
-    ['Q_PLAN_REVENGE', '商议对策', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIGHT_BULLY', '与张三商议对策', '猎户张三'],
-
-    # Q_FIGHT_BULLY: 击败泼皮
-    ['Q_FIGHT_BULLY', '讨回公道', 'SANDBOX', 'COMBAT', '泼皮牛二', 1, 'Q_TRUTH', '击败泼皮牛二', '猎户张三'],
-
-    # --- 第七幕：真相大白 ---
-    # Q_TRUTH: 得知幕后黑手
-    ['Q_TRUTH', '真相', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '得知背后的势力', '鱼西施'],
-
-    # --- 自由探索 ---
-    ['Q_FREE_PLAY', '闯荡江湖', 'SANDBOX', 'FREE', 'NONE', 0, '', '自由探索汴京', '9999'],
-
-    # ═══════════════════════════════════════════════════════════════
-    # 【城镇模式】Day 1-7 开局主线 —— 在城中站稳脚跟
-    # ═══════════════════════════════════════════════════════════════
+    # 设计参考：designDoc 12.7 开局体验流（Day 1-7）
+    # Day 1 巳时抵达 → 生存压力驱动自由探索 → 亥时主线触发
     # 主线4阶段：活下来→有收入→有根基→有势力
-    # 通过 WAIT_TIME 在 Day 1 亥时触发，复用已有 quest type 驱动推进
 
-    # --- 主线触发：Day 1 亥时内心独白 ---
-    ['Q_SETTLE_WAIT', '等待夜幕', 'SANDBOX', 'WAIT_TIME', '1:亥', 0, 'Q_SETTLE_INTRO', '天色渐暗...', '9999'],
+    # --- Day 1 子时（深夜）：玩家抵达，主线立即触发 ---
+    ['Q_SETTLE_WAIT', '深夜抵达', 'SANDBOX', 'WAIT_TIME', '1:子', 0, 'Q_SETTLE_INTRO', '深夜，你来到了这座陌生的小镇...', '9999'],
     ['Q_SETTLE_INTRO', '内心独白', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_SETTLE_P1', '总算活过了今天...', '9999'],
 
     # --- 阶段1：活下来（吃饱+找到住处） ---
@@ -148,6 +82,58 @@ quests = [
     # 完成后：饥饿值降低+老板娘好感提升，引导玩家体会"帮人=资源"
     ['Q_TAVERN_HELP', '搬酒箱', 'SANDBOX', 'INTERACT', '酒馆老板娘', 1, 'Q_TAVERN_MEAL', '帮老板娘搬两箱酒', '酒馆老板娘'],
     ['Q_TAVERN_MEAL', '吃顿热饭', 'SANDBOX', 'DIALOG', 'NONE', 0, '', '管你一顿饭', '9999'],
+
+    # ═══════════════════════════════════════════════════════════════
+    # 【沙盒模式】Day 2 街头冲突事件 —— 鱼西施剧情
+    # ═══════════════════════════════════════════════════════════════
+    # 设计参考：designDoc 12.7 Day 2 申时小冲突
+    # Day 2 申时自动触发，玩家初期属性不足大概率只能旁观
+    # 后续可作为起幕事件的种子，连接更长的剧情链
+
+    # --- Day 2 申时：街头冲突（WAIT_TIME 触发，不再是开局第一幕）---
+    ['Q_YUXISHI_TRIGGER', '街头风波', 'SANDBOX', 'WAIT_TIME', '2:申', 0, 'Q_YUXISHI_CHOICE', '你在街边目睹了一场欺凌', '9999'],
+    ['Q_YUXISHI_CHOICE', '抉择时刻', 'SANDBOX', 'CHOICE', 'NONE', 0, 'GOOD:Q_YUXISHI_GOOD|EVIL:Q_YUXISHI_EVIL|WATCH:Q_YUXISHI_WATCH', '正义或邪恶？还是旁观？', '9999'],
+
+    # --- 旁观路线（Day 2 默认路线，属性不足时的选择）---
+    ['Q_YUXISHI_WATCH', '无能为力', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '你只能默默看着', '9999'],
+
+    # --- 正义路线：出手相救 ---
+    ['Q_YUXISHI_GOOD', '仗义出手', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_BULLY_INTRO', '你选择出手相救', '9999'],
+
+    # --- 邪恶路线：助纣为虐 ---
+    ['Q_YUXISHI_EVIL', '落井下石', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '你选择同流合污', '9999'],
+
+    # --- 第一幕：结下梁子 ---
+    ['Q_BULLY_INTRO', '结怨', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FAREWELL', '泼皮落败而逃', '9999'],
+
+    # --- 第二幕：落脚与帮忙（与鱼西施对话链）---
+    ['Q_FAREWELL', '落脚', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_CATCH_FISH', '与鱼西施交谈', '鱼西施'],
+    ['Q_CATCH_FISH', '帮忙捕鱼', 'SANDBOX', 'GATHER', '生鱼', 3, 'Q_DELIVER_FISH', '去河滩捕3条鱼', '鱼西施'],
+    ['Q_DELIVER_FISH', '交付鱼', 'SANDBOX', 'DELIVER', '生鱼', 3, 'Q_WALK_BACK', '把3条生鱼交给鱼西施', '鱼西施'],
+
+    # --- 第三幕：遭遇报复 ---
+    ['Q_WALK_BACK', '回城休息', 'SANDBOX', 'REACH', 'AMBUSH_POINT', 200, 'Q_AMBUSH', '天色已晚，回城里休息吧', '9999'],
+    ['Q_AMBUSH', '遭遇埋伏', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_WAKE_UP', '泼皮的报复', '9999'],
+    ['Q_WAKE_UP', '苏醒', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_RECOVER', '在鱼西施家中醒来', '鱼西施'],
+
+    # --- 第四幕：恢复与准备 ---
+    ['Q_RECOVER', '恢复体力', 'SANDBOX', 'EAT', '', 50, 'Q_SAVE_MONEY', '吃点东西恢复体力', '鱼西施'],
+    ['Q_SAVE_MONEY', '积攒盘缠', 'SANDBOX', 'RESOURCE_TOTAL', 'MONEY', 50, 'Q_SEEK_HELP', '积攒50铜钱', '鱼西施'],
+
+    # --- 第五幕：寻找帮手 ---
+    ['Q_SEEK_HELP', '寻求帮助', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIND_HUNTER', '鱼西施告知有人可以帮忙', '鱼西施'],
+    ['Q_FIND_HUNTER', '寻访猎户', 'SANDBOX', 'INTERACT', '猎户张三', 1, 'Q_BEFRIEND', '找到并与猎户张三交谈', '猎户张三'],
+    ['Q_BEFRIEND', '结交', 'SANDBOX', 'RECRUIT', '猎户张三', 1, 'Q_PLAN_REVENGE', '招募张三为同伴', '猎户张三'],
+
+    # --- 第六幕：复仇 ---
+    ['Q_PLAN_REVENGE', '商议对策', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FIGHT_BULLY', '与张三商议对策', '猎户张三'],
+    ['Q_FIGHT_BULLY', '讨回公道', 'SANDBOX', 'COMBAT', '泼皮牛二', 1, 'Q_TRUTH', '击败泼皮牛二', '猎户张三'],
+
+    # --- 第七幕：真相大白 ---
+    ['Q_TRUTH', '真相', 'SANDBOX', 'DIALOG', 'NONE', 0, 'Q_FREE_PLAY', '得知背后的势力', '鱼西施'],
+
+    # --- 自由探索 ---
+    ['Q_FREE_PLAY', '闯荡江湖', 'SANDBOX', 'FREE', 'NONE', 0, '', '自由探索汴京', '9999'],
 
     # ═══════════════════════════════════════════════════════════════
     # 【生存模式】村庄重建主线（保留原有）
@@ -190,12 +176,12 @@ quest_headers = ['id', 'title', 'scenario', 'type', 'target', 'count', 'next', '
 
 dialogs = [
     # ═══════════════════════════════════════════════════════════════
-    # 【沙盒模式】鱼西施主线剧情对话
+    # 【沙盒模式】Day 2 街头冲突对话（鱼西施事件，不再是开局）
     # ═══════════════════════════════════════════════════════════════
-    
-    # --- Q_YUXISHI_TRIGGER: 街头风波（自动触发的开场剧情）---
-    ['Q_YUXISHI_TRIGGER', 'NARRATOR', '汴京城，繁华的街道上人来人往。', '', ''],
-    ['Q_YUXISHI_TRIGGER', 'NARRATOR', '你正漫无目的地闲逛，突然听到前方传来一阵骚动。', '', ''],
+
+    # --- Q_YUXISHI_TRIGGER: Day 2 申时街头冲突（WAIT_TIME 自动触发）---
+    ['Q_YUXISHI_TRIGGER', 'NARRATOR', '午后的街道上，人流渐渐稀疏。', '', ''],
+    ['Q_YUXISHI_TRIGGER', 'NARRATOR', '你正走在路上，突然听到前方传来一阵骚动。', '', ''],
     ['Q_YUXISHI_TRIGGER', 'NARRATOR', '一个泼皮正在欺负一个卖鱼的女子，周围的人纷纷避让。', '', ''],
     ['Q_YUXISHI_TRIGGER', '泼皮牛二', '臭娘们，你这鱼明明是死的，还敢卖高价？', '', ''],
     ['Q_YUXISHI_TRIGGER', '泼皮牛二', '信不信爷砸了你的摊子！', '', ''],
@@ -224,6 +210,14 @@ dialogs = [
     ['Q_YUXISHI_EVIL', '鱼西施', '你...你们这群畜生！老天有眼...', '', ''],
     ['Q_YUXISHI_EVIL', 'NARRATOR', '你和泼皮一起瓜分了鱼西施的货物和钱财。', '', ''],
     ['Q_YUXISHI_EVIL', 'NARRATOR', '远处有人在指指点点，似乎认出了你的脸...', '', 'TRIGGER_BOUNTY'],
+
+    # --- Q_YUXISHI_WATCH: 旁观路线（Day 2 默认路线，初期属性不足）---
+    ['Q_YUXISHI_WATCH', 'NARRATOR', '你攥紧了拳头，但理智告诉你，现在的你不是他们的对手。', '', ''],
+    ['Q_YUXISHI_WATCH', 'NARRATOR', '泼皮们嚣张地抢走了鱼，扬长而去。', '', ''],
+    ['Q_YUXISHI_WATCH', 'NARRATOR', '卖鱼的女子蹲在地上，默默收拾着被打翻的摊子。', '', ''],
+    ['Q_YUXISHI_WATCH', '我', '......', '', ''],
+    ['Q_YUXISHI_WATCH', 'NARRATOR', '你低头走过，心里五味杂陈。', '', ''],
+    ['Q_YUXISHI_WATCH', '我', '（下次遇到这种事，我不想只能站着看。）', '', ''],
     
     # --- Q_BULLY_INTRO: 泼皮放狠话（紧接正义路线）---
     ['Q_BULLY_INTRO', '泼皮牛二', '小子，你知道爷是谁吗？！', '', ''],
@@ -412,19 +406,20 @@ dialogs = [
     # 【城镇模式】Day 1-7 开局主线对话
     # ═══════════════════════════════════════════════════════════════
 
-    # --- Q_SETTLE_INTRO: 内心独白（Day 1 亥时，主线开启的核心情感节拍）---
-    ['Q_SETTLE_INTRO', 'NARRATOR', '夜幕笼罩了汴京城。街上的喧嚣渐渐退去，只剩几盏昏黄的灯笼在风中摇晃。', '', 'FADE_TO_BLACK:0.3'],
-    ['Q_SETTLE_INTRO', 'NARRATOR', '你靠在墙角，浑身酸痛，望着头顶陌生的星空。', '', 'FADE_FROM_BLACK:0.5'],
-    ['Q_SETTLE_INTRO', '我', '......总算活过了今天。', '', ''],
-    ['Q_SETTLE_INTRO', 'NARRATOR', '肚子还在隐隐作痛。白天在街上转了整整一天，这座城的每条巷子都透着拒人千里的冷漠。', '', ''],
-    ['Q_SETTLE_INTRO', '我', '不认识任何人...身上也没几个钱...', '', ''],
-    ['Q_SETTLE_INTRO', 'NARRATOR', '远处传来更夫的梆子声，一下一下，敲在寂静的夜里。', '', ''],
-    ['Q_SETTLE_INTRO', '我', '可我不能一直这样。', '', ''],
-    ['Q_SETTLE_INTRO', '我', '那些人...迟早会找到这里。', '', ''],
+    # --- Q_SETTLE_INTRO: 穷小子进城（武林群侠传风格开场演出）---
+    ['Q_SETTLE_INTRO', 'NARRATOR', '深夜，子时。万籁俱寂。', '', 'FADE_FROM_BLACK:1'],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '一个衣衫褴褛的身影出现在汴京城外的官道上。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '（那些人应该没追上来...先找个落脚的地方。）', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '远处，城墙的轮廓在月色下若隐若现。你拖着疲惫的身躯，朝那座城走去。', '', 'PLAYER_WALK_TO:EAST_GATE'],
+    ['Q_SETTLE_INTRO', '我', '（汴京...如果能在这里落脚就好了。）', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '穿过城门，街道空无一人。只有几盏残灯在风中摇曳。', '', 'PLAYER_WALK_TO:CITY_CENTER'],
+    ['Q_SETTLE_INTRO', '我', '......总算进来了。', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '肚子在叫，浑身酸痛。身上只剩几文铜钱。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '不认识任何人...这座城的每条巷子都透着拒人千里的冷漠。', '', ''],
+    ['Q_SETTLE_INTRO', '我', '可我不能一直这样。那些人迟早会找到这里。', '', ''],
     ['Q_SETTLE_INTRO', '我', '我必须在这座城站稳脚跟。找到住处，找到活路，找到靠得住的人。', '', ''],
-    ['Q_SETTLE_INTRO', '我', '否则等他们追上来的时候，我连跑都没地方跑。', '', ''],
     ['Q_SETTLE_INTRO', 'NARRATOR', '你攥紧了拳头。夜风灌进单薄的衣衫，但心里燃起了一团火。', '', ''],
-    ['Q_SETTLE_INTRO', 'NARRATOR', '【主线任务开启】在城中站稳脚跟', '', ''],
+    ['Q_SETTLE_INTRO', 'NARRATOR', '【主线任务开启】在城中站稳脚跟', '', 'ADVANCE_TIME:10'],
 
     # --- Q_SETTLE_P1: 填饱肚子（EAT任务，submit_npc=9999自动完成）---
     ['Q_SETTLE_P1', 'NARRATOR', '天刚蒙蒙亮，你的肚子就开始抗议了。', '', ''],

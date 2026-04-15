@@ -440,6 +440,12 @@ class QuestManager:
             # target 格式: "x,y,radius" 如 "2800,2000,150" 或区域名 "AMBUSH_POINT"
             if self._check_player_reach_target(player, q.target, q.count):
                 completed = True
+
+        # 9. 【新增】等待时间类任务 (WAIT_TIME) - 到达指定天数+时辰自动完成
+        elif q.type == 'WAIT_TIME':
+            # target 格式: "day:时辰" 如 "1:亥", "2:申"
+            if ctx and self._check_wait_time(player, q.target, ctx):
+                completed = True
     
         if completed:
             if q.type == 'GATHER':
@@ -460,13 +466,13 @@ class QuestManager:
                             # 3. 如果需要，可以重置计时器防止瞬间再次吸附
                             card.state = "IDLE" 
             
-            # 【特殊处理】REACH类型任务且submit_npc='9999'时，自动推进并触发下个任务对话
-            if q.type == 'REACH' and q.submit_npc == '9999':
+            # 【通用】submit_npc='9999' 的任务自动推进（WAIT_TIME/EAT/REACH等）
+            if q.submit_npc == '9999':
                 self.quest_status = QS_READY
-                print(f"[Quest] REACH任务 '{q.title}' 完成，自动推进...")
+                print(f"[Quest] '{q.title}' 完成，自动推进...")
                 self.advance_quest()
-                
-                # 获取下一个任务，如果是DIALOG类型则立即触发对话
+
+                # 如果下一个是DIALOG任务，立即触发对话
                 next_q = self.get_current_quest()
                 if next_q and next_q.type == 'DIALOG':
                     self.quest_status = QS_ACTIVE
@@ -1240,26 +1246,39 @@ class QuestManager:
             return True
         return False
 
-    def trigger_yuxishi_event(self, story_ui, ctx=None):
+    # 12时辰映射到一天中的序号（0~11）
+    SHICHEN_MAP = {
+        '子': 0, '丑': 1, '寅': 2, '卯': 3, '辰': 4, '巳': 5,
+        '午': 6, '未': 7, '申': 8, '酉': 9, '戌': 10, '亥': 11,
+    }
+
+    def _check_wait_time(self, player, target, ctx):
         """
-        手动触发鱼西施事件
-        可以由 EventManager 或其他系统调用
+        检查是否到达指定的天数+时辰
+        target 格式: "day:时辰" 如 "1:亥", "2:申"
         """
-        # 检查是否已经触发过
-        if self.is_quest_finished('Q_YUXISHI_TRIGGER'):
+        parts = target.split(':')
+        if len(parts) != 2:
             return False
-        
-        # 设置当前任务为鱼西施触发事件
-        self.active_quest_id = 'Q_YUXISHI_TRIGGER'
-        self.quest_status = QS_ACTIVE
-        
-        # 播放对话
-        dialogs = self.get_dialog('Q_YUXISHI_TRIGGER')
-        if dialogs:
-            story_ui.start_dialog(dialogs)
+        try:
+            target_day = int(parts[0])
+        except ValueError:
+            return False
+        target_shichen = self.SHICHEN_MAP.get(parts[1], -1)
+        if target_shichen < 0:
+            return False
+
+        em = ctx.event_manager
+        current_shichen = int(em.current_day_ticks / em.ticks_per_day * 12)
+        current_day = player.day
+
+        if current_day > target_day:
             return True
-        
+        if current_day == target_day and current_shichen >= target_shichen:
+            print(f"[Quest] WAIT_TIME 条件满足: Day {current_day} {parts[1]}时 (shichen={current_shichen})")
+            return True
         return False
+
     def get_quest_log_data(self):
         """返回 (active_list, finished_list) 供 UI 显示"""
         active_list = []
@@ -1506,22 +1525,7 @@ class QuestManager:
                 story_ui.start_dialog(intro_dialogs)
                 print(f"[Quest] 自动激活了第二段开场剧情 (教程模式)")
                 return True
-        
-        # ═══════════════════════════════════════════════════════════════
-        # 【新增】沙盒模式：鱼西施事件作为开场
-        # ═══════════════════════════════════════════════════════════════
-        if self.active_quest_id == 'Q_YUXISHI_TRIGGER' and self.flags.get('sandbox_intro_ready'):
-            self.flags['sandbox_intro_ready'] = False  # 防止重复
-            self.flags['intro_played'] = True
-            self.flags['intro_played_dialog'] = True
-            
-            dialogs = self.get_dialog('Q_YUXISHI_TRIGGER')
-            if dialogs:
-                story_ui.start_dialog(dialogs)
-                self.quest_status = QS_ACTIVE
-                print(f"[Quest] 自动激活沙盒开场剧情：鱼西施事件")
-                return True
-        
+
         return False
 
     # ==================== 调试功能：快速完成任务 ====================

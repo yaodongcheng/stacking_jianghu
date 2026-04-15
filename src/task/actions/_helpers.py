@@ -8,6 +8,15 @@ Action handler 通用工具函数
 import math
 
 
+def find_npc_by_id(all_cards, npc_id):
+    """根据 ID 在 all_cards 中查找 NPC，返回 card 或 None"""
+    npc_id = int(npc_id)
+    for card in all_cards:
+        if getattr(card, 'id', None) == npc_id:
+            return card
+    return None
+
+
 def find_npc_by_name(all_cards, name):
     """根据名字在 all_cards 中查找 NPC，返回第一个匹配项或 None"""
     for card in all_cards:
