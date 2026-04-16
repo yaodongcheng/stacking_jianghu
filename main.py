@@ -46,7 +46,7 @@ from src.director_system import get_director
 # 值为 None 表示退化为单屏模式，不启用摄像机
 SCENARIO_WORLD_SIZES = {
     SCENARIO_TUTORIAL: None,            # 小村教程：全屏单屏，不需要摄像机
-    SCENARIO_SANDBOX:  (4800, 3600),    # 闯荡汴京：城内不变，上下野外扩大（从2700→3600）
+    SCENARIO_SANDBOX:  (5600, 4200),    # 闯荡汴京：扩大地图（从4800x3600→5600x4200）
     # 未来剧本在此扩展 ...
 }
 
@@ -887,7 +887,8 @@ def main():
             
             if ctx.event_manager.time_speed > 0 and not is_story_blocking:
                 perf.begin('ai_system')  # 【性能监控】
-                ctx.ai_system.update(ctx.all_cards, ctx.world_map, dt_ms=dt)
+                ctx.ai_system.update(ctx.all_cards, ctx.world_map, dt_ms=dt,
+                                     day_progress=ctx.event_manager.get_day_progress())
                 perf.end('ai_system')
                 
                 perf.begin('combat_system')  # 【性能监控】
@@ -1214,6 +1215,9 @@ def main():
         # ══════════════════════════════════════════════════════════════════════
         ctx.screen_effects.update_day_night(ctx.event_manager.get_day_progress())
         ctx.screen_effects.draw(screen)
+
+        # 【修复】剧情对话框在屏幕特效之上绘制，确保黑屏渐出时对话正常显示
+        ctx.story_ui.draw(screen)
 
         pygame.display.flip()
         

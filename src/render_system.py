@@ -172,7 +172,8 @@ class RenderSystem:
                              font=self.ui_manager.font_small)
 
         # ── 7. 剧情与调试层 ──────────────────────────────────────
-        story_ui.draw(screen)
+        # 注意：story_ui.draw() 已移至 main.py 中 screen_effects.draw() 之后，
+        # 确保对话框不被淡入淡出遮罩覆盖
         self._draw_modals(context, mx, my, click_event, event)
 
         if DEBUG_NPCPATHFINDING and hasattr(self.world_map, 'pathfinder'):

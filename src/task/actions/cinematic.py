@@ -395,6 +395,9 @@ def _resolve_location(wm, location, player=None):
     if loc_upper == 'EAST_GATE':
         g = wm.gates.get('EAST')
         return (g.centerx, g.centery) if g else None
+    elif loc_upper == 'EAST_GATE_INNER':
+        g = wm.gates.get('EAST')
+        return (g.centerx - 150, g.centery) if g else None
     elif loc_upper == 'WEST_GATE':
         g = wm.gates.get('WEST')
         return (g.centerx, g.centery) if g else None

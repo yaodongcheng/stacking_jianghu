@@ -170,6 +170,8 @@ class NPC(CardBase):
         self.recruit_fame_req = 100         
         # 流民标记
         self.is_refugee = False
+        # 住所引用（世界加载时分配，夜间回家用）
+        self.home_building = None
         # 初始装备和资源        
         self._update_recruit_cost()
         self._give_starter_kit()

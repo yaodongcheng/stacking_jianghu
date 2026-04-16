@@ -161,14 +161,14 @@ Q_SETTLE_INTRO,NARRATOR,一个衣衫褴褛的身影出现在汴京城外的官�
 Q_SETTLE_INTRO,我,（那些人应该没追上来...先找个落脚的地方。）,,
 Q_SETTLE_INTRO,NARRATOR,远处，城墙的轮廓在月色下若隐若现。你拖着疲惫的身躯，朝那座城走去。,,PLAYER_WALK_TO:EAST_GATE
 Q_SETTLE_INTRO,我,（汴京...如果能在这里落脚就好了。）,,
-Q_SETTLE_INTRO,NARRATOR,穿过城门，街道空无一人。只有几盏残灯在风中摇曳。,,PLAYER_WALK_TO:CITY_CENTER
+Q_SETTLE_INTRO,NARRATOR,穿过城门，街道空无一人。只有几盏残灯在风中摇曳。,,PLAYER_WALK_TO:EAST_GATE_INNER
 Q_SETTLE_INTRO,我,......总算进来了。,,
 Q_SETTLE_INTRO,NARRATOR,肚子在叫，浑身酸痛。身上只剩几文铜钱。,,
 Q_SETTLE_INTRO,我,不认识任何人...这座城的每条巷子都透着拒人千里的冷漠。,,
 Q_SETTLE_INTRO,我,可我不能一直这样。那些人迟早会找到这里。,,
 Q_SETTLE_INTRO,我,我必须在这座城站稳脚跟。找到住处，找到活路，找到靠得住的人。,,
 Q_SETTLE_INTRO,NARRATOR,你攥紧了拳头。夜风灌进单薄的衣衫，但心里燃起了一团火。,,
-Q_SETTLE_INTRO,NARRATOR,【主线任务开启】在城中站稳脚跟,,ADVANCE_TIME:10
+Q_SETTLE_INTRO,NARRATOR,【主线任务开启】在城中站稳脚跟,,
 Q_SETTLE_P1,NARRATOR,天刚蒙蒙亮，你的肚子就开始抗议了。,,
 Q_SETTLE_P1,我,再不吃点东西，怕是连路都走不动了。,,
 Q_SETTLE_P1,NARRATOR,城里到处飘着早点的香气，可口袋里的几个铜板让你不敢乱花。,,

@@ -393,9 +393,10 @@ class AISystem:
         
         return False
 
-    def update(self, all_cards, world_map, dt_ms=16):
+    def update(self, all_cards, world_map, dt_ms=16, day_progress=0.0):
         """每帧更新所有NPC的决策"""
         self._dt_ms = dt_ms  # 存储供 _execute_combat 使用
+        self._day_progress = day_progress  # 【住所系统】存储日进度供夜间休息判断
         npcs = [c for c in all_cards if isinstance(c, NPC)]
         buildings = [c for c in all_cards if isinstance(c, Building)]
         
@@ -478,7 +479,15 @@ class AISystem:
 
             # ── 堆叠工作中：只有在突发事件需要响应时才进入决策树 ──────
             if npc.stack_parent and npc.state != STATE_CARRYING:
-                if npc.aggro_target is None and not event_interrupted:
+                # 白天 + 堆叠在自己的家上 → 起床，不跳过决策
+                home = getattr(npc, 'home_building', None)
+                if home is not None and npc.stack_parent == home and not self._is_nighttime():
+                    npc.bounce_off(home, distance=50)
+                    npc.state = STATE_IDLE
+                    npc.ai_reason = "起床了"
+                    npc.action_queue.clear()
+                    # 不 continue —— 让决策树分配新工作
+                elif npc.aggro_target is None and not event_interrupted:
                     if getattr(npc, 'spectate_src_x', None) is None:
                         continue   # 安静在建筑里干活，不需要决策
 
@@ -538,10 +547,19 @@ class AISystem:
                 return
         
         # ══════════════════════════════════════════════════════════════
-        # 被堆叠的 NPC 不做移动决策
+        # 被堆叠的 NPC 不做移动决策（白天起床例外）
         # ══════════════════════════════════════════════════════════════
         if npc.stack_parent is not None:
-            return
+            # 白天 + 堆叠在自己的家上 → 起床
+            home = getattr(npc, 'home_building', None)
+            if home is not None and npc.stack_parent == home and not self._is_nighttime():
+                npc.bounce_off(home, distance=50)
+                npc.state = STATE_IDLE
+                npc.ai_reason = "起床了"
+                npc.action_queue.clear()
+                # 继续往下走，让后续优先级分配工作
+            else:
+                return
         
         # ══════════════════════════════════════════════════════════════
         # 状态清理：STATE_CARRYING 但没在背人
@@ -626,7 +644,14 @@ class AISystem:
         # ══════════════════════════════════════════════════════════════
         if self._enqueue_survival(npc, all_buildings, world_map):
             return
-        
+
+        # ══════════════════════════════════════════════════════════════
+        # 优先级 5.3: 夜间休息（戌~寅时回家睡觉）
+        # ══════════════════════════════════════════════════════════════
+        if self._should_sleep(npc):
+            if self._enqueue_sleep(npc):
+                return
+
         # ══════════════════════════════════════════════════════════════
         # 优先级 5.5: 贴身护卫（只有BODYGUARD才在这里跟随）
         # ══════════════════════════════════════════════════════════════
@@ -662,6 +687,7 @@ class AISystem:
                 'world_map': world_map,
                 'dt_ms': getattr(self, '_dt_ms', 16),
                 'combat_manager': self.combat_manager,
+                'day_progress': getattr(self, '_day_progress', 0.0),
             }
             if job_behavior.execute(npc, context):
                 return
@@ -688,6 +714,73 @@ class AISystem:
             npc.action_queue.enqueue(Roam(roam_rect, duration_ms=5000, reason=roam_reason))
         else:
             npc.action_queue.enqueue(Roam(world_map.city_rect, duration_ms=5000, reason=roam_reason))
+
+
+    # ---- 夜间休息系统 ----
+    # 夜间时段：戌时(10/12)到寅末(3/12)，即约19:00~05:00
+    # 豁免职业：匪盗夜间活动（GUARD不再整体豁免，护卫型GUARD也要睡觉）
+    NIGHT_JOBS_EXEMPT = set()  # 所有NPC夜间都要休息
+
+    def _is_nighttime(self):
+        """检查当前是否是夜间（戌~寅时）"""
+        p = getattr(self, '_day_progress', 0.0)
+        return p >= 10 / 12 or p < 3 / 12  # 戌时(19:00)到寅末(05:00)
+
+    def _should_sleep(self, npc):
+        """判断NPC是否应该去睡觉"""
+        if not self._is_nighttime():
+            return False
+        if npc.job in self.NIGHT_JOBS_EXEMPT:
+            return False
+        if getattr(npc, 'home_building', None) is None:
+            return False
+        if getattr(npc, 'is_follower', False):
+            return False
+        return True
+
+    def _enqueue_sleep(self, npc):
+        """让NPC回家睡觉"""
+        from src.atomic_actions import MoveToPosition, Stay, MoveToBuilding
+
+        home = getattr(npc, 'home_building', None)
+        if home is None:
+            return False
+
+        # 已经堆叠在家上 → 保持不动
+        if npc.stack_parent == home:
+            npc.action_queue.clear()
+            npc.ai_reason = "睡觉中"
+            npc.action_queue.enqueue(Stay(reason="睡觉中"))
+            return True
+
+        hx, hy = home.rect.centerx, home.rect.centery
+        dist = math.hypot(npc.rect.centerx - hx, npc.rect.centery - hy)
+
+        if dist > 50:
+            # 还没到家，走回去（用MoveToPosition避免MoveToBuilding的抢占弹开循环）
+            npc.action_queue.clear()
+            npc.action_queue.enqueue(MoveToPosition(hx, hy, reason="回家休息"))
+            npc.ai_reason = "回家中"
+            return True
+        else:
+            # 到家附近了
+            # 如果建筑已被其他人占据，就在附近待着（共享建筑场景）
+            if home.stack_child is not None and home.stack_child != npc:
+                npc.action_queue.clear()
+                npc.ai_reason = "睡觉中"
+                npc.action_queue.enqueue(Stay(reason="睡觉中"))
+                return True
+            # 堆叠上去
+            from src.definitions import STACK_OFFSET_Y
+            if npc.stack_parent:
+                npc.stack_parent.stack_child = None
+            npc.stack_parent = home
+            home.stack_child = npc
+            npc.set_pos(home.rect.centerx, home.rect.centery + STACK_OFFSET_Y)
+            npc.action_queue.clear()
+            npc.ai_reason = "睡觉中"
+            npc.action_queue.enqueue(Stay(reason="睡觉中"))
+            return True
 
 
     # ---- 阵营判断（job 优先，tag 仅辅助） ----
