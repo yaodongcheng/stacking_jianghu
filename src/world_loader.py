@@ -3,7 +3,7 @@ import math
 import pygame
 from src.definitions import *
 from src.entities import Player, NPC, Building,Resource
-from src.data_loader import load_npcs_from_csv, register_npc_id_name
+from src.data_loader import load_npcs_from_csv, register_npc_id_name, load_buildings_from_csv
 from src.social_system import social_manager
 from src.data.character_seeds import SEEDS
 
@@ -289,449 +289,59 @@ class WorldLoader:
 
             # 加载所有预定义NPC（从CSV），鱼西施/泼皮作为普通NPC生成
             predefined_npcs = load_npcs_from_csv("data/npc_data.csv")
-            org_building_map = {
-                'SCHOOL': 'SCHOOL',
-                'INN': 'INN',
-                'GOV': 'GOV_OFFICE',
-                'TEMPLE': 'TEMPLE',
-                'SWEET': 'THEATER',
-                'GOD_FORT': 'GOV_OFFICE',
-                'NONE': 'HOUSE'
-            }
-            spawned_orgs = {}
+            # ===============================================================
+            # 从 CSV 加载所有建筑（基础设施、住房、农田、资源点）
+            # ===============================================================
+            building_cards, org_workplace_refs, npc_home_map, market_pos = \
+                load_buildings_from_csv("data/building_config.csv", ctx.world_map, scenario_type)
+            all_cards.extend(building_cards)
 
-            # ---- 安全建筑区域：城内中央区，留足边距避免贴墙 ----
+            # ── 组织区域配置表（用于NPC初始位置分散）─────────────────
+            ORG_ZONE = {
+                'heifeng_zhai':   'WILD',
+                'qinglang_bang':  'WILD',
+                'luopo_gang':     'WILD',
+                'beggar_gang':    'SLUM',
+            }
+
             cr = ctx.world_map.city_rect
-            safe_margin = 120  # 距城墙至少120像素
+            safe_margin = 120
             safe_left  = cr.left  + safe_margin
             safe_top   = cr.top   + safe_margin
             safe_right = cr.right - safe_margin
             safe_bot   = cr.bottom - safe_margin
-            # 城内建筑网格（3列×3行 = 9格）
-            # 格子编号示意（r=行, c=列，从左到右、从上到下）：
-            #   [0][1][2]
-            #   [3][4][5]
-            #   [6][7][8]
-            col_step = (safe_right - safe_left) // 3
-            row_step = (safe_bot - safe_top) // 3
-            city_grid = [
-                (safe_left + col_step * c + col_step // 2,
-                 safe_top  + row_step * r + row_step // 2)
-                for r in range(3) for c in range(3)
-            ]
-            # ── 固定公共/核心建筑位置 ──────────────────────────────
-            # 索引0 = 左上    → 学堂（文人聚集）
-            # 索引2 = 右上    → 寺庙（僧侣诵经）
-            # 索引3 = 左中    → 市场（贸易区，靠近城门方向）
-            # 索引4 = 正中心  → 府衙（城市权力中心）
-            # 索引5 = 右中    → 医馆（城东救治）
-            # 索引8 = 右下    → 工坊（城东南生产）
-            RESERVED_SLOTS = {0, 2, 3, 4, 5, 8}  # 学堂、寺庙、市场、府衙、医馆、工坊
-            school_pos   = city_grid[0]   # 左上：学堂
-            temple_pos   = city_grid[2]   # 右上：寺庙
-            market_pos   = city_grid[3]   # 左中：市场
-            gov_pos      = city_grid[4]   # 正中心：府衙
-            clinic_pos   = city_grid[5]   # 右中：医馆
-            workshop_pos = city_grid[8]   # 右下：工坊
-            # 组织建筑只能使用未被保留的格子
-            org_slots = [p for i, p in enumerate(city_grid) if i not in RESERVED_SLOTS]
 
-            # ---- 核心公共建筑 ----
-            # 【住所系统】维护 org_id → Building 的映射，用于分配NPC住所
-            org_home_refs = {}  # org_id → Building 对象
-
-            gov_bld = Building(gov_pos[0], gov_pos[1], 'GOV_OFFICE')
-            all_cards.append(gov_bld)
-            org_home_refs['kaifeng_fu'] = gov_bld
-            org_home_refs['shenhou_fu'] = gov_bld
-            org_home_refs['gao_manor'] = gov_bld
-            
-            # ════════════════════════════════════════════════════════════════
-            # 【新增】城内多个同类建筑，避免NPC都挤在一处
-            # ════════════════════════════════════════════════════════════════
-            
-            # 主市场（城西）：初始有基础库存
-            market_bld = Building(market_pos[0],   market_pos[1],   'MARKET')
-            market_bld.inventory = {
-                ITEM_GRAIN: 10,  # 粮食（供 NPC 买来吃）
-                '棉袄':      5,   # 棉袄（供 NPC 买来抵寒）
-                ITEM_COIN:  100, # 初始铜钱（市场的营运资金）
-            }
-            all_cards.append(market_bld)
-            org_home_refs['tianshui_alley'] = market_bld  # 天水巷商人住在集市附近
-            
-            # 副市场（城东南）：第二个交易点
-            market2_x = safe_right - col_step // 3
-            market2_y = safe_bot - row_step // 3
-            market_bld2 = Building(market2_x, market2_y, 'MARKET')
-            market_bld2.inventory = {
-                ITEM_GRAIN: 5,
-                ITEM_COIN:  50,
-            }
-            all_cards.append(market_bld2)
-            
-            # 小摊（城北）：第三个小型交易点
-            market3_x = cr.centerx + 80
-            market3_y = safe_top + row_step // 4
-            market_bld3 = Building(market3_x, market3_y, 'MARKET')
-            market_bld3.inventory = {
-                ITEM_COIN:  30,
-            }
-            all_cards.append(market_bld3)
-            
-            print(f"[WorldLoader] 生成了 3 个市场/交易点")
-            
-            all_cards.append(Building(clinic_pos[0],   clinic_pos[1],   'CLINIC'))      # 医馆右中
-            all_cards.append(Building(workshop_pos[0], workshop_pos[1], 'WORKSHOP'))    # 工坊右下
-            
-            # ---- 阶段1新增：学堂和寺庙（为学者和僧侣提供工作场所）----
-            school_bld = Building(school_pos[0], school_pos[1], 'SCHOOL')
-            all_cards.append(school_bld)
-            org_home_refs['taixue'] = school_bld
-
-            temple_bld = Building(temple_pos[0], temple_pos[1], 'TEMPLE')
-            all_cards.append(temple_bld)
-            org_home_refs['daxiangguo'] = temple_bld
-
-            spawned_orgs['SCHOOL'] = school_pos  # 预注册，避免重复生成
-            spawned_orgs['TEMPLE'] = temple_pos  # 预注册，避免重复生成
-            
-            # ════════════════════════════════════════════════════════════════
-            # 【新增】城内休闲建筑：茶馆、酒楼（供高等级NPC享乐）
-            # ════════════════════════════════════════════════════════════════
-            # 茶馆（城中偏北）
-            teahouse_x = cr.centerx - 100
-            teahouse_y = safe_top + row_step // 2
-            all_cards.append(Building(teahouse_x, teahouse_y, 'TEAHOUSE'))
-            
-            # 酒楼（城中偏南）
-            tavern_x = cr.centerx + 100
-            tavern_y = safe_bot - row_step // 2
-            all_cards.append(Building(tavern_x, tavern_y, 'TAVERN'))
-            
-            print(f"[WorldLoader] 生成了茶馆和酒楼（供高等级NPC休闲）")
-
-            # ════════════════════════════════════════════════════════════════
-            # 城外农田：均匀分布在城池四周（北、南、西三个方向，东边留给开局事件）
-            # ════════════════════════════════════════════════════════════════
             wm = ctx.world_map
-            cr = ctx.world_map.city_rect
-            farm_margin = 100  # 距城墙的距离
-            
-            farm_positions = []
-            
-            # 西侧农田（城西门外，2块）
-            west_x = cr.left - farm_margin - 80
-            farm_positions.append((west_x, cr.centery - 150))
-            farm_positions.append((west_x, cr.centery + 150))
-            
-            # 北侧农田（城北门外，2块）
-            north_y = cr.top - farm_margin - 80
-            farm_positions.append((cr.centerx - 200, north_y))
-            farm_positions.append((cr.centerx + 200, north_y))
-            
-            # 南侧农田（城南门外，2块）
-            south_y = cr.bottom + farm_margin + 80
-            farm_positions.append((cr.centerx - 200, south_y))
-            farm_positions.append((cr.centerx + 200, south_y))
-            
-            # 西北角农田（1块）
-            farm_positions.append((cr.left - farm_margin - 150, cr.top - farm_margin - 50))
-            
-            # 西南角农田（1块）
-            farm_positions.append((cr.left - farm_margin - 150, cr.bottom + farm_margin + 50))
-            
-            # 确保农田在世界边界内
-            for fx, fy in farm_positions:
-                fx = max(60, min(fx, wm.w - 60))
-                fy = max(60, min(fy, wm.h - 60))
-                all_cards.append(Building(int(fx), int(fy), 'FARM'))
-            
-            print(f"[WorldLoader] 生成了 {len(farm_positions)} 块农田分布在城池周围")
+            _safe_dist = 600
+            _outer_zones = []
+            if cr.top > _safe_dist + 100:
+                _outer_zones.append((cr.left, wm.w - 50, 50, cr.top - _safe_dist))
+            if wm.h - cr.bottom > _safe_dist + 100:
+                _outer_zones.append((50, wm.w - 50, cr.bottom + _safe_dist, wm.h - 50))
+            if cr.left > _safe_dist + 100:
+                _outer_zones.append((50, cr.left - _safe_dist, 50, wm.h - 50))
+            if wm.w - cr.right > _safe_dist + 200:
+                _outer_zones.append((cr.right + _safe_dist + 100, wm.w - 50, 50, wm.h - 50))
+            _outer_zones = [(x0, x1, y0, y1) for x0, x1, y0, y1 in _outer_zones
+                            if x1 - x0 > 100 and y1 - y0 > 100]
 
-            # ════════════════════════════════════════════════════════════════
-            # 【重构】城外资源点：均匀分散分布，避开城墙
-            # 使用随机偏移确保资源不会太集中
-            # ════════════════════════════════════════════════════════════════
-            wm = ctx.world_map
-            wall_thick = wm.wall_thick
-            resource_count = 0
-            
-            # 辅助函数：在指定区域内生成随机位置，避开城墙，并检查建筑间距
-            def safe_pos(base_x, base_y, spread_x=80, spread_y=80):
-                """生成安全的随机位置，确保不与城墙重叠，且与其他建筑保持2格(80px)间距"""
-                for _ in range(20):  # 增加尝试次数确保能找到合适位置
-                    x = base_x + random.randint(-spread_x, spread_x)
-                    y = base_y + random.randint(-spread_y, spread_y)
-                    # 确保在世界边界内
-                    x = max(60, min(x, wm.w - 60))
-                    y = max(60, min(y, wm.h - 60))
-                    # 检查是否与城墙重叠
-                    test_rect = pygame.Rect(x - 20, y - 20, 40, 40)
-                    wall_collision = False
-                    for wall in wm.walls:
-                        if test_rect.colliderect(wall):
-                            wall_collision = True
-                            break
-                    if wall_collision:
-                        continue
-                    # 检查与其他建筑的间距（至少2格=80像素）
-                    if check_building_overlap(x, y, CARD_W, CARD_H, all_cards):
-                        return x, y
-                # 兜底：使用find_valid_building_position做最后挣扎
-                return find_valid_building_position(base_x, base_y, all_cards, wm, 
-                                                    spread=max(spread_x, spread_y) * 2)
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 【中立区】城东门外：玩家开局区域，资源大范围分散分布
-            # 【修复】资源点远离城门，沿城墙外侧均匀分布
-            # ═══════════════════════════════════════════════════════════════
-            east_gate = wm.gates['EAST']
-            gate_cx = east_gate.centerx
-            gate_cy = east_gate.centery
-            
-            # 城东河滩群（3个河滩，远离城门大范围分散）
-            fishpond_positions = [
-                (gate_cx + 350, gate_cy - 350),   # 东北远处
-                (gate_cx + 450, gate_cy + 200),   # 东南远处
-                (gate_cx + 500, gate_cy - 80),    # 正东远处
-            ]
-            for bx, by in fishpond_positions:
-                px, py = safe_pos(bx, by, 80, 80)
-                all_cards.append(Building(px, py, 'FISHPOND'))
-                resource_count += 1
-            
-            # 城东浆果丛（4个，大范围散布远离城门）
-            bush_positions_east = [
-                (gate_cx + 250, gate_cy - 400),   # 东北
-                (gate_cx + 550, gate_cy - 200),   # 远东偏北
-                (gate_cx + 500, gate_cy + 350),   # 远东南
-                (gate_cx + 300, gate_cy + 450),   # 东南角
-            ]
-            for bx, by in bush_positions_east:
-                px, py = safe_pos(bx, by, 100, 100)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            # 城东树林（3棵，分散在远处）
-            tree_positions_east = [
-                (gate_cx + 600, gate_cy - 100),   # 远东
-                (gate_cx + 550, gate_cy + 150),   # 远东南
-                (gate_cx + 400, gate_cy - 280),   # 东北
-            ]
-            for bx, by in tree_positions_east:
-                px, py = safe_pos(bx, by, 70, 70)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            print(f"[WorldLoader] 城东中立区: 3河滩 + 4浆果丛 + 3树林（分散远离城门）")
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 西侧区域：树林为主
-            # ═══════════════════════════════════════════════════════════════
-            west_gate = wm.gates['WEST']
-            west_cx = west_gate.centerx
-            west_cy = west_gate.centery
-            
-            # 西侧树林（6棵，沿城墙外侧分散）
-            tree_positions_west = [
-                (west_cx - 150, west_cy - 300),
-                (west_cx - 200, west_cy - 100),
-                (west_cx - 180, west_cy + 100),
-                (west_cx - 220, west_cy + 280),
-                (west_cx - 300, west_cy - 200),
-                (west_cx - 350, west_cy + 50),
-            ]
-            for bx, by in tree_positions_west:
-                px, py = safe_pos(bx, by, 80, 80)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            # 西侧浆果丛（3个）
-            bush_positions_west = [
-                (west_cx - 120, west_cy + 350),
-                (west_cx - 250, west_cy - 350),
-                (west_cx - 400, west_cy + 150),
-            ]
-            for bx, by in bush_positions_west:
-                px, py = safe_pos(bx, by, 60, 60)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 北侧区域：浆果丛为主 + 河滩
-            # ═══════════════════════════════════════════════════════════════
-            north_gate = wm.gates['NORTH']
-            north_cx = north_gate.centerx
-            north_cy = north_gate.centery
-            
-            # 北侧浆果丛（5个，横向分散）
-            bush_positions_north = [
-                (north_cx - 400, north_cy - 150),
-                (north_cx - 200, north_cy - 200),
-                (north_cx + 100, north_cy - 180),
-                (north_cx + 300, north_cy - 220),
-                (north_cx + 450, north_cy - 150),
-            ]
-            for bx, by in bush_positions_north:
-                px, py = safe_pos(bx, by, 70, 50)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            # 北侧树林（2棵）
-            tree_positions_north = [
-                (north_cx - 350, north_cy - 280),
-                (north_cx + 380, north_cy - 300),
-            ]
-            for bx, by in tree_positions_north:
-                px, py = safe_pos(bx, by, 60, 40)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            # 北侧河滩（2个）
-            fishpond_north = [
-                (north_cx - 100, north_cy - 350),
-                (north_cx + 200, north_cy - 380),
-            ]
-            for bx, by in fishpond_north:
-                px, py = safe_pos(bx, by, 50, 40)
-                all_cards.append(Building(px, py, 'FISHPOND'))
-                resource_count += 1
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 南侧区域：混合资源
-            # ═══════════════════════════════════════════════════════════════
-            south_gate = wm.gates['SOUTH']
-            south_cx = south_gate.centerx
-            south_cy = south_gate.centery
-            
-            # 南侧树林（4棵）
-            tree_positions_south = [
-                (south_cx - 350, south_cy + 150),
-                (south_cx - 150, south_cy + 220),
-                (south_cx + 200, south_cy + 180),
-                (south_cx + 400, south_cy + 200),
-            ]
-            for bx, by in tree_positions_south:
-                px, py = safe_pos(bx, by, 70, 60)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            # 南侧浆果丛（3个）
-            bush_positions_south = [
-                (south_cx - 250, south_cy + 300),
-                (south_cx + 50, south_cy + 350),
-                (south_cx + 350, south_cy + 320),
-            ]
-            for bx, by in bush_positions_south:
-                px, py = safe_pos(bx, by, 60, 50)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            # 南侧矿山（2个）
-            mine_south = [
-                (south_cx + 450, south_cy + 280),
-                (south_cx - 400, south_cy + 350),
-            ]
-            for bx, by in mine_south:
-                px, py = safe_pos(bx, by, 50, 40)
-                all_cards.append(Building(px, py, 'MINE'))
-                resource_count += 1
-            
-            # ═══════════════════════════════════════════════════════════════
-            # 四个角落区域：特色资源
-            # ═══════════════════════════════════════════════════════════════
-            
-            # 西北角：矿山区（4个矿山）
-            nw_base_x = cr.left - 400
-            nw_base_y = cr.top - 300
-            mine_nw = [
-                (nw_base_x, nw_base_y),
-                (nw_base_x - 150, nw_base_y + 100),
-                (nw_base_x + 100, nw_base_y + 150),
-                (nw_base_x - 100, nw_base_y + 250),
-            ]
-            for bx, by in mine_nw:
-                px, py = safe_pos(bx, by, 80, 80)
-                all_cards.append(Building(px, py, 'MINE'))
-                resource_count += 1
-            
-            # 西南角：树林带（5棵树）
-            sw_base_x = cr.left - 350
-            sw_base_y = cr.bottom + 250
-            tree_sw = [
-                (sw_base_x, sw_base_y),
-                (sw_base_x - 120, sw_base_y + 80),
-                (sw_base_x + 80, sw_base_y + 150),
-                (sw_base_x - 180, sw_base_y + 200),
-                (sw_base_x + 50, sw_base_y + 280),
-            ]
-            for bx, by in tree_sw:
-                px, py = safe_pos(bx, by, 70, 70)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            # 东北角：河滩 + 浆果（3河滩 + 3浆果）
-            ne_base_x = cr.right + 300
-            ne_base_y = cr.top - 250
-            fishpond_ne = [
-                (ne_base_x, ne_base_y),
-                (ne_base_x + 150, ne_base_y + 100),
-                (ne_base_x + 80, ne_base_y + 200),
-            ]
-            for bx, by in fishpond_ne:
-                px, py = safe_pos(bx, by, 60, 60)
-                all_cards.append(Building(px, py, 'FISHPOND'))
-                resource_count += 1
-            
-            bush_ne = [
-                (ne_base_x + 200, ne_base_y - 50),
-                (ne_base_x + 280, ne_base_y + 150),
-                (ne_base_x - 80, ne_base_y + 250),
-            ]
-            for bx, by in bush_ne:
-                px, py = safe_pos(bx, by, 50, 50)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            # 东南角：浆果 + 树（4浆果 + 3树）
-            se_base_x = cr.right + 350
-            se_base_y = cr.bottom + 200
-            bush_se = [
-                (se_base_x, se_base_y),
-                (se_base_x + 130, se_base_y + 80),
-                (se_base_x + 60, se_base_y + 180),
-                (se_base_x + 200, se_base_y + 150),
-            ]
-            for bx, by in bush_se:
-                px, py = safe_pos(bx, by, 60, 60)
-                all_cards.append(Building(px, py, 'BUSH'))
-                resource_count += 1
-            
-            tree_se = [
-                (se_base_x + 250, se_base_y + 50),
-                (se_base_x + 180, se_base_y + 250),
-                (se_base_x - 100, se_base_y + 280),
-            ]
-            for bx, by in tree_se:
-                px, py = safe_pos(bx, by, 50, 50)
-                all_cards.append(Building(px, py, 'TREE'))
-                resource_count += 1
-            
-            print(f"[WorldLoader] 生成了 {resource_count} 个城外资源点（分散分布）")
+            def _random_wild_pos():
+                if _outer_zones:
+                    z = random.choice(_outer_zones)
+                    return random.randint(z[0], z[1]), random.randint(z[2], z[3])
+                return random.randint(50, 200), random.randint(wm.h - 200, wm.h - 50)
 
-            # ---- 组织建筑，占城内剩余格 ----
-            slot_idx = 0
-            cx, cy = cr.center  # 仅用于散兵NPC的偏移参考
-            # 预注册已生成的固定建筑，让对应 org 的 NPC 直接归属，不重复生成建筑
-            spawned_orgs['GOV']     = gov_pos       # 府衙 org → 固定中心位置
-            spawned_orgs['GOD_FORT']= gov_pos       # 神侯府也归属府衙（同类型）
+            def _random_slum_pos():
+                rect = wm.slum_rect
+                return (random.randint(rect.left + 30, rect.right - 30),
+                        random.randint(rect.top + 30, rect.bottom - 30))
 
-            # ── 建筑位置索引（用于NPC开局分散就位）────────────────────────────────
-            # 结构: org_id → (建筑中心x, 建筑中心y)
-            # 已注册的固定建筑直接复用，避免重复生成
-            # ── 统计每个组织已经生成了多少NPC，用于螺旋式分散偏移 ──
-            org_npc_counts = {}   # org_id → 已放置NPC数量
+            # ── 以组织工作建筑为参考点，分散放置NPC ──────────────────
+            spawned_orgs = {}
+            for org_id, bld in org_workplace_refs.items():
+                spawned_orgs[org_id] = (bld.rect.centerx, bld.rect.centery)
+
+            org_npc_counts = {}
 
             for npc in predefined_npcs:
                 if npc.id == 9000 or (npc.job == 'NONE' and npc.name == '流民'):
@@ -740,120 +350,40 @@ class WorldLoader:
                     npc.job = npc.hidden_job
 
                 org = getattr(npc, 'org_id', 'NONE')
-                b_x, b_y = 0, 0
+                zone = ORG_ZONE.get(org, 'CITY')
 
-                # ════════════════════════════════════════════════════════════════
-                # 土匪/山贼/黑风寨 → 城外四周游荡（但避开城东门开局剧情区域）
-                # 乞丐/流氓 → 城南贫民窟散养
-                # ════════════════════════════════════════════════════════════════
-                # 【修复】heifeng_zhai（黑风寨）成员应该在城外，不是城内
-                is_outlaw = (npc.job == 'BANDIT' or
-                             org == 'BANDIT_ZHAI' or
-                             org == 'heifeng_zhai')
+                if zone == 'WILD':
+                    b_x, b_y = _random_wild_pos()
+                    if org != 'NONE' and org not in spawned_orgs:
+                        spawned_orgs[org] = (b_x, b_y)
 
-                if is_outlaw:
-                    # 山贼/黑风寨分布在城外野外的边缘区域
-                    # 【修复】距离城墙至少 600px，确保在 bandit_zones 范围内
-                    wm = ctx.world_map
-                    cr = wm.city_rect
-                    safe_dist = 600  # 距离城墙的最小安全距离（与 bandit_zones 边距一致）
+                elif zone == 'SLUM':
+                    b_x, b_y = _random_slum_pos()
+                    if org != 'NONE' and org not in spawned_orgs:
+                        spawned_orgs[org] = (b_x, b_y)
 
-                    # 定义城外边缘区域（远离城墙）
-                    # 格式: (min_x, max_x, min_y, max_y)
-                    # [修复] 北部区域太小时改用整个北部野外区域
-                    outer_zones = []
-
-                    # 北部区域：如果城墙距离顶部足够远，就用北部
-                    if cr.top > safe_dist + 100:
-                        outer_zones.append((50, wm.w - 50, 50, cr.top - safe_dist))
-
-                    # 南部区域：如果城墙距离底部足够远，就用南部
-                    if wm.h - cr.bottom > safe_dist + 100:
-                        outer_zones.append((50, wm.w - 50, cr.bottom + safe_dist, wm.h - 50))
-
-                    # 西部区域：如果城墙距离左侧足够远，就用西部
-                    if cr.left > safe_dist + 100:
-                        outer_zones.append((50, cr.left - safe_dist, 50, wm.h - 50))
-
-                    # 东部区域（避开剧情区但可以用远东）：如果右侧空间足够
-                    if wm.w - cr.right > safe_dist + 200:
-                        outer_zones.append((cr.right + safe_dist + 100, wm.w - 50, 50, wm.h - 50))
-
-                    # 过滤掉无效区域（宽度或高度太小）
-                    valid_zones = []
-                    for zone in outer_zones:
-                        w = zone[1] - zone[0]
-                        h = zone[3] - zone[2]
-                        if w > 100 and h > 100:
-                            valid_zones.append(zone)
-
-                    if valid_zones:
-                        zone = random.choice(valid_zones)
-                        b_x = random.randint(max(50, zone[0]), min(zone[1], wm.w - 50))
-                        b_y = random.randint(max(50, zone[2]), min(zone[3], wm.h - 50))
+                else:  # CITY
+                    if org in spawned_orgs:
+                        bx_grid, by_grid = spawned_orgs[org]
                     else:
-                        # 兜底：放在地图左下角
-                        b_x = random.randint(50, 200)
-                        b_y = random.randint(wm.h - 200, wm.h - 50)
-
-                    # 【住所系统】首次遇到此org时，在第一个成员位置生成据点建筑
-                    if org != 'NONE' and org not in org_home_refs:
-                        lair = Building(b_x, b_y, 'HOUSE')
-                        all_cards.append(lair)
-                        org_home_refs[org] = lair
-                        spawned_orgs[org] = (b_x, b_y)
-
-                elif org == 'BEGGAR' or npc.job == 'THUG':
-                    # 乞丐和泼皮 → 贫民窟（城南）
-                    rect = ctx.world_map.slum_rect
-                    b_x = random.randint(rect.left + 30, rect.right - 30)
-                    b_y = random.randint(rect.top + 30, rect.bottom - 30)
-
-                    # 【住所系统】首次遇到此org时，在贫民窟生成据点建筑
-                    if org != 'NONE' and org not in org_home_refs:
-                        lair = Building(b_x, b_y, 'HOUSE')
-                        all_cards.append(lair)
-                        org_home_refs[org] = lair
-                        spawned_orgs[org] = (b_x, b_y)
-                else:
-                    # 正规组织 → 分配城内格子（每个org生成一栋建筑）
-                    if org not in spawned_orgs:
-                        if slot_idx < len(org_slots):
-                            bx_grid, by_grid = org_slots[slot_idx]
-                            slot_idx += 1
-                        else:
-                            # 格子用完，城内安全区随机
-                            bx_grid = random.randint(safe_left, safe_right)
-                            by_grid = random.randint(safe_top,  safe_bot)
-                        b_type = org_building_map.get(org, 'HOUSE')
-                        org_bld = Building(bx_grid, by_grid, b_type)
-                        all_cards.append(org_bld)
+                        bx_grid = random.randint(safe_left, safe_right)
+                        by_grid = random.randint(safe_top, safe_bot)
                         spawned_orgs[org] = (bx_grid, by_grid)
-                        # 【住所系统】记录组织建筑引用（未预注册的组织）
-                        if org not in org_home_refs:
-                            org_home_refs[org] = org_bld
 
-                    bx_grid, by_grid = spawned_orgs[org]
-
-                    # ── 螺旋分散：让同一建筑下的多个NPC以扇形散开，不堆叠 ──
+                    # 螺旋分散
                     n = org_npc_counts.get(org, 0)
                     org_npc_counts[org] = n + 1
-                    # 半径和角度：第0个人在建筑正右方，之后依次旋转约137°（黄金角）
-                    radius  = 80 + (n // 6) * 55       # 每圈6人后扩大半径
-                    angle   = n * 2.399                 # 黄金角弧度，避免对齐成行
+                    radius = 80 + (n // 6) * 55
+                    angle = n * 2.399
                     b_x = bx_grid + int(math.cos(angle) * radius)
                     b_y = by_grid + int(math.sin(angle) * radius)
-
-                    # 加一点随机抖动，让排列不那么机械
                     b_x += random.randint(-12, 12)
                     b_y += random.randint(-12, 12)
-
-                    # 防止超出城内安全边界
                     b_x = max(safe_left, min(b_x, safe_right))
-                    b_y = max(safe_top,  min(b_y, safe_bot))
+                    b_y = max(safe_top, min(b_y, safe_bot))
 
                 npc.set_pos(b_x, b_y)
-                npc.clear_movement_target("初始分布")  # 确保目标同步
+                npc.clear_movement_target("初始分布")
 
                 if npc.eco_status == 'RICH':     npc.money = 500
                 elif npc.eco_status == 'ENOUGH': npc.money = 200
@@ -866,82 +396,67 @@ class WorldLoader:
                         social_manager.register_relation(npc.id, target_id, rel_type)
 
             # ════════════════════════════════════════════════════════════════
-            # 【住所系统】为每个城内NPC生成独立民居，分散在城内各处
+            # 【住所系统】统一分配 home_building
             # ════════════════════════════════════════════════════════════════
-            # 排除：匪盗(城外)、乞丐/泼皮(贫民窟)、流民(无家)、玩家
-            HOMELESS_ORGS = {'heifeng_zhai', 'BANDIT_ZHAI', 'qinglang_bang', 'luopo_gang', 'beggar_gang'}
-            npcs_need_home = [
-                n for n in all_cards
-                if isinstance(n, NPC) and n.job != 'PLAYER'
-                and n.job not in ('BANDIT', 'THUG')
-                and not getattr(n, 'is_refugee', False)
-                and getattr(n, 'org_id', 'NONE') not in HOMELESS_ORGS
-            ]
-
-            # 在城内安全区为每个NPC生成一间HOUSE，用网格布局避免重叠
-            import math as _math
-            num_houses = len(npcs_need_home)
-            # 计算网格：在安全区内均匀布置
-            house_area_w = safe_right - safe_left
-            house_area_h = safe_bot - safe_top
-            cols = max(1, int(_math.ceil(_math.sqrt(num_houses * house_area_w / max(house_area_h, 1)))))
-            rows = max(1, int(_math.ceil(num_houses / cols)))
-            cell_w = house_area_w // max(cols, 1)
-            cell_h = house_area_h // max(rows, 1)
-
-            for i, npc in enumerate(npcs_need_home):
-                r = i // cols
-                c = i % cols
-                hx = safe_left + c * cell_w + cell_w // 2 + random.randint(-20, 20)
-                hy = safe_top + r * cell_h + cell_h // 2 + random.randint(-20, 20)
-                # 防止超出安全边界
-                hx = max(safe_left + 30, min(hx, safe_right - 30))
-                hy = max(safe_top + 30, min(hy, safe_bot - 30))
-                house = Building(hx, hy, 'HOUSE')
-                all_cards.append(house)
-                npc.home_building = house
-
-            home_count = len(npcs_need_home)
-            print(f"[WorldLoader] 生成了 {home_count} 间民居，每个NPC一间")
-
-            # 【住所系统】山贼/泼皮/乞丐等：以组织建筑为家（不生成独立民居）
+            # 第一步：CSV 中已定义的 NPC 个人住所
             for card in all_cards:
                 if not isinstance(card, NPC) or card.job == 'PLAYER':
                     continue
-                if getattr(card, 'home_building', None) is not None:
-                    continue  # 已经有家了
-                if getattr(card, 'is_refugee', False):
-                    continue  # 流民无家
-                org = getattr(card, 'org_id', 'NONE')
-                if org in org_home_refs:
-                    card.home_building = org_home_refs[org]
+                npc_id_str = str(card.id)
+                if npc_id_str in npc_home_map:
+                    card.home_building = npc_home_map[npc_id_str]
 
-            # 【住所系统】开局子时，将有家的NPC堆叠到民居上（视觉上"在屋里睡觉"）
+            # 第二步：兜底 - 仍无家的NPC动态生成 HOUSE
+            npcs_need_home = [
+                n for n in all_cards
+                if isinstance(n, NPC) and n.job != 'PLAYER'
+                and not getattr(n, 'is_refugee', False)
+                and getattr(n, 'home_building', None) is None
+            ]
+            if npcs_need_home:
+                import math as _math
+                num_houses = len(npcs_need_home)
+                house_area_w = safe_right - safe_left
+                house_area_h = safe_bot - safe_top
+                cols = max(1, int(_math.ceil(_math.sqrt(num_houses * house_area_w / max(house_area_h, 1)))))
+                rows = max(1, int(_math.ceil(num_houses / cols)))
+                cell_w = house_area_w // max(cols, 1)
+                cell_h = house_area_h // max(rows, 1)
+
+                for i, npc in enumerate(npcs_need_home):
+                    r = i // cols
+                    c = i % cols
+                    hx = safe_left + c * cell_w + cell_w // 2 + random.randint(-20, 20)
+                    hy = safe_top + r * cell_h + cell_h // 2 + random.randint(-20, 20)
+                    hx = max(safe_left + 30, min(hx, safe_right - 30))
+                    hy = max(safe_top + 30, min(hy, safe_bot - 30))
+                    house = Building(hx, hy, 'HOUSE')
+                    all_cards.append(house)
+                    npc.home_building = house
+                print(f"[WorldLoader] 兜底生成了 {num_houses} 栋住所")
+
+            home_total = sum(1 for c in all_cards if isinstance(c, NPC) and getattr(c, 'home_building', None))
+            print(f"[WorldLoader] 住所分配完成：{home_total} 个NPC有家")
+
+            # 【住所系统】开局子时，将有家的NPC堆叠到民居上
             from src.definitions import STACK_OFFSET_Y
             for card in all_cards:
                 if not isinstance(card, NPC) or card.job == 'PLAYER':
                     continue
                 home = getattr(card, 'home_building', None)
-                if home is not None:
-                    # 共享建筑已被占据 → 在建筑附近待着即可
-                    if home.stack_child is not None:
-                        card.set_pos(home.rect.centerx + random.randint(-40, 40),
-                                     home.rect.centery + random.randint(-30, 30))
-                        card.clear_movement_target("开局回家")
-                        card.ai_reason = "睡觉中"
-                        continue
-                    # 建立堆叠关系：NPC叠在HOUSE上
-                    card.stack_parent = home
-                    home.stack_child = card
-                    card.set_pos(home.rect.centerx, home.rect.centery + STACK_OFFSET_Y)
+                if home is None:
+                    continue
+                if home.stack_child is not None and home.stack_child != card:
+                    card.set_pos(home.rect.centerx + random.randint(-40, 40),
+                                 home.rect.centery + random.randint(-30, 30))
                     card.clear_movement_target("开局回家")
                     card.ai_reason = "睡觉中"
-
-            # ---- 初始散落资源（放在市场旁边，方便捡取）----
-            mx, my = market_pos
-            all_cards.append(Resource(mx + 80, my + 60, ITEM_WOOD,  count=5))
-            all_cards.append(Resource(mx - 80, my + 60, ITEM_BERRY, count=5))
-            all_cards.append(Resource(mx,      my + 90, ITEM_COIN,  count=10))
+                    continue
+                card.stack_parent = home
+                home.stack_child = card
+                card.set_pos(home.rect.centerx, home.rect.centery + STACK_OFFSET_Y)
+                card.clear_movement_target("开局回家")
+                card.ai_reason = "睡觉中"
 
             # ---- 解锁所有限制 ----
             from src.definitions import DEBUG_SKIP_YUXISHI, STATE_IDLE
@@ -969,7 +484,7 @@ class WorldLoader:
                 # 子时（深夜）抵达小镇，主线立即触发
                 ctx.quest_manager.active_quest_id = "Q_SETTLE_WAIT"
                 ctx.quest_manager.quest_status = QS_ACTIVE
-                ctx.quest_manager.set_flag('guidance_visible', True)
+                # guidance_visible 保持 False，开场独白结束后由 UNLOCK_GUIDANCE 解锁
                 ctx.quest_manager.set_flag('refugee_unlocked', True)
                 ctx.quest_manager.set_flag('intro_played', True)
                 ctx.quest_manager.set_flag('intro_played_dialog', True)
@@ -978,7 +493,7 @@ class WorldLoader:
                 player.hunger = 80
                 player.hp = 70
 
-            print(f"[WorldLoader] 汴京加载完毕。NPC: {len(predefined_npcs)}，组织建筑: {len(spawned_orgs)}")
+            print(f"[WorldLoader] 汴京加载完毕。NPC: {len(predefined_npcs)}，组织建筑: {len(org_workplace_refs)}")
             
             # ════════════════════════════════════════════════════════════════
             # 【最终验证】检查所有建筑之间的间距

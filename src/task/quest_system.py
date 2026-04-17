@@ -1386,22 +1386,20 @@ class QuestManager:
     def get_all_task_displays(self, player=None, all_cards=[]) -> list:
         """
         获取所有任务的展示数据（按优先级排序）
-        
+
         返回 TaskDisplayData 列表，按优先级排序：
         生存 > 情报 > 势力 > 主线
-        
-        目前返回模拟数据，后续阶段填充真实数据
+
+        开场剧情期间（guidance_visible=False）只显示主线任务
         """
         tasks = []
-        
-        # ===== 1. 生存任务（模拟数据） =====
-        # TODO: 阶段一实现真实检测逻辑
-        if player:
+        show_side_tasks = self.flags.get('guidance_visible', False)
+
+        # ===== 1. 生存任务（开场剧情期间隐藏）=====
+        if player and show_side_tasks:
             hunger = getattr(player, 'hunger', 0)
             cold = getattr(player, 'cold', 0)
-            
-            # 【调试模式】始终显示一个生存任务，方便测试 UI
-            # 后续删除此调试代码
+
             if hunger >= 70:
                 tasks.append(TaskDisplayData(
                     task_type=TASK_TYPE_SURVIVAL,
@@ -1414,18 +1412,6 @@ class QuestManager:
                     text="肚子有些饿了",
                     is_urgent=False
                 ))
-            else:
-                # 【调试】低饥饿时也显示，方便看 UI 效果
-                tasks.append(TaskDisplayData(
-                    task_type=TASK_TYPE_SURVIVAL,
-                    text="饥饿度测试(调试)",
-                    is_urgent=False,
-                    target_npc="自己",
-                    objective="找到食物恢复饥饿值",
-                    reward="恢复体力",
-                    deadline_days=0,
-                    description="肚子饿了，需要找点吃的填饱肚子。"
-                ))
             
             # 寒冷警告（超过阈值才显示）
             if cold >= 70:
@@ -1435,36 +1421,18 @@ class QuestManager:
                     is_urgent=True
                 ))
         
-        # ===== 2. 情报委托（模拟数据） =====
+        # ===== 2. 情报委托 =====
         # TODO: 阶段三实现真实数据
-        tasks.append(TaskDisplayData(
-            task_type=TASK_TYPE_INTEL,
-            text="打探鱼西施的消息",
-            progress="1/3",
-            target_npc="鱼西施",
-            objective="向3个不同的NPC打听鱼西施的近况",
-            reward="鱼西施的好感度+20，铜钱500",
-            deadline_days=7,
-            description="鱼西施最近行踪神秘，有人想知道她最近在和谁来往。"
-        ))
-        
-        # ===== 3. 势力任务（模拟数据） =====
+
+        # ===== 3. 势力任务 =====
         # TODO: 阶段五实现真实数据
-        # 【调试】启用模拟数据，方便测试 UI
-        tasks.append(TaskDisplayData(
-            task_type=TASK_TYPE_FACTION,
-            text="帮帮主收集铜钱",
-            progress="50/100",
-            target_npc="帮主",
-            objective="收集100枚铜钱交给帮主",
-            reward="帮派贡献+10，铜钱200",
-            deadline_days=5,
-            description="帮主需要资金扩充帮派势力，急需铜钱。"
-        ))
         
-        # ===== 4. 主线任务 =====
-        # 从现有方法获取主线任务数据
+        # ===== 4. 主线任务（始终显示，包括开场剧情期间）=====
+        # 临时启用 guidance_visible 以确保主线文字不被过滤
+        saved_gv = self.flags.get('guidance_visible', False)
+        self.flags['guidance_visible'] = True
         main_text = self.get_current_objective_text(player, all_cards)
+        self.flags['guidance_visible'] = saved_gv
         if main_text:
             is_complete = "[√]" in main_text
             # 清理前缀符号
@@ -1473,17 +1441,6 @@ class QuestManager:
                 task_type=TASK_TYPE_MAIN,
                 text=clean_text,
                 is_complete=is_complete
-            ))
-        else:
-            # 【调试】无主线任务时显示模拟数据
-            tasks.append(TaskDisplayData(
-                task_type=TASK_TYPE_MAIN,
-                text="主线任务测试(调试)",
-                target_npc="村长",
-                objective="前往村长家接取任务",
-                reward="经验值+100，铜钱200",
-                deadline_days=0,
-                description="这是游戏的主线任务，请前往村长家了解详情。"
             ))
         
         # 按优先级排序

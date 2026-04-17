@@ -1167,6 +1167,8 @@ def main():
             pass
                 
         # --- 渲染 ---
+        # 昼夜 alpha 需要在 render 之前更新，因为昼夜遮罩在 render 内部绘制
+        ctx.screen_effects.update_day_night(ctx.event_manager.get_day_progress())
         renderer.render(ctx, mx, my, click_event, current_event)
         
         # [!] 绘制视觉效果（边缘光晕等，在所有UI之上）
@@ -1211,9 +1213,8 @@ def main():
         perf.frame_end(clock.get_fps())
 
         # ══════════════════════════════════════════════════════════════════════
-        # 【屏幕特效】昼夜遮罩 + 淡入淡出（由 ScreenEffectsManager 统一管理）
+        # 【屏幕特效】全黑覆盖 + 淡入淡出（昼夜遮罩已移至 render_system 内部）
         # ══════════════════════════════════════════════════════════════════════
-        ctx.screen_effects.update_day_night(ctx.event_manager.get_day_progress())
         ctx.screen_effects.draw(screen)
 
         # 【修复】剧情对话框在屏幕特效之上绘制，确保黑屏渐出时对话正常显示

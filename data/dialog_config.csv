@@ -168,7 +168,7 @@ Q_SETTLE_INTRO,我,不认识任何人...这座城的每条巷子都透着拒人�
 Q_SETTLE_INTRO,我,可我不能一直这样。那些人迟早会找到这里。,,
 Q_SETTLE_INTRO,我,我必须在这座城站稳脚跟。找到住处，找到活路，找到靠得住的人。,,
 Q_SETTLE_INTRO,NARRATOR,你攥紧了拳头。夜风灌进单薄的衣衫，但心里燃起了一团火。,,
-Q_SETTLE_INTRO,NARRATOR,【主线任务开启】在城中站稳脚跟,,
+Q_SETTLE_INTRO,NARRATOR,【主线任务开启】在城中站稳脚跟,,UNLOCK_GUIDANCE
 Q_SETTLE_P1,NARRATOR,天刚蒙蒙亮，你的肚子就开始抗议了。,,
 Q_SETTLE_P1,我,再不吃点东西，怕是连路都走不动了。,,
 Q_SETTLE_P1,NARRATOR,城里到处飘着早点的香气，可口袋里的几个铜板让你不敢乱花。,,

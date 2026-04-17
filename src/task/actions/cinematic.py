@@ -85,8 +85,20 @@ class ScreenEffectsManager:
         a1 = self._NIGHT_ALPHA_TABLE[(idx + 1) % 12]
         self._night_alpha = int(a0 + (a1 - a0) * frac)
 
+    def draw_day_night(self, screen):
+        """仅绘制昼夜遮罩（在游戏世界之上、UI之下调用）"""
+        if self._full_black or self._night_alpha <= 0:
+            return
+        import pygame
+        sw, sh = self.screen_w, self.screen_h
+        if self._overlay is None or self._overlay.get_size() != (sw, sh):
+            self._overlay = pygame.Surface((sw, sh))
+        self._overlay.fill(self.NIGHT_COLOR)
+        self._overlay.set_alpha(self._night_alpha)
+        screen.blit(self._overlay, (0, 0))
+
     def draw(self, screen):
-        """绘制所有屏幕特效（在 pygame.display.flip 之前调用）"""
+        """绘制屏幕特效：全黑覆盖 + 淡入淡出（昼夜遮罩已移至 draw_day_night）"""
         import pygame
 
         sw, sh = self.screen_w, self.screen_h
@@ -100,15 +112,7 @@ class ScreenEffectsManager:
             screen.blit(self._overlay, (0, 0))
             return  # 全黑时不绘制其他效果
 
-        # --- 2. 昼夜遮罩 ---
-        if self._night_alpha > 0:
-            if self._overlay is None or self._overlay.get_size() != (sw, sh):
-                self._overlay = pygame.Surface((sw, sh))
-            self._overlay.fill(self.NIGHT_COLOR)
-            self._overlay.set_alpha(self._night_alpha)
-            screen.blit(self._overlay, (0, 0))
-
-        # --- 3. 淡入淡出 ---
+        # --- 2. 淡入淡出 ---
         if self._fade_type:
             elapsed = _time_mod.time() - self._fade_start
             progress = min(elapsed / self._fade_duration, 1.0)

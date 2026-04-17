@@ -163,6 +163,11 @@ class RenderSystem:
         # ── 4.5 事件区域遮罩（半透明+边框）────────────────────────
         self._draw_event_zone(context, screen, cam)
 
+        # ── 4.6 昼夜遮罩（在世界之上、UI之下）─────────────────────
+        sfx = getattr(context, 'screen_effects', None)
+        if sfx:
+            sfx.draw_day_night(screen)
+
         # ── 5. UI 层（固定坐标，不随摄像机移动）──────────────────
         self._draw_ui_layer(context, mx, my, click_event)
 
