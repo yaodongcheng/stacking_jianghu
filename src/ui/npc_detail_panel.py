@@ -1216,7 +1216,7 @@ class UIDialogsMixin:
         # 检查是否有仇恨数据且空间足够
         if hasattr(npc, 'hatred') and npc.hatred and y + line_h * 2 < content_rect.bottom - 10:
             # 导入通用的获取NPC名字函数
-            from src.data_loader import get_npc_name_by_id_global
+            from src.task.npc_registry import get_npc_name_by_id
             
             pygame.draw.line(screen, (80, 80, 100), (x_left, y), (content_rect.right - 10, y))
             y += 10
@@ -1230,7 +1230,7 @@ class UIDialogsMixin:
             hatred_entries = []
             for target_id, hate_val in sorted_hatred[:3]:
                 # 使用通用函数获取名字（支持CSV加载的NPC、种子NPC、动态NPC）
-                target_name = get_npc_name_by_id_global(target_id)
+                target_name = get_npc_name_by_id(target_id)
                 hatred_entries.append(f"{target_name}:{hate_val}")
             
             hatred_info = "  ".join(hatred_entries)

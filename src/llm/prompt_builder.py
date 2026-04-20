@@ -975,23 +975,11 @@ action说明:
                 
                 return "玩家"
             
-            # 尝试从task模块获取NPC名字
-            try:
-                from src.task import ID_TO_NAME
-                if entity_id_str in ID_TO_NAME:
-                    return ID_TO_NAME[entity_id_str]
-            except:
-                pass
-            
-            # 尝试从NPC_SEEDS获取
-            try:
-                from src.data.character_seeds import SEEDS
-                npc_index = int(entity_id) - 8000
-                if 0 <= npc_index < len(SEEDS):
-                    return SEEDS[npc_index]['name']
-            except:
-                pass
-            
+            # 从注册表查 NPC 名字
+            from src.task.npc_registry import get_npc_name_by_id, ID_TO_NAME
+            if entity_id_str in ID_TO_NAME:
+                return get_npc_name_by_id(entity_id_str)
+
             return f"某人({entity_id})"
         except Exception as e:
             return f"某人"

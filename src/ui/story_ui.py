@@ -4,6 +4,7 @@ import math
 from src.definitions import *
 from src.utils import wrap_text, load_image
 from src.ui.choice_tooltip import ChoiceTooltipHelper
+from src.task.actions._helpers import find_npc_by_id
 
 class StoryUI:
     def __init__(self, screen_w, screen_h):
@@ -748,61 +749,27 @@ class StoryUI:
     
     def _get_speaker_avatar(self, speaker_id, size=(48, 48)):
         """获取说话者的头像surface
-        
+
         Args:
             speaker_id: 说话者ID
             size: 头像尺寸元组 (宽, 高)
-            
+
         Returns:
             pygame.Surface 或 None
         """
         if not self._all_cards_ref:
             return None
-        
-        # 查找说话者卡牌
-        speaker_card = None
-        
-        # 如果是玩家
+
+        # 玩家用 is_player 标记，单独走一条路径
         if speaker_id in (0, 9999):
-            for card in self._all_cards_ref:
-                if getattr(card, 'is_player', False):
-                    speaker_card = card
-                    break
+            speaker_card = next((c for c in self._all_cards_ref if getattr(c, 'is_player', False)), None)
         else:
-            # 查找NPC - 先按ID查找
-            for card in self._all_cards_ref:
-                card_id = getattr(card, 'id', None)
-                if card_id is not None and card_id == speaker_id:
-                    speaker_card = card
-                    break
-                # 检查 npc_data.id
-                npc_data = getattr(card, 'npc_data', None)
-                if npc_data and getattr(npc_data, 'id', None) == speaker_id:
-                    speaker_card = card
-                    break
-            
-            # 【修复】如果没找到，尝试按名字匹配（备用方案）
-            if speaker_card is None and self.current_line:
-                speaker_name = self.current_line.speaker
-                if speaker_name and speaker_name not in ('NARRATOR', '旁白', '我'):
-                    for card in self._all_cards_ref:
-                        card_name = getattr(card, 'name', '')
-                        if not card_name:
-                            continue
-                        # 模糊匹配：名字互相包含
-                        if speaker_name in card_name or card_name in speaker_name:
-                            speaker_card = card
-                            print(f"[StoryUI] 按名字匹配到头像: {speaker_name} -> {card_name}")
-                            break
-        
+            speaker_card = find_npc_by_id(self._all_cards_ref, speaker_id)
+
         # 获取头像
         if speaker_card and hasattr(speaker_card, 'appearance'):
             return speaker_card.appearance.get_head_surface(size)
-        
-        # 【调试】如果找不到头像，打印日志
-        if speaker_card is None:
-            print(f"[StoryUI] 警告: 找不到说话者头像 ID={speaker_id}, name={getattr(self.current_line, 'speaker', '???')}")
-        
+
         return None
     
     def _draw_speech_bubble(self, screen, x, y, w, h, tail_x, tail_y):

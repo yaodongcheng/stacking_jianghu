@@ -7,78 +7,6 @@ from src.entities import NPC, Building, Resource
 from src.utils import resource_path
 from src.definitions import CARD_W, CARD_H, ITEM_GRAIN, ITEM_COIN, ITEM_BERRY, ITEM_WOOD, SCENARIO_SANDBOX, SCENARIO_TUTORIAL
 
-# 全局 NPC ID -> Name 映射表（运行时动态维护）
-NPC_ID_NAME_MAP = {}
-
-def register_npc_id_name(npc_id, npc_name):
-    """注册 NPC ID 和名字的映射关系"""
-    NPC_ID_NAME_MAP[str(npc_id)] = npc_name
-
-def get_npc_name_by_id_global(npc_id):
-    """
-    根据 NPC ID 获取名字（通用函数）
-    
-    查询顺序：
-    1. 运行时加载的 NPC（从 CSV 或动态生成）
-    2. 种子 NPC（从 character_seeds.py）
-    3. 特殊 ID
-    """
-    npc_id_str = str(npc_id)
-    
-    # 1. 优先从运行时映射表中查找
-    if npc_id_str in NPC_ID_NAME_MAP:
-        return NPC_ID_NAME_MAP[npc_id_str]
-    
-    # 2. 从种子 NPC 中查找（task 模块的 ID_TO_NAME）
-    from src.task import ID_TO_NAME
-    if npc_id_str in ID_TO_NAME:
-        return ID_TO_NAME[npc_id_str]
-    
-    # 3. 特殊 ID 处理
-    if npc_id_str == '9999':
-        return '（自动完成）'
-    if npc_id_str == '9000':
-        return '未指定'
-    if npc_id_str == '0' or npc_id_str == '':
-        return '玩家'
-    
-    # 4. 默认返回 ID 本身
-    return f'NPC({npc_id})'
-
-def clear_npc_id_name_map():
-    """清空映射表（用于重新加载游戏时）"""
-    NPC_ID_NAME_MAP.clear()
-
-
-def get_npc_id_by_name_global(npc_name: str):
-    """
-    根据 NPC 名字获取 ID（通用函数）
-    
-    查询顺序：
-    1. 运行时加载的 NPC（从 NPC_ID_NAME_MAP 反向查找）
-    2. 种子 NPC（从 character_seeds.py）
-    
-    Args:
-        npc_name: NPC 名字
-        
-    Returns:
-        int or None: NPC ID，未找到返回 None
-    """
-    if not npc_name:
-        return None
-    
-    # 1. 从运行时映射表中反向查找
-    for npc_id_str, name in NPC_ID_NAME_MAP.items():
-        if name == npc_name:
-            return int(npc_id_str)
-    
-    # 2. 从种子 NPC 中反向查找
-    from src.task import ID_TO_NAME
-    for npc_id_str, name in ID_TO_NAME.items():
-        if name == npc_name:
-            return int(npc_id_str)
-    
-    return None
 
 def load_npcs_from_csv(filepath):
     npcs = []
@@ -129,13 +57,7 @@ def load_npcs_from_csv(filepath):
                 # 创建 NPC 对象
                 new_npc = NPC(row_data)
                 npcs.append(new_npc)
-                
-                # 【新增】注册到全局 ID->Name 映射表
-                npc_id = row_data.get('id')
-                npc_name = row_data.get('name', '无名氏')
-                if npc_id:
-                    register_npc_id_name(npc_id, npc_name)
-                
+
     except FileNotFoundError:
         print(f"错误: 找不到文件 {filepath}")
     except Exception as e:

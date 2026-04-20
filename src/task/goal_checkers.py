@@ -111,8 +111,9 @@ def check_eat(quest, player, all_cards, manager, ctx):
 
 
 def check_deliver(quest, player, all_cards, manager, ctx):
-    """交付物品到指定 NPC：进度由 on_item_delivered 在外部累加 flag"""
-    return manager.flags.get(f'deliver_{quest.id}', 0) >= quest.count
+    """交付物品到指定 NPC：进度由 DeliverType 维护"""
+    from . import quest_types
+    return quest_types.get('DELIVER').is_goal_met(manager, quest)
 
 
 def check_reach(quest, player, all_cards, manager, ctx):
@@ -138,6 +139,35 @@ def check_reach(quest, player, all_cards, manager, ctx):
         print(f"[Quest] 玩家到达目标区域 {quest.target}! 距离={dist:.0f}px <= {radius}px")
         return True
     return False
+
+
+def check_affinity(quest, player, all_cards, manager, ctx):
+    """任一指定 NPC（target='ANY' 时为任意 NPC）对玩家好感度 >= count"""
+    threshold = int(quest.count) if quest.count else 50
+    target = (quest.target or 'ANY').strip()
+    for c in all_cards:
+        if not isinstance(c, NPC):
+            continue
+        if getattr(c, 'is_player', False):
+            continue
+        if target != 'ANY' and getattr(c, 'name', '') != target:
+            continue
+        if getattr(c, 'affinity_to_player', 0) >= threshold:
+            return True
+    return False
+
+
+def check_org_rank(quest, player, all_cards, manager, ctx):
+    """玩家在某组织内等级 >= count（target='ANY' 时不限组织）"""
+    threshold = int(quest.count) if quest.count else 1
+    target_org = (quest.target or 'ANY').strip()
+    player_org = getattr(player, 'player_org_id', None)
+    player_rank = getattr(player, 'player_org_rank', 0)
+    if not player_org:
+        return False
+    if target_org != 'ANY' and player_org != target_org:
+        return False
+    return player_rank >= threshold
 
 
 def check_wait_time(quest, player, all_cards, manager, ctx):
@@ -171,7 +201,7 @@ def check_wait_time(quest, player, all_cards, manager, ctx):
 # 注册表
 # ============================================================================
 # DIALOG / INTERACT 由对话流转推进，没有"被动检查目标完成"的语义，故不在此表。
-# CHOICE / FREE / AFFINITY_CHECK / ORG_RANK 同理（目前由其他子系统推进）。
+# CHOICE / FREE 同理（玩家手动触发）。
 GOAL_CHECKERS = {
     'GATHER':         check_gather,
     'HAVE_UNIT':      check_have_unit,
@@ -184,6 +214,8 @@ GOAL_CHECKERS = {
     'DELIVER':        check_deliver,
     'REACH':          check_reach,
     'WAIT_TIME':      check_wait_time,
+    'AFFINITY_CHECK': check_affinity,
+    'ORG_RANK':       check_org_rank,
 }
 
 

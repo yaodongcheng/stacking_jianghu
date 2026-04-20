@@ -20,7 +20,8 @@ from src.llm.event_dialog_generator import (
     EventDialogGenerator, EventScriptFull, EventDialogLine,
     get_event_dialog_generator
 )
-from src.data_loader import NPC_ID_NAME_MAP, get_npc_name_by_id_global, get_npc_id_by_name_global
+from src.task.npc_registry import get_npc_name_by_id, get_speaker_id
+from src.task.actions._helpers import find_npc_by_name
 
 
 def convert_effect_to_directive(effect_str: str, actor_ids: list = None) -> str:
@@ -339,28 +340,27 @@ class LiveNewsToDialogBridge:
             speaker = line.speaker_name
             speaker_id = line.speaker_id
             
-            # 校验：检查 id 和 name 是否匹配 NPC_ID_NAME_MAP
+            # 校验：检查 id 和 name 是否匹配注册表
             if speaker_id is not None and speaker_id > 0:
-                expected_name = get_npc_name_by_id_global(speaker_id)
+                expected_name = get_npc_name_by_id(speaker_id)
                 # 如果映射表中有这个名字，且与 LLM 输出的名字不一致，使用映射表的名字
                 if expected_name and expected_name != f'NPC({speaker_id})':
                     if speaker != expected_name:
                         print(f"[NewsDialogBridge] 校验修正: ID={speaker_id}, '{speaker}' → '{expected_name}'")
                         speaker = expected_name
-            
-            # 【重要】如果 speaker_id == 0 或 None，从全局映射表或 ctx.all_cards 中查找对应的 NPC ID
+
+            # 【重要】如果 speaker_id == 0 或 None，从注册表或 ctx.all_cards 中查找对应的 NPC ID
             if (speaker_id is None or speaker_id == 0) and speaker not in ['旁白', '我', '玩家', 'NARRATOR', 'PLAYER']:
-                # 1. 优先从全局映射表查找（NPC_ID_NAME_MAP 反向查找）
-                speaker_id = get_npc_id_by_name_global(speaker)
+                # 1. 优先从注册表查找
+                speaker_id = get_speaker_id(speaker)
                 if speaker_id:
-                    print(f"[NewsDialogBridge] 说话人ID修正(全局表): '{speaker}' → ID={speaker_id}")
+                    print(f"[NewsDialogBridge] 说话人ID修正(注册表): '{speaker}' → ID={speaker_id}")
                 # 2. 回退到运行时 ctx.all_cards 查找
                 elif ctx and hasattr(ctx, 'all_cards'):
-                    for card in ctx.all_cards:
-                        if isinstance(card, NPC) and hasattr(card, 'name') and card.name == speaker:
-                            speaker_id = card.id
-                            print(f"[NewsDialogBridge] 说话人ID修正(运行时): '{speaker}' → ID={speaker_id}")
-                            break
+                    card = find_npc_by_name(ctx.all_cards, speaker)
+                    if card is not None:
+                        speaker_id = card.id
+                        print(f"[NewsDialogBridge] 说话人ID修正(运行时): '{speaker}' → ID={speaker_id}")
             
             # 替换文本中的占位符
             text = self._resolve_text_placeholders(line.text, news)

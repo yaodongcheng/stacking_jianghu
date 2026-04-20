@@ -12,7 +12,7 @@ import pygame
 import re
 from typing import Dict, List, Optional, Tuple, Any, Callable
 
-from src.data_loader import get_npc_name_by_id_global
+from src.task.npc_registry import get_npc_name_by_id
 
 
 class ChoiceTooltipHelper:
@@ -118,13 +118,13 @@ class ChoiceTooltipHelper:
             
             # affinity_to_player 特殊处理
             if attr == 'affinity_to_player':
-                npc_name = get_npc_name_by_id_global(actor) or f"NPC{actor}"
+                npc_name = get_npc_name_by_id(actor) or f"NPC{actor}"
                 compare_text = ChoiceTooltipHelper.format_compare_symbol(compare)
                 return f"与{npc_name}好感度{compare_text}{need_val}"
             
             # 关系属性特殊处理
             if attr == 'relation' or attr.endswith('_relation'):
-                npc_name = get_npc_name_by_id_global(actor)
+                npc_name = get_npc_name_by_id(actor)
                 compare_text = ChoiceTooltipHelper.format_compare_symbol(compare)
                 return f"与{npc_name}好感{compare_text}{need_val}"
             
@@ -162,7 +162,7 @@ class ChoiceTooltipHelper:
                 
                 # 关系属性特殊处理
                 if attr == 'relation' or attr.endswith('_relation'):
-                    npc_name = get_npc_name_by_id_global(actor)
+                    npc_name = get_npc_name_by_id(actor)
                     try:
                         num = int(val)
                         if num > 0:
@@ -175,7 +175,7 @@ class ChoiceTooltipHelper:
                 
                 # NPC情绪属性特殊处理
                 if attr == 'emotion':
-                    npc_name = get_npc_name_by_id_global(actor)
+                    npc_name = get_npc_name_by_id(actor)
                     from src.definitions import EMOTION_CN
                     if val in EMOTION_CN:
                         emotion_text = EMOTION_CN.get(val, val)
@@ -194,7 +194,7 @@ class ChoiceTooltipHelper:
                 if actor == 'PLAYER':
                     actor_name = '玩家'
                 else:
-                    actor_name = get_npc_name_by_id_global(actor)
+                    actor_name = get_npc_name_by_id(actor)
                 
                 # 数值处理
                 try:
@@ -298,12 +298,12 @@ class ChoiceTooltipHelper:
                 if from_part == 'PLAYER':
                     from_name = '玩家'
                 else:
-                    from_name = get_npc_name_by_id_global(from_part) or f"NPC{from_part}"
+                    from_name = get_npc_name_by_id(from_part) or f"NPC{from_part}"
                 
                 if to_actor == 'PLAYER':
                     to_name = '玩家'
                 else:
-                    to_name = get_npc_name_by_id_global(to_actor) or f"NPC{to_actor}"
+                    to_name = get_npc_name_by_id(to_actor) or f"NPC{to_actor}"
                 
                 # 判断是消耗还是收益
                 if from_part == 'PLAYER':

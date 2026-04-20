@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from src.live_news_to_dialog import LiveNewsToDialog\")",
+      "Bash(python -c \"from src.ui.choice_tooltip import ChoiceTooltipHelper; from src.ui.npc_detail_panel import NPCDetailPanel\")"
+    ]
+  }
+}

@@ -24,7 +24,7 @@ from src.definitions import (
     GAME_STATE_PLAYING
 )
 from src.utils import resource_path
-from src.data_loader import get_npc_name_by_id_global
+from src.task.npc_registry import get_npc_name_by_id
 from src.ui.event_notification import FunctionalAction, LiveNewsItem
 from src.ui.choice_tooltip import ChoiceTooltipHelper
 
@@ -820,13 +820,13 @@ class LiveSnapshotPanel:
             
             # affinity_to_player 特殊处理（如 1008:affinity_to_player:>=:10 表示与NPC 1008好感度>=10）
             if attr == 'affinity_to_player':
-                npc_name = get_npc_name_by_id_global(actor) or f"NPC{actor}"
+                npc_name = get_npc_name_by_id(actor) or f"NPC{actor}"
                 compare_text = self._format_compare_symbol(compare)
                 return f"与{npc_name}好感度{compare_text}{need_val}"
             
             # 关系属性特殊处理（如 1005:relation:>:0 表示与NPC 1005好感大于0）
             if attr == 'relation' or attr.endswith('_relation'):
-                npc_name = get_npc_name_by_id_global(actor)
+                npc_name = get_npc_name_by_id(actor)
                 compare_text = self._format_compare_symbol(compare)
                 return f"与{npc_name}好感{compare_text}{need_val}"
             
@@ -888,8 +888,8 @@ class LiveSnapshotPanel:
                 
                 # 关系属性特殊处理
                 if attr == 'relation' or attr.endswith('_relation'):
-                    # 使用 get_npc_name_by_id_global 获取 NPC 名字，不显示 ID
-                    npc_name = get_npc_name_by_id_global(actor)
+                    # 使用 get_npc_name_by_id 获取 NPC 名字，不显示 ID
+                    npc_name = get_npc_name_by_id(actor)
                     try:
                         num = int(val)
                         if num > 0:
@@ -903,7 +903,7 @@ class LiveSnapshotPanel:
                 
                 # NPC情绪属性特殊处理（如 1001:emotion:HAPPY 表示NPC 1001变得开心）
                 if attr == 'emotion':
-                    npc_name = get_npc_name_by_id_global(actor)
+                    npc_name = get_npc_name_by_id(actor)
                     # 从definitions导入情绪中文映射
                     from src.definitions import EMOTION_CN
                     # 只处理定义内的情绪，无效情绪直接跳过不显示
@@ -937,7 +937,7 @@ class LiveSnapshotPanel:
                 if actor == 'PLAYER':
                     actor_name = '玩家'
                 else:
-                    actor_name = get_npc_name_by_id_global(actor)
+                    actor_name = get_npc_name_by_id(actor)
                 
                 # 数值
                 try:
@@ -1043,12 +1043,12 @@ class LiveSnapshotPanel:
                 if from_part == 'PLAYER':
                     from_name = '玩家'
                 else:
-                    from_name = get_npc_name_by_id_global(from_part) or f"NPC{from_part}"
+                    from_name = get_npc_name_by_id(from_part) or f"NPC{from_part}"
                 
                 if to_actor == 'PLAYER':
                     to_name = '玩家'
                 else:
-                    to_name = get_npc_name_by_id_global(to_actor) or f"NPC{to_actor}"
+                    to_name = get_npc_name_by_id(to_actor) or f"NPC{to_actor}"
                 
                 # 判断是消耗还是收益
                 if from_part == 'PLAYER':

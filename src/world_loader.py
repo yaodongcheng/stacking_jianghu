@@ -3,9 +3,8 @@ import math
 import pygame
 from src.definitions import *
 from src.entities import Player, NPC, Building,Resource
-from src.data_loader import load_npcs_from_csv, register_npc_id_name, load_buildings_from_csv
+from src.data_loader import load_npcs_from_csv, load_buildings_from_csv
 from src.social_system import social_manager
-from src.data.character_seeds import SEEDS
 
 # ════════════════════════════════════════════════════════════════
 # 建筑间距检查系统
@@ -142,76 +141,8 @@ def validate_all_buildings(all_cards):
                 warnings.append(f"建筑重叠: {b1.name}({b1.building_type}) 与 {b2.name}({b2.building_type})")
             elif edge_dist < BUILDING_MIN_EDGE_DISTANCE:
                 warnings.append(f"建筑过近({edge_dist}px): {b1.name} 与 {b2.name}")
-    
-    return warnings
 
-# ════════════════════════════════════════════════════════════════
-# 从 SEEDS 征调角色的辅助函数
-# 将"演员"从人物设定库中拉出来，临时安排到开场剧情里
-# ════════════════════════════════════════════════════════════════
-def _recruit_actor_from_seeds(name):
-    """从 SEEDS 中查找角色，返回适配 NPC 构造器的字典
-    
-    Args:
-        name: 角色名称（必须存在于 SEEDS 中）
-        
-    Returns:
-        dict: 可直接传给 NPC(data) 的字典
-    """
-    for idx, seed in enumerate(SEEDS):
-        if seed['name'] == name:
-            # 从 seed 构建 NPC 所需的数据字典
-            # 使用 seed 的索引作为基础ID，避免与 CSV NPC 冲突
-            # 8000+ 保留给事件角色
-            npc_id = 8000 + idx
-            
-            # 根据性别选择外观
-            is_female = seed.get('gender', 'Male') == 'Female'
-            body_img = 'body_02.png' if is_female else 'body_01.png'
-            head_img = 'head_02.png' if is_female else 'head_01.png'
-            
-            # 整合 tags
-            tags = seed.get('tags', [])
-            tags_str = ';'.join(tags) if isinstance(tags, list) else tags
-            
-            # 根据 power_type 映射 job（与 organization_system.py 保持一致）
-            power_type = seed.get('power_type', '')
-            tags = seed.get('tags', [])
-            
-            job_by_power = {
-                '士': 'OFFICIAL',
-                '农': 'FARMER',
-                '工': 'ARTISAN',
-                '商': 'MERCHANT',
-                '学': 'SCHOLAR',
-                '兵': 'GUARD',
-                '游': 'GUARD',
-                '匪': 'BANDIT',
-            }
-            job = job_by_power.get(power_type, 'NONE')
-            
-            # 特殊处理：带有 THUG tag 的匪类角色应该是泼皮（城内混混）而不是山贼（城外强盗）
-            if 'THUG' in tags and power_type == '匪':
-                job = 'THUG'
-            
-            return {
-                'id': npc_id,
-                'name': seed['name'],
-                'job': job,
-                'power_type': power_type,
-                'social_level': seed.get('social_level', 1),
-                'tags': tags_str,
-                'body_img': body_img,
-                'head_img': head_img,
-                'desc': seed.get('desc', ''),
-                'org_id': seed.get('org_id'),
-                'org_role': seed.get('org_role'),
-                'org_rank': seed.get('org_rank', 0),
-                'personality': seed.get('personality'),
-                'initial_dilemma': seed.get('initial_dilemma'),
-            }
-    
-    raise ValueError(f"[WorldLoader] 致命错误：角色 '{name}' 不存在于 SEEDS 中！")
+    return warnings
 
 
 class WorldLoader:

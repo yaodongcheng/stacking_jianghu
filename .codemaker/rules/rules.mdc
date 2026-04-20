@@ -209,24 +209,23 @@ npc = find_npc_by_name(all_cards, "张三")
 npc_dict = find_npcs_by_names(all_cards, ["张三", "李四"])
 ```
 
-**仅需 ID↔名字 字符串互查时（不需要 card 对象），使用全局映射表（字典 O(1)）**：
+**仅需 ID↔名字 字符串互查时（不需要 card 对象），使用 npc_registry（字典 O(1)）**：
 
 ```python
-from src.data_loader import get_npc_name_by_id_global, get_npc_id_by_name_global
+from src.task.npc_registry import get_npc_name_by_id, get_speaker_id
 
-name = get_npc_name_by_id_global(8001)      # ID -> 名字（O(1) 字典查询）
-npc_id = get_npc_id_by_name_global("张三")   # 名字 -> ID (int 或 None)
+name = get_npc_name_by_id(1007)        # ID -> 名字（O(1) 字典查询）
+npc_id = get_speaker_id("孙二娘")       # 名字 -> ID (int 或 None)
 ```
 
 ### 2.3 NPC ID 规则
 
-**ID计算公式**：
-```python
-NPC_ID = 8000 + CSV_ROW_INDEX  # npc_data.csv 中的行索引
-```
+**唯一来源**：所有 NPC ID 来自 `data/npc_data.csv` 的 `id` 字段；`npc_registry` 在模块 import 时读 csv 构建 `NAME_TO_ID` / `ID_TO_NAME`。**禁止**任何基于行索引或 SEEDS 数组下标的自动生成 ID。
 
-**特殊ID**：
-- 玩家: `id=1`
+**特殊ID常量**（在 `src/task/npc_registry.py`）：
+- 玩家: `ID_PLAYER = 9999`
+- 跟随者（玩家命名的随从）: `ID_FOLLOWER = 9998`
+- 村长: `ID_VILLAGE_HEAD = 9000`
 
 ### 2.4 坐标系统
 

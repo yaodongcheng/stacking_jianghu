@@ -32,6 +32,7 @@ from src.ui.event_notification import (
     NewsCategory, DilemmaType
 )
 from src.definitions import *
+from src.task.actions._helpers import find_npc_by_id
 from src.utils import log_game_event
 
 # 对话扩写系统
@@ -1226,21 +1227,20 @@ class AIDirector:
             
             if actor_ids and ctx and hasattr(ctx, 'all_cards'):
                 # 从 all_cards 中查找第一个演员的位置
-                for card in ctx.all_cards:
-                    if hasattr(card, 'id') and card.id == actor_ids[0]:
-                        location_x = card.rect.centerx
-                        location_y = card.rect.centery
-                        # 尝试获取位置名称
-                        if hasattr(card, 'zone'):
-                            zone_names = {
-                                'INNER': '城内',
-                                'OUTER': '城外',
-                                'FARM': '农田',
-                                'MARKET': '集市',
-                                'SLUM': '贫民窟'
-                            }
-                            location_name = zone_names.get(card.zone, '城内')
-                        break
+                card = find_npc_by_id(ctx.all_cards, actor_ids[0])
+                if card is not None:
+                    location_x = card.rect.centerx
+                    location_y = card.rect.centery
+                    # 尝试获取位置名称
+                    if hasattr(card, 'zone'):
+                        zone_names = {
+                            'INNER': '城内',
+                            'OUTER': '城外',
+                            'FARM': '农田',
+                            'MARKET': '集市',
+                            'SLUM': '贫民窟'
+                        }
+                        location_name = zone_names.get(card.zone, '城内')
             
             # 确定事件类别
             event_type = decision.get('event_type', '')

@@ -4,6 +4,7 @@ import math
 from src.definitions import *
 from src.entities import NPC,Resource
 from src.utils import log_game_event
+from src.task.actions._helpers import find_npc_by_id, find_npc_by_name
 class RenderSystem:
     def __init__(self, screen, ui_manager, world_map, ft_manager):
         self.screen = screen
@@ -1739,11 +1740,9 @@ class RenderSystem:
                 return None
             
             # 查找提交NPC
-            for card in all_cards:
-                if hasattr(card, 'id') and str(card.id) == str(submit_npc):
-                    return make_result((card.rect.centerx, card.rect.centery), 'npc', card)
-                if hasattr(card, 'name') and card.name == submit_npc:
-                    return make_result((card.rect.centerx, card.rect.centery), 'npc', card)
+            card = find_npc_by_id(all_cards, submit_npc) if str(submit_npc).isdigit() else find_npc_by_name(all_cards, submit_npc)
+            if card is not None:
+                return make_result((card.rect.centerx, card.rect.centery), 'npc', card)
         
         elif quest_mgr.quest_status == QS_ACTIVE:
             # 任务进行中，根据任务类型确定目标
@@ -1755,9 +1754,9 @@ class RenderSystem:
             
             elif q.type == 'INTERACT':
                 # 交互任务：目标是指定NPC
-                for card in all_cards:
-                    if hasattr(card, 'name') and card.name == q.target:
-                        return make_result((card.rect.centerx, card.rect.centery), 'npc', card)
+                card = find_npc_by_name(all_cards, q.target)
+                if card is not None:
+                    return make_result((card.rect.centerx, card.rect.centery), 'npc', card)
             
             elif q.type == 'GATHER':
                 # 采集任务：从配方系统获取资源对应的建筑类型

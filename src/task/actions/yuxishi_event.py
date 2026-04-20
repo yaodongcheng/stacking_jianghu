@@ -476,37 +476,12 @@ def action_release_event_npcs(quest_mgr, ctx=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# 导出函数（供 QuestManager.make_choice 调用）
+# 鱼西施事件 - 选择数值效果 & 剧情记忆注入
+# 通过 quest_types/choice.py 的注册表暴露给 ChoiceType 使用
 # ═══════════════════════════════════════════════════════════════
 
-def get_choice_effects(quest_id, choice_key):
-    """获取选择的效果数据"""
-    CHOICE_EFFECTS = {
-        'Q_YUXISHI_CHOICE': {
-            'GOOD': {
-                'fame': 10,
-                'morality': 10,
-                'message': '你出手相救，声名远扬',
-            },
-            'EVIL': {
-                'fame': -5,
-                'morality': -20,
-                'money': 20,
-                'bounty': {
-                    'issuer': 'YAMEN',
-                    'reward': 30,
-                    'reason': '欺压良善'
-                },
-                'message': '你选择了黑暗面...',
-            }
-        },
-    }
 
-    quest_effects = CHOICE_EFFECTS.get(quest_id, {})
-    return quest_effects.get(choice_key, {})
-
-
-def apply_story_memories(quest_mgr, quest_id, choice_key, player, all_cards, ft_manager=None):
+def _yuxishi_apply_memories(quest_mgr, choice_key, player, all_cards, ft_manager=None):
     """根据剧情分支为所有当事人添加记忆"""
     if not all_cards:
         print("[Quest] 警告: all_cards 为空，无法生成剧情记忆")
@@ -518,194 +493,223 @@ def apply_story_memories(quest_mgr, quest_id, choice_key, player, all_cards, ft_
                 return card
         return None
 
-    if quest_id == 'Q_YUXISHI_CHOICE':
-        yuxishi = _find('鱼西施')
-        popi_niuer = _find('泼皮牛二')
-        popi_goudan = _find('泼皮狗蛋')
+    yuxishi = _find('鱼西施')
+    popi_niuer = _find('泼皮牛二')
+    popi_goudan = _find('泼皮狗蛋')
 
-        # 无论玩家选什么，鱼西施都被泼皮欺负过
+    # 无论玩家选什么，鱼西施都被泼皮欺负过
+    if yuxishi:
+        if popi_niuer:
+            yuxishi.add_memory(
+                event_type='BULLIED_BY',
+                target_id=getattr(popi_niuer, 'id', None),
+                target_name='泼皮牛二',
+                description='在城东街头被泼皮牛二骚扰欺负',
+                importance=4
+            )
+            yuxishi.modify_affinity(getattr(popi_niuer, 'id', 0), -40)
+
+        if popi_goudan:
+            yuxishi.add_memory(
+                event_type='BULLIED_BY',
+                target_id=getattr(popi_goudan, 'id', None),
+                target_name='泼皮狗蛋',
+                description='泼皮狗蛋帮着牛二一起欺负自己',
+                importance=3
+            )
+            yuxishi.modify_affinity(getattr(popi_goudan, 'id', 0), -30)
+
+    if popi_niuer and yuxishi:
+        popi_niuer.add_memory(
+            event_type='BULLIED',
+            target_id=getattr(yuxishi, 'id', None),
+            target_name='鱼西施',
+            description='在城东街头调戏欺负鱼西施',
+            importance=2
+        )
+
+    if popi_goudan and yuxishi:
+        popi_goudan.add_memory(
+            event_type='BULLIED',
+            target_id=getattr(yuxishi, 'id', None),
+            target_name='鱼西施',
+            description='跟着牛二一起欺负鱼西施',
+            importance=2
+        )
+
+    # ─── 玩家选择 GOOD：出手相救 ───
+    if choice_key == 'GOOD':
+        player_id = getattr(player, 'id', 9999)
+        player_name = getattr(player, 'name', '玩家')
+
         if yuxishi:
+            yuxishi.add_memory(
+                event_type='HELPED_BY',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'{player_name}挺身而出，救我于泼皮之手',
+                importance=5
+            )
+            yuxishi.modify_affinity(player_id, +50)
+            yuxishi.affinity_to_player = yuxishi.get_affinity_to(player_id)
+
+            if ft_manager:
+                ft_manager.add_text("鱼西施好感度 +50",
+                                    yuxishi.rect.centerx, yuxishi.rect.top - 60, (255, 200, 255))
+
+        if popi_niuer:
+            popi_niuer.add_memory(
+                event_type='FOUGHT_WITH',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'在欺负鱼西施时被{player_name}阻止，动了手',
+                importance=4
+            )
+            popi_niuer.modify_affinity(player_id, -40)
+            popi_niuer.sync_affinity_to_player(player_id)
+
+        if popi_goudan:
+            popi_goudan.add_memory(
+                event_type='FOUGHT_WITH',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'被{player_name}打了，怀恨在心',
+                importance=3
+            )
+            popi_goudan.modify_affinity(player_id, -30)
+            popi_goudan.sync_affinity_to_player(player_id)
+
+        if player and hasattr(player, 'add_memory'):
+            player.add_memory(
+                event_type='HELPED',
+                target_id=getattr(yuxishi, 'id', None) if yuxishi else None,
+                target_name='鱼西施',
+                description='在城东出手相救被泼皮欺负的鱼西施',
+                importance=4
+            )
+            if yuxishi and hasattr(player, 'modify_affinity'):
+                player.modify_affinity(getattr(yuxishi, 'id', 0), +30)
+
             if popi_niuer:
-                yuxishi.add_memory(
-                    event_type='BULLIED_BY',
+                player.add_memory(
+                    event_type='FOUGHT_WITH',
                     target_id=getattr(popi_niuer, 'id', None),
                     target_name='泼皮牛二',
-                    description='在城东街头被泼皮牛二骚扰欺负',
-                    importance=4
+                    description='为救鱼西施与泼皮牛二动手',
+                    importance=3
                 )
-                yuxishi.modify_affinity(getattr(popi_niuer, 'id', 0), -40)
+                if hasattr(player, 'modify_affinity'):
+                    player.modify_affinity(getattr(popi_niuer, 'id', 0), -20)
 
             if popi_goudan:
-                yuxishi.add_memory(
-                    event_type='BULLIED_BY',
+                player.add_memory(
+                    event_type='FOUGHT_WITH',
                     target_id=getattr(popi_goudan, 'id', None),
                     target_name='泼皮狗蛋',
-                    description='泼皮狗蛋帮着牛二一起欺负自己',
-                    importance=3
-                )
-                yuxishi.modify_affinity(getattr(popi_goudan, 'id', 0), -30)
-
-        if popi_niuer and yuxishi:
-            popi_niuer.add_memory(
-                event_type='BULLIED',
-                target_id=getattr(yuxishi, 'id', None),
-                target_name='鱼西施',
-                description='在城东街头调戏欺负鱼西施',
-                importance=2
-            )
-
-        if popi_goudan and yuxishi:
-            popi_goudan.add_memory(
-                event_type='BULLIED',
-                target_id=getattr(yuxishi, 'id', None),
-                target_name='鱼西施',
-                description='跟着牛二一起欺负鱼西施',
-                importance=2
-            )
-
-        # ─── 玩家选择 GOOD：出手相救 ───
-        if choice_key == 'GOOD':
-            player_id = getattr(player, 'id', 9999)
-            player_name = getattr(player, 'name', '玩家')
-
-            if yuxishi:
-                yuxishi.add_memory(
-                    event_type='HELPED_BY',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'{player_name}挺身而出，救我于泼皮之手',
-                    importance=5
-                )
-                yuxishi.modify_affinity(player_id, +50)
-                yuxishi.affinity_to_player = yuxishi.get_affinity_to(player_id)
-
-                if ft_manager:
-                    ft_manager.add_text("鱼西施好感度 +50",
-                                        yuxishi.rect.centerx, yuxishi.rect.top - 60, (255, 200, 255))
-
-            if popi_niuer:
-                popi_niuer.add_memory(
-                    event_type='FOUGHT_WITH',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'在欺负鱼西施时被{player_name}阻止，动了手',
-                    importance=4
-                )
-                popi_niuer.modify_affinity(player_id, -40)
-                popi_niuer.sync_affinity_to_player(player_id)
-
-            if popi_goudan:
-                popi_goudan.add_memory(
-                    event_type='FOUGHT_WITH',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'被{player_name}打了，怀恨在心',
-                    importance=3
-                )
-                popi_goudan.modify_affinity(player_id, -30)
-                popi_goudan.sync_affinity_to_player(player_id)
-
-            if player and hasattr(player, 'add_memory'):
-                player.add_memory(
-                    event_type='HELPED',
-                    target_id=getattr(yuxishi, 'id', None) if yuxishi else None,
-                    target_name='鱼西施',
-                    description='在城东出手相救被泼皮欺负的鱼西施',
-                    importance=4
-                )
-                if yuxishi and hasattr(player, 'modify_affinity'):
-                    player.modify_affinity(getattr(yuxishi, 'id', 0), +30)
-
-                if popi_niuer:
-                    player.add_memory(
-                        event_type='FOUGHT_WITH',
-                        target_id=getattr(popi_niuer, 'id', None),
-                        target_name='泼皮牛二',
-                        description='为救鱼西施与泼皮牛二动手',
-                        importance=3
-                    )
-                    if hasattr(player, 'modify_affinity'):
-                        player.modify_affinity(getattr(popi_niuer, 'id', 0), -20)
-
-                if popi_goudan:
-                    player.add_memory(
-                        event_type='FOUGHT_WITH',
-                        target_id=getattr(popi_goudan, 'id', None),
-                        target_name='泼皮狗蛋',
-                        description='与泼皮狗蛋一起打了一架',
-                        importance=2
-                    )
-                    if hasattr(player, 'modify_affinity'):
-                        player.modify_affinity(getattr(popi_goudan, 'id', 0), -20)
-
-            try:
-                from src.llm.event_memory_bridge import inject_help_memory
-                if yuxishi:
-                    inject_help_memory(player, yuxishi, "出手相救")
-            except Exception as e:
-                print(f"[Quest] LLM记忆注入失败: {e}")
-
-            print(f"[Quest] 记忆系统: 玩家选择GOOD，已为鱼西施、泼皮、玩家添加记忆")
-
-        # ─── 玩家选择 EVIL：助纣为虐 ───
-        elif choice_key == 'EVIL':
-            player_id = getattr(player, 'id', 9999)
-            player_name = getattr(player, 'name', '玩家')
-
-            if yuxishi:
-                yuxishi.add_memory(
-                    event_type='BULLIED_BY',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'{player_name}不仅不帮忙，还和泼皮一起欺负我',
-                    importance=5
-                )
-                yuxishi.modify_affinity(player_id, -60)
-                yuxishi.affinity_to_player = yuxishi.get_affinity_to(player_id)
-
-                if ft_manager:
-                    ft_manager.add_text("鱼西施好感度 -60",
-                                        yuxishi.rect.centerx, yuxishi.rect.top - 60, (255, 50, 50))
-
-            if popi_niuer:
-                popi_niuer.add_memory(
-                    event_type='PARTNERED_WITH',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'{player_name}和咱们一起欺负鱼西施，是自己人',
-                    importance=3
-                )
-                popi_niuer.modify_affinity(player_id, +30)
-                popi_niuer.sync_affinity_to_player(player_id)
-
-            if popi_goudan:
-                popi_goudan.add_memory(
-                    event_type='PARTNERED_WITH',
-                    target_id=player_id,
-                    target_name=player_name,
-                    description=f'{player_name}帮着我们欺负人，够意思',
+                    description='与泼皮狗蛋一起打了一架',
                     importance=2
                 )
-                popi_goudan.modify_affinity(player_id, +20)
-                popi_goudan.sync_affinity_to_player(player_id)
+                if hasattr(player, 'modify_affinity'):
+                    player.modify_affinity(getattr(popi_goudan, 'id', 0), -20)
 
-            if player and hasattr(player, 'add_memory'):
-                player.add_memory(
-                    event_type='BULLIED',
-                    target_id=getattr(yuxishi, 'id', None) if yuxishi else None,
-                    target_name='鱼西施',
-                    description='在城东和泼皮一起欺负鱼西施，分了赃',
-                    importance=4
-                )
-                if yuxishi and hasattr(player, 'modify_affinity'):
-                    player.modify_affinity(getattr(yuxishi, 'id', 0), -10)
+        try:
+            from src.llm.event_memory_bridge import inject_help_memory
+            if yuxishi:
+                inject_help_memory(player, yuxishi, "出手相救")
+        except Exception as e:
+            print(f"[Quest] LLM记忆注入失败: {e}")
 
-                if popi_niuer and hasattr(player, 'modify_affinity'):
-                    player.modify_affinity(getattr(popi_niuer, 'id', 0), +15)
-                if popi_goudan and hasattr(player, 'modify_affinity'):
-                    player.modify_affinity(getattr(popi_goudan, 'id', 0), +10)
+        print(f"[Quest] 记忆系统: 玩家选择GOOD，已为鱼西施、泼皮、玩家添加记忆")
 
-            print(f"[Quest] 记忆系统: 玩家选择EVIL，已为所有当事人添加记忆")
+    # ─── 玩家选择 EVIL：助纣为虐 ───
+    elif choice_key == 'EVIL':
+        player_id = getattr(player, 'id', 9999)
+        player_name = getattr(player, 'name', '玩家')
+
+        if yuxishi:
+            yuxishi.add_memory(
+                event_type='BULLIED_BY',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'{player_name}不仅不帮忙，还和泼皮一起欺负我',
+                importance=5
+            )
+            yuxishi.modify_affinity(player_id, -60)
+            yuxishi.affinity_to_player = yuxishi.get_affinity_to(player_id)
+
+            if ft_manager:
+                ft_manager.add_text("鱼西施好感度 -60",
+                                    yuxishi.rect.centerx, yuxishi.rect.top - 60, (255, 50, 50))
+
+        if popi_niuer:
+            popi_niuer.add_memory(
+                event_type='PARTNERED_WITH',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'{player_name}和咱们一起欺负鱼西施，是自己人',
+                importance=3
+            )
+            popi_niuer.modify_affinity(player_id, +30)
+            popi_niuer.sync_affinity_to_player(player_id)
+
+        if popi_goudan:
+            popi_goudan.add_memory(
+                event_type='PARTNERED_WITH',
+                target_id=player_id,
+                target_name=player_name,
+                description=f'{player_name}帮着我们欺负人，够意思',
+                importance=2
+            )
+            popi_goudan.modify_affinity(player_id, +20)
+            popi_goudan.sync_affinity_to_player(player_id)
+
+        if player and hasattr(player, 'add_memory'):
+            player.add_memory(
+                event_type='BULLIED',
+                target_id=getattr(yuxishi, 'id', None) if yuxishi else None,
+                target_name='鱼西施',
+                description='在城东和泼皮一起欺负鱼西施，分了赃',
+                importance=4
+            )
+            if yuxishi and hasattr(player, 'modify_affinity'):
+                player.modify_affinity(getattr(yuxishi, 'id', 0), -10)
+
+            if popi_niuer and hasattr(player, 'modify_affinity'):
+                player.modify_affinity(getattr(popi_niuer, 'id', 0), +15)
+            if popi_goudan and hasattr(player, 'modify_affinity'):
+                player.modify_affinity(getattr(popi_goudan, 'id', 0), +10)
+
+        print(f"[Quest] 记忆系统: 玩家选择EVIL，已为所有当事人添加记忆")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 注册到 ChoiceType 插件（模块加载时执行）
+# ═══════════════════════════════════════════════════════════════
+
+from src.task.quest_types.choice import (
+    register_effects, register_alias, register_memory_hook,
+)
+
+register_effects('Q_YUXISHI_CHOICE', {
+    'GOOD': {
+        'text': '出手相救',
+        'fame': 10,
+        'morality': 10,
+        'message': '你出手相救，声名远扬',
+    },
+    'EVIL': {
+        'text': '助纣为虐',
+        'fame': -5,
+        'morality': -20,
+        'money': 20,
+        'bounty': {'issuer': 'YAMEN', 'reward': 30, 'reason': '欺压良善'},
+        'message': '你选择了黑暗面...',
+    },
+})
+
+# Q_SETTLE_CHOICE 复用同一套效果与记忆钩子（主线融合后的别名）
+register_alias('Q_SETTLE_CHOICE', 'Q_YUXISHI_CHOICE')
+register_memory_hook('Q_YUXISHI_CHOICE', _yuxishi_apply_memories)
 
 
 # ======================== Handler 注册表 ========================
