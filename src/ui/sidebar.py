@@ -498,6 +498,14 @@ class TaskDetailPanel:
         """显示任务详情（根据内容动态计算高度）"""
         self.visible = True
         self.task = task
+
+        print(
+            f"[TaskDetailPanel] type={task.type!r} text={task.text!r} "
+            f"description={task.description!r} target_npc={task.target_npc!r} "
+            f"objective={task.objective!r} reward={task.reward!r} "
+            f"deadline_days={task.deadline_days} progress={task.progress!r} "
+            f"is_complete={task.is_complete} is_urgent={task.is_urgent}"
+        )
         
         # 弹窗宽度固定，高度根据内容动态计算
         panel_w = 400

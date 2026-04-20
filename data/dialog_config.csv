@@ -171,7 +171,7 @@ Q_SETTLE_INTRO,NARRATOR,【主线任务开启】在城中站稳脚跟,,UNLOCK_GU
 Q_SETTLE_P1,NARRATOR,天刚蒙蒙亮，肚子又叫上了。,,
 Q_SETTLE_P1,我,再不吃点东西，怕是连路都走不动了。,,
 Q_SETTLE_P1,NARRATOR,满街的早点香味，可口袋里就那么几个铜板。,,
-Q_SETTLE_P1,NARRATOR,【提示】想办法填饱肚子——去酒馆帮忙换顿饭，到集市打零工赚点吃食钱，或者出城碰碰运气采些野果。,,
+Q_SETTLE_P1,NARRATOR,【提示】把角色拖到酒馆找老板娘帮忙换顿饭，或者出城拖到果丛上采些野果。,,
 Q_SETTLE_P1_REMIND,NARRATOR,肚子又叫了...什么体面不体面的，先活下去再说。,,
 Q_SETTLE_P1_END,NARRATOR,热乎乎的食物下肚，整个人总算缓过劲来。,,
 Q_SETTLE_P1_END,我,吃饱了...现在得想想住的问题。总不能天天睡大街。,,

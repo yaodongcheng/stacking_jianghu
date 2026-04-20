@@ -12,7 +12,7 @@ import csv
 import random
 import os
 from src.definitions import *
-from src.entities import Player, NPC, Building, Resource
+from src.entities import NPC
 from src.utils import resource_path
 
 # 导入角色种子数据，用于动态构建 ID 映射
@@ -92,7 +92,14 @@ class QuestData:
         self.desc = row['desc']
         self.submit_npc = row.get('submit_npc', '9000')
         self.scenario = row.get('scenario', '')
-        
+
+        # 委托型字段（设计文档 §3.2，全部可选 / 空 = "不适用"）
+        # budget / reward 走 DSL，例如 "MONEY:300;ITEM:生鱼:3"；deadline 单位为天
+        self.budget = (row.get('budget') or '').strip()
+        self.reward = (row.get('reward') or '').strip()
+        deadline_raw = (row.get('deadline') or '').strip()
+        self.deadline = int(deadline_raw) if deadline_raw else 0
+
         # 【新增】分支任务支持
         # CHOICE类型任务可以有多个后续分支
         # 格式: "next_good|next_evil" 或 "BRANCH_A:条件A|BRANCH_B:条件B"
@@ -340,113 +347,23 @@ class QuestManager:
         if val: self.quest_status = "READY"
 
     def check_progress(self, player, all_cards, ctx=None):
-        """检查当前任务是否完成"""
+        """检查当前任务是否完成。
+
+        目标判定按 quest.type 派发到 goal_checkers 注册表。
+        本方法只负责后续状态机推进 / NPC 弹开 / 自动激活下一段对话。
+        """
         if self.quest_status != QS_ACTIVE:
             return False
         q = self.get_current_quest()
-        if not q: return False
-        if q.type in ['DIALOG', 'INTERACT']: 
+        if not q:
             return False
-        
-        completed = False
-        
-        # 1. 采集类
-        if q.type == 'GATHER':
-            # 检查玩家或任意随从背包
-            count = player.inventory.get(q.target, 0)
-            for c in all_cards:
-                if getattr(c, 'is_follower', False):
-                    count += c.inventory.get(q.target, 0)
-            if count >= q.count: completed = True
-        
-        elif q.type == 'HAVE_UNIT':
-            count = 0
-            for c in all_cards:
-                # 检查 NPC 职业
-                if isinstance(c, NPC) and getattr(c, 'job', '') == q.target:
-                    count += 1
-                # 检查 建筑 类型
-                elif isinstance(c, Building) and getattr(c, 'building_type', '') == q.target:
-                    count += 1
-                elif isinstance(c, Resource) and c.item_type == q.target:
-                    count += c.count
-            if count >= q.count: completed = True
-        elif q.type == 'RESOURCE_TOTAL':
-            current_val = 0
-            if q.target == 'MONEY': current_val = player.money
-            elif q.target == 'FAME': current_val = player.fame
-            if current_val >= q.count: completed = True
-        # 2. 生存天数类
-        elif q.type == 'SURVIVE':
-            if q.target == 'DAY' and player.day >= q.count:
-                completed = True
-        
-        # 3. 目标完成类 (GOAL) - 用于特殊目标如"取消悬赏"
-        elif q.type == 'GOAL':
-            if q.target == 'CANCEL_BOUNTY':
-                # 检查恶霸悬赏是否已取消
-                if not self.flags.get('bully_bounty_active', True):
-                    completed = True
-            elif q.target == 'DEFEAT_BULLY':
-                # 检查恶霸是否被击败
-                if self.flags.get('bully_defeated', False):
-                    completed = True
-            elif q.target == 'HUNGER':
-                # 检查玩家饥饿值是否低于目标值（即已吃东西）
-                current_hunger = getattr(player, 'hunger', 100)
-                if current_hunger <= q.count:
-                    completed = True
-        
-        # 4. 招募类任务 (RECRUIT) - 检查是否已招募指定NPC
-        elif q.type == 'RECRUIT':
-            recruit_target = q.target  # NPC名字
-            recruited = self.flags.get(f'recruited_{recruit_target}', False)
-            if recruited:
-                completed = True
-            else:
-                # 也检查 followers 列表
-                followers = getattr(player, 'followers', [])
-                for f in followers:
-                    if getattr(f, 'name', '') == recruit_target:
-                        completed = True
-                        self.set_flag(f'recruited_{recruit_target}', True)
-                        break
-        
-        # 5. 战斗类任务 (COMBAT) - 检查是否击败指定目标
-        elif q.type == 'COMBAT':
-            combat_target = q.target  # NPC名字
-            if self.flags.get(f'defeated_{combat_target}', False):
-                completed = True
-        
-        # 6. 进食/恢复类任务 (EAT) - 只看结果：饥饿值是否低于目标
-        elif q.type == 'EAT':
-            # target 是目标饥饿阈值，饥饿值低于此值即完成
-            # 例如 target=50 表示"饥饿值降到50以下"
-            target_hunger = int(q.count) if q.count else 50
-            current_hunger = getattr(player, 'hunger', 100)
-            if current_hunger < target_hunger:
-                completed = True
-        
-        # 7. 交付类任务 (DELIVER) - 通过将物品堆叠到NPC身上来完成
-        # 进度由 on_item_delivered 方法更新
-        elif q.type == 'DELIVER':
-            # 检查交付进度计数器
-            deliver_count = self.flags.get(f'deliver_{q.id}', 0)
-            if deliver_count >= q.count:
-                completed = True
-        
-        # 8. 【新增】到达区域类任务 (REACH) - 玩家到达指定区域即完成
-        elif q.type == 'REACH':
-            # target 格式: "x,y,radius" 如 "2800,2000,150" 或区域名 "AMBUSH_POINT"
-            if self._check_player_reach_target(player, q.target, q.count):
-                completed = True
+        # DIALOG / INTERACT 由对话流转完成，无被动判定
+        if q.type in ('DIALOG', 'INTERACT'):
+            return False
 
-        # 9. 【新增】等待时间类任务 (WAIT_TIME) - 到达指定天数+时辰自动完成
-        elif q.type == 'WAIT_TIME':
-            # target 格式: "day:时辰" 如 "1:亥", "2:申"
-            if ctx and self._check_wait_time(player, q.target, ctx):
-                completed = True
-    
+        from .goal_checkers import is_goal_met
+        completed = is_goal_met(q, player, all_cards, self, ctx)
+
         if completed:
             if q.type == 'GATHER':
                 for card in all_cards:
@@ -459,29 +376,45 @@ class QuestManager:
                             # 1. 停止工作并弹开
                             if card.stack_parent:
                                 card.bounce_off(card.stack_parent)
-                            
+
                             # 2. 修改AI状态描述作为"说话" (显示在人物下方或面板上)
                             card.ai_reason = f"采集够了{q.target}，可以回去交任务了"
-                            
+
                             # 3. 如果需要，可以重置计时器防止瞬间再次吸附
-                            card.state = "IDLE" 
-            
+                            card.state = "IDLE"
+
             # 【通用】submit_npc='9999' 的任务自动推进（WAIT_TIME/EAT/REACH等）
             if q.submit_npc == '9999':
                 self.quest_status = QS_READY
                 print(f"[Quest] '{q.title}' 完成，自动推进...")
-                self.advance_quest()
 
-                # 如果下一个是DIALOG任务，立即触发对话
+                old_id = q.id
+                self.advance_quest()
                 next_q = self.get_current_quest()
+
+                # 拼接过场对话：本段 _END（收尾内心独白）+ 下段开场叙述
+                # 之前只在"下段是 DIALOG"时才播 next 对话，导致非对话型主线
+                # （HAVE_UNIT/RESOURCE_TOTAL 等）的开场和上段的收尾全被吞掉。
+                combined = []
+                end_dialogs = self.get_dialog(f"{old_id}_END")
+                if end_dialogs:
+                    combined.extend(end_dialogs)
+                if next_q:
+                    start_dialogs = self.get_dialog(next_q.id)
+                    if start_dialogs:
+                        combined.extend(start_dialogs)
+
+                # 下段如果是 DIALOG 任务，先置 ACTIVE，让对话结束时 on_dialog_finished 能推进
                 if next_q and next_q.type == 'DIALOG':
                     self.quest_status = QS_ACTIVE
                     print(f"[Quest] 自动触发DIALOG任务: {next_q.id}")
-                    dialogs = self.get_dialog(next_q.id)
-                    if dialogs and ctx:
-                        ctx.story_ui.start_dialog(dialogs)
+
+                if combined and ctx:
+                    print(f"[Quest] 播放过场对话: {old_id}_END({len(end_dialogs) if end_dialogs else 0}行) "
+                          f"+ {next_q.id if next_q else '-'}({len(start_dialogs) if (next_q and start_dialogs) else 0}行)")
+                    ctx.story_ui.start_dialog(combined)
                 return True
-            
+
             self.quest_status = QS_READY
             submit_name = self._get_npc_name_by_id(q.submit_npc)
             print(f"[Quest] '{q.title}' 目标达成 -> READY (去找{submit_name}交付)")
@@ -1201,83 +1134,6 @@ class QuestManager:
 
             processed.append(new_d)
         return processed
-    def _check_player_reach_target(self, player, target, radius):
-        """
-        检查玩家是否到达目标区域
-        target: 区域名（如 AMBUSH_POINT）或坐标字符串 "x,y"
-        radius: 判定半径（像素）
-        """
-        if not player:
-            return False
-        
-        px, py = player.rect.centerx, player.rect.centery
-        
-        # 预定义的特殊区域点
-        REACH_POINTS = {
-            'AMBUSH_POINT': (2200, 2100),   # 城东门外的伏击点（城门附近）
-            'RIVER_BANK': (3000, 2500),     # 河滩
-            'HUNTER_CABIN': (500, 500),     # 猎户小屋
-            'MARKET_CENTER': (1700, 1400),  # 市场中心
-        }
-        
-        # 解析目标点
-        target_pos = None
-        if target in REACH_POINTS:
-            target_pos = REACH_POINTS[target]
-        elif ',' in str(target):
-            # 格式: "x,y"
-            try:
-                parts = str(target).split(',')
-                target_pos = (int(parts[0]), int(parts[1]))
-            except:
-                pass
-        
-        if not target_pos:
-            print(f"[Quest] REACH任务目标解析失败: {target}")
-            return False
-        
-        # 计算距离
-        import math
-        dist = math.hypot(px - target_pos[0], py - target_pos[1])
-        check_radius = int(radius) if radius else 150
-        
-        if dist <= check_radius:
-            print(f"[Quest] 玩家到达目标区域 {target}! 距离={dist:.0f}px <= {check_radius}px")
-            return True
-        return False
-
-    # 12时辰映射到一天中的序号（0~11）
-    SHICHEN_MAP = {
-        '子': 0, '丑': 1, '寅': 2, '卯': 3, '辰': 4, '巳': 5,
-        '午': 6, '未': 7, '申': 8, '酉': 9, '戌': 10, '亥': 11,
-    }
-
-    def _check_wait_time(self, player, target, ctx):
-        """
-        检查是否到达指定的天数+时辰
-        target 格式: "day:时辰" 如 "1:亥", "2:申"
-        """
-        parts = target.split(':')
-        if len(parts) != 2:
-            return False
-        try:
-            target_day = int(parts[0])
-        except ValueError:
-            return False
-        target_shichen = self.SHICHEN_MAP.get(parts[1], -1)
-        if target_shichen < 0:
-            return False
-
-        em = ctx.event_manager
-        current_shichen = int(em.current_day_ticks / em.ticks_per_day * 12)
-        current_day = player.day
-
-        if current_day > target_day:
-            return True
-        if current_day == target_day and current_shichen >= target_shichen:
-            print(f"[Quest] WAIT_TIME 条件满足: Day {current_day} {parts[1]}时 (shichen={current_shichen})")
-            return True
-        return False
 
     def get_quest_log_data(self):
         """返回 (active_list, finished_list) 供 UI 显示"""
@@ -1324,7 +1180,41 @@ class QuestManager:
         
         # 兜底：直接返回原值
         return npc_id_or_name
-    
+
+    def _derive_objective(self, q):
+        """从 QuestData 派生一句"具体完成条件"，给详情面板的"完成条件"字段用。
+        侧边栏 text 讲"做什么"，objective 讲"达成什么"，二者互补。
+        """
+        if not q:
+            return ""
+        t = q.type
+        if t == 'GATHER':
+            return f"采集 {q.target} ×{q.count}"
+        if t == 'HAVE_UNIT':
+            return f"拥有 {q.target} ×{q.count}"
+        if t == 'RESOURCE_TOTAL':
+            unit = '铜钱' if q.target == 'MONEY' else ('声望' if q.target == 'FAME' else q.target)
+            return f"{unit}累积达到 {q.count}"
+        if t == 'SURVIVE':
+            return f"存活到第 {q.count} 天"
+        if t == 'EAT':
+            return f"将饥饿值降到 {q.count} 以下"
+        if t == 'DELIVER':
+            return f"向指定 NPC 交付 {q.target} ×{q.count}"
+        if t == 'RECRUIT':
+            return f"招募 {q.target}"
+        if t == 'COMBAT':
+            return f"击败 {q.target}"
+        if t == 'REACH':
+            return f"到达 {q.target}"
+        if t == 'WAIT_TIME':
+            return f"等到 {q.target}"
+        if t == 'INTERACT':
+            return f"与 {q.target} 交互"
+        if t in ('DIALOG', 'CHOICE'):
+            return ""  # 对话/抉择不需要明确条件
+        return ""
+
     def get_current_objective_text(self, player=None, all_cards=[]):
         """侧边栏简略显示"""
         if not self.flags['guidance_visible']: return ""
@@ -1365,13 +1255,8 @@ class QuestManager:
                     if q.target == 'MONEY': current = player.money
                     prog_str = f"({current}/{q.count})"
                 elif q.type == 'EAT':
-                    # 饥饿恢复任务：显示当前饥饿值和目标值
-                    current_hunger = getattr(player, 'hunger', 100)
-                    target_hunger = int(q.count) if q.count else 50
-                    if current_hunger < target_hunger:
-                        prog_str = "([ok] 已恢复)"
-                    else:
-                        prog_str = f"(饥饿:{int(current_hunger)}→需<{target_hunger})"
+                    # 饥饿恢复：进度归生存卡管，主线 text 只讲"怎么做"，不再附带饥饿值
+                    prog_str = ""
                 elif q.type in ['DIALOG', 'INTERACT']:
                     prog_str = ""  # 对话/交互类不显示进度
                 elif q.type in ['COMBAT', 'RECRUIT']:
@@ -1404,21 +1289,30 @@ class QuestManager:
                 tasks.append(TaskDisplayData(
                     task_type=TASK_TYPE_SURVIVAL,
                     text="得找点吃的",
-                    is_urgent=True
+                    is_urgent=True,
+                    description="饥饿是会死人的。再不进食，体力崩溃只是时间问题。",
+                    objective=f"将饥饿值降到 50 以下（当前 {int(hunger)}）",
+                    target_npc="玩家",
                 ))
             elif hunger >= 50:
                 tasks.append(TaskDisplayData(
                     task_type=TASK_TYPE_SURVIVAL,
                     text="肚子有些饿了",
-                    is_urgent=False
+                    is_urgent=False,
+                    description="还能撑一阵子，但久了对身子不好。",
+                    objective=f"将饥饿值降到 50 以下（当前 {int(hunger)}）",
+                    target_npc="玩家",
                 ))
-            
+
             # 寒冷警告（超过阈值才显示）
             if cold >= 70:
                 tasks.append(TaskDisplayData(
                     task_type=TASK_TYPE_SURVIVAL,
                     text="快冻僵了",
-                    is_urgent=True
+                    is_urgent=True,
+                    description="再这么冻下去，命都要保不住。",
+                    objective=f"找件衣裳或近火取暖（当前寒冷 {int(cold)}）",
+                    target_npc="玩家",
                 ))
         
         # ===== 2. 情报委托 =====
@@ -1437,10 +1331,30 @@ class QuestManager:
             is_complete = "[√]" in main_text
             # 清理前缀符号
             clean_text = main_text.replace("[!]", "").replace("[√]", "").replace(">>", "").strip()
+
+            # 把 QuestData 字段直接灌进 TaskDisplayData，详情面板才不至于全空
+            q = self.get_current_quest()
+            description = q.desc if q else ""
+            # submit_npc='9999' 表示玩家自己执行（不需要交付给某个 NPC）
+            if q and q.submit_npc == '9999':
+                target_npc = "玩家"
+            else:
+                target_npc = self._get_npc_name_by_id(q.submit_npc) if q else ""
+            objective = self._derive_objective(q) if q else ""
+            reward_text = ""
+            if q and q.reward:
+                from .dsl import parse_dsl, format_dsl
+                reward_text = format_dsl(parse_dsl(q.reward))
+
             tasks.append(TaskDisplayData(
                 task_type=TASK_TYPE_MAIN,
                 text=clean_text,
-                is_complete=is_complete
+                is_complete=is_complete,
+                description=description,
+                target_npc=target_npc,
+                objective=objective,
+                reward=reward_text,
+                deadline_days=q.deadline if q else 0,
             ))
         
         # 按优先级排序
