@@ -668,7 +668,7 @@ class UIPanelsMixin:
 
     def draw_roster(self, screen, npc_mgr):
         """绘制百姓名册 (增强版：显示势力、等级、战力等信息)"""
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.entities.npc import POWER_COLORS
         from src.faction_colors import get_org_color
         
@@ -882,7 +882,7 @@ class UIPanelsMixin:
 
     def draw_daily_report(self, screen, report_data, mx, my, click_event):
         """绘制每日结算报告"""
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.entities.npc import POWER_COLORS
         
         # 全黑背景
@@ -1094,7 +1094,7 @@ class UIPanelsMixin:
         显示：玩家所属门派任务列表、功勋、职级
         """
         from src.org_task_system import get_org_task_system
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.entities.npc import POWER_COLORS
         
         org_task_sys = get_org_task_system()
@@ -1315,7 +1315,7 @@ class UIPanelsMixin:
             (close_clicked: bool, occupy_clicked: bool)
         """
         from src.data.building_defs import BUILDING_DB, BUILDING_ICONS
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.faction_war_system import ResourceControlPoint
         from src.recipe_system import RecipeManager
         
@@ -1711,7 +1711,7 @@ class UIPanelsMixin:
         增强：显示势力首领、规模、成员数量
         支持标签页：势力关系 | 门派任务
         """
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.entities.npc import POWER_COLORS
         
         # 存储NPC列表供内部使用

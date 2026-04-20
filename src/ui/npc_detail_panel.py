@@ -3,7 +3,7 @@ import pygame
 from src.definitions import *
 from src.utils import log_game_event, wrap_text
 from src.entities import Resource 
-from src.data.character_seeds import ORGANIZATIONS
+from src.data.organization_defs import ORGANIZATIONS
 from src.item_system import ItemManager
 from src.aistory.story_director import StoryDirector
 from src.ui.live_news_panel import toggle_live_news_panel

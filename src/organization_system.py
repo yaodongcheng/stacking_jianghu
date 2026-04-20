@@ -8,7 +8,7 @@
 import random
 from src.definitions import ITEM_COIN
 from src.utils import log_game_event
-from src.data.character_seeds import ORGANIZATIONS, ORG_RANKS, POWER_TYPES
+from src.data.organization_defs import ORGANIZATIONS, ORG_RANKS, POWER_TYPES
 
 # ═══════════════════════════════════════════════════════════════════
 # 组织经济管理器 - 管理所有组织的资金流动

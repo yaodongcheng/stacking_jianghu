@@ -1010,7 +1010,7 @@ class NPC(CardBase):
         rank_symbol = RANK_SYMBOLS.get(org_rank, '')
         
         # 获取职业等级称号（如"喽啰"、"大当家"等）
-        from src.data.character_seeds import get_job_title
+        from src.data.organization_defs import get_job_title
         job_title = get_job_title(self.job, org_rank)
         
         # ═══════════════════════════════════════════════════════════════

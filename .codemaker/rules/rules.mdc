@@ -107,7 +107,7 @@ aistory/
 │   ├── audio/sound_manager.py   # 音频系统
 │   ├── data/                    # 内嵌数据定义
 │   │   ├── building_defs.py     # 建筑定义
-│   │   └── character_seeds.py   # 角色种子数据
+│   │   └── organization_defs.py  # 组织/势力/职业称号定义（结构常量）
 │   │
 │   ├── # --- 核心游戏系统(顶层模块) ---
 │   ├── ai_system.py         # NPC AI 决策入口

@@ -196,7 +196,7 @@ def get_npc_faction_visual(npc):
     org_name = '无势力'
     if org_id and org_id != 'NONE':
         try:
-            from src.data.character_seeds import ORGANIZATIONS
+            from src.data.organization_defs import ORGANIZATIONS
             org_data = ORGANIZATIONS.get(org_id, {})
             org_name = org_data.get('name', org_id)
         except:

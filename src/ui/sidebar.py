@@ -96,7 +96,7 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
         cur_y += 22
         bounty_issuer = getattr(player, 'bounty_issuer', None)
         if bounty_issuer:
-            from src.data.character_seeds import ORGANIZATIONS
+            from src.data.organization_defs import ORGANIZATIONS
             org_name = ORGANIZATIONS.get(bounty_issuer, {}).get('name', bounty_issuer)
             issuer_surf = small_font.render(f"来自: {org_name}", True, (255, 150, 150))
             screen.blit(issuer_surf, (pad_x + 12, cur_y))

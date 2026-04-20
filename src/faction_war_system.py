@@ -11,7 +11,7 @@ import math
 import pygame
 from src.definitions import *
 from src.utils import log_game_event
-from src.data.character_seeds import ORGANIZATIONS, POWER_TYPES
+from src.data.organization_defs import ORGANIZATIONS, POWER_TYPES
 
 # ═══════════════════════════════════════════════════════════════════
 # 资源控制点系统

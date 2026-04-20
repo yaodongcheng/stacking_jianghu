@@ -62,7 +62,7 @@ def action_join_org(quest_mgr, ctx=None, org_id='kaifeng_fu'):
         org_economy.org_members[org_id].append(player.id)
 
     if ft_manager:
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         org_name = ORGANIZATIONS.get(org_id, {}).get('name', org_id)
         ft_manager.add_text(f"加入 {org_name}！", player.rect.centerx, player.rect.top - 30, (100, 200, 255))
 

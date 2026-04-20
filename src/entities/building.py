@@ -172,7 +172,7 @@ class Building(CardBase):
     def _draw_control_flag(self, screen, font):
         """绘制建筑势力控制旗帜/标记"""
         from src.faction_war_system import get_faction_war_system
-        from src.data.character_seeds import ORGANIZATIONS
+        from src.data.organization_defs import ORGANIZATIONS
         from src.entities.npc import POWER_COLORS
         
         faction_war = get_faction_war_system()
