@@ -34,6 +34,24 @@ class QuestData:
         deadline_raw = (row.get('deadline') or '').strip()
         self.deadline = int(deadline_raw) if deadline_raw else 0
 
+        # 通用触发字段（策划配置）
+        # trigger 取值（策划在 quest_config.csv 直接看：
+        #   NEWGAME           — 游戏新开局自动触发，只触发一次
+        #   AUTO              — 上一段任务推进过来时，自动激活并播开场对白
+        #   CLICKNPC:<NPC名>  — 等玩家点击/交互指定 NPC 触发
+        #   空                — 旧配置兼容，按 submit_npc + 类型默认逻辑判断
+        # precondition: 触发前置条件，目前支持 'true' / 空 = 始终通过；预留 flag 表达式扩展
+        raw_trigger = (row.get('trigger') or '').strip()
+        self.trigger_raw = raw_trigger          # 保留原始字符串供日志
+        self.trigger_npc = ''                    # CLICKNPC 解析出的 NPC 名
+        if ':' in raw_trigger:
+            head, _, tail = raw_trigger.partition(':')
+            self.trigger = head.strip().upper()
+            self.trigger_npc = tail.strip()
+        else:
+            self.trigger = raw_trigger.upper()
+        self.precondition = (row.get('precondition') or '').strip()
+
         # 分支任务支持
         # CHOICE 类型任务可以有多个后续分支
         # 格式: "next_good|next_evil" 或 "BRANCH_A:条件A|BRANCH_B:条件B"

@@ -15,6 +15,7 @@ class ItemData:
         self.warm_val = int(data.get('warm_val') or 0)
         self.atk_bonus = int(data.get('atk_bonus') or 0)
         self.def_bonus = int(data.get('def_bonus') or 0)  # 新增防御加成
+        self.buff_duration = int(data.get('buff_duration') or 0)  # 攻防 buff 持续秒数
         self.desc = data.get('desc', '')
 
 class ItemManager:
@@ -89,3 +90,47 @@ class ItemManager:
         """返回物品在市场的固定价格（铜钱）"""
         data = self.get_data(item_id)
         return data.value if data else 0
+
+
+def apply_food_effects(consumer, item_id):
+    """把食物的所有效果立刻施加到 consumer (NPC/Player) 身上。
+
+    饥饿(hunger_rec)与寒冷(warm_val)立即生效且永久；
+    攻防加成(atk_bonus/def_bonus)按 buff_duration 秒挂临时 buff。
+
+    Returns: dict 描述本次施加了哪些效果，供 UI 提示。空 dict 表示不是食物或没效果。
+    """
+    item_sys = ItemManager.get_instance()
+    data = item_sys.get_data(item_id)
+    if data is None:
+        return {}
+
+    applied = {}
+
+    if data.hunger_rec > 0:
+        old = getattr(consumer, 'hunger', 0)
+        consumer.hunger = max(0, old - data.hunger_rec)
+        applied['hunger'] = data.hunger_rec
+
+    if data.warm_val > 0:
+        old = getattr(consumer, 'cold', 0)
+        consumer.cold = max(0, old - data.warm_val)
+        applied['warm'] = data.warm_val
+
+    if data.buff_duration > 0:
+        duration_ms = data.buff_duration * 1000
+        if data.atk_bonus > 0:
+            # 同维度 buff 取较强值并刷新时长（不叠加，避免反复吃刷出离谱数值）
+            if data.atk_bonus >= getattr(consumer, 'atk_buff', 0):
+                consumer.atk_buff = data.atk_bonus
+            consumer.atk_buff_remaining_ms = max(getattr(consumer, 'atk_buff_remaining_ms', 0), duration_ms)
+            applied['atk_buff'] = data.atk_bonus
+            applied['atk_buff_sec'] = data.buff_duration
+        if data.def_bonus > 0:
+            if data.def_bonus >= getattr(consumer, 'def_buff', 0):
+                consumer.def_buff = data.def_bonus
+            consumer.def_buff_remaining_ms = max(getattr(consumer, 'def_buff_remaining_ms', 0), duration_ms)
+            applied['def_buff'] = data.def_bonus
+            applied['def_buff_sec'] = data.buff_duration
+
+    return applied

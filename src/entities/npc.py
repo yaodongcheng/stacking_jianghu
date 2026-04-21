@@ -77,6 +77,12 @@ class NPC(CardBase):
         self.dissatisfaction = 0 #不满值
         self.survival_timer = 0 # 计时器
 
+        # 食物施加的临时攻防 buff（buff_duration 到期自动清零）
+        self.atk_buff = 0
+        self.atk_buff_remaining_ms = 0
+        self.def_buff = 0
+        self.def_buff_remaining_ms = 0
+
 
 
         # 标签（必须在 generate_personality_from_job 之前初始化）
@@ -657,6 +663,18 @@ class NPC(CardBase):
         else:
             self.ai_reason = "自由行动"
     def update(self, all_cards, world_map, ctx, dt_ms=16):
+        # 食物攻防 buff 衰减
+        if self.atk_buff_remaining_ms > 0:
+            self.atk_buff_remaining_ms -= dt_ms
+            if self.atk_buff_remaining_ms <= 0:
+                self.atk_buff = 0
+                self.atk_buff_remaining_ms = 0
+        if self.def_buff_remaining_ms > 0:
+            self.def_buff_remaining_ms -= dt_ms
+            if self.def_buff_remaining_ms <= 0:
+                self.def_buff = 0
+                self.def_buff_remaining_ms = 0
+
         # 【气泡定时器】递减并清理
         if getattr(self, '_salute_bubble_timer', 0) > 0:
             self._salute_bubble_timer -= dt_ms
@@ -1184,7 +1202,7 @@ class NPC(CardBase):
             self.dissatisfaction -= 1
             
     def _try_eat_from_inventory(self):
-        
+        from src.item_system import ItemManager, apply_food_effects
         item_sys = ItemManager.get_instance()
         food_to_eat = None
         for item_id in list(self.inventory.keys()):
@@ -1192,16 +1210,9 @@ class NPC(CardBase):
                 food_to_eat = item_id
                 break
         if food_to_eat:
-            # 吃掉
             self.inventory[food_to_eat] -= 1
             if self.inventory[food_to_eat] <= 0: del self.inventory[food_to_eat]
-            
-            # 恢复数值 (查表)
-            rec_val = item_sys.get_hunger_recovery(food_to_eat)
-            
-            # 吃东西同时降低饥饿和寒冷
-            self.hunger = max(0, self.hunger - rec_val)
-            self.cold = max(0, self.cold - rec_val * 0.5)  # 食物也提供一些保暖效果
+            apply_food_effects(self, food_to_eat)
 
     # ──────────────────────────────────────────────────────────────
     # 装备系统：穿戴武器/护甲/服装 → 动态影响战斗属性和保暖
@@ -1247,17 +1258,17 @@ class NPC(CardBase):
         return True
 
     def get_effective_atk(self):
-        """返回含装备加成的实际攻击力"""
+        """返回含装备加成与食物 buff 的实际攻击力"""
         item_sys = ItemManager.get_instance()
         bonus = item_sys.get_atk_bonus(self.equip_weapon) if self.equip_weapon else 0
-        return self.atk + bonus
+        return self.atk + bonus + self.atk_buff
 
     def get_effective_def(self):
-        """返回含装备加成的实际防御力（护甲+衣物）"""
+        """返回含装备加成与食物 buff 的实际防御力（护甲+衣物）"""
         item_sys = ItemManager.get_instance()
         armor_bonus = item_sys.get_def_bonus(self.equip_armor) if self.equip_armor else 0
         clothing_bonus = item_sys.get_def_bonus(self.equip_clothing) if self.equip_clothing else 0
-        return self.def_ + armor_bonus + clothing_bonus
+        return self.def_ + armor_bonus + clothing_bonus + self.def_buff
 
     def _check_warmth(self, all_cards):
         """检查是否有热源（含装备服装加成）"""

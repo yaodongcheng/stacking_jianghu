@@ -305,29 +305,26 @@ class QuestManager:
                 print(f"[Quest] '{q.title}' 完成，自动推进...")
 
                 old_id = q.id
-                self.advance_quest()
+                self.advance_quest()  # 内部已根据 next.trigger 设置 quest_status
                 next_q = self.get_current_quest()
 
                 # 拼接过场对话：本段 _END（收尾内心独白）+ 下段开场叙述
-                # 之前只在"下段是 DIALOG"时才播 next 对话，导致非对话型主线
-                # （HAVE_UNIT/RESOURCE_TOTAL 等）的开场和上段的收尾全被吞掉。
+                # 下段开场对白只在 trigger=AUTO 时才播；CLICKNPC 要等玩家点 NPC
+                # trigger 为空走旧逻辑兼容（任意类型都拼上去）
                 combined = []
                 end_dialogs = self.get_dialog(f"{old_id}_END")
                 if end_dialogs:
                     combined.extend(end_dialogs)
+                start_dialogs = []
                 if next_q:
-                    start_dialogs = self.get_dialog(next_q.id)
-                    if start_dialogs:
-                        combined.extend(start_dialogs)
-
-                # 下段如果是 DIALOG 任务，先置 ACTIVE，让对话结束时 on_dialog_finished 能推进
-                if next_q and next_q.type == 'DIALOG':
-                    self.quest_status = QS_ACTIVE
-                    print(f"[Quest] 自动触发DIALOG任务: {next_q.id}")
+                    if next_q.trigger == 'AUTO' or next_q.trigger == '':
+                        start_dialogs = self.get_dialog(next_q.id)
+                        if start_dialogs:
+                            combined.extend(start_dialogs)
 
                 if combined and ctx:
                     print(f"[Quest] 播放过场对话: {old_id}_END({len(end_dialogs) if end_dialogs else 0}行) "
-                          f"+ {next_q.id if next_q else '-'}({len(start_dialogs) if (next_q and start_dialogs) else 0}行)")
+                          f"+ {next_q.id if next_q else '-'}({len(start_dialogs)}行, trigger={next_q.trigger if next_q else '?'})")
                     ctx.story_ui.start_dialog(combined)
                 return True
 
@@ -344,32 +341,36 @@ class QuestManager:
         if current:
             self.finished_quests.add(current.id)
             print(f"[Quest] Finished: {current.title}")
-            
+
             # 决定下一个任务
             next_id = manual_next_id if manual_next_id else current.next_id
-            
+
             if next_id and next_id in self.quests:
                 self.active_quest_id = next_id
                 next_quest = self.quests[next_id]
-                
-                # 【修复】以下类型任务自动激活，不需要找NPC接取:
-                # 1. GOAL 类型任务
-                # 2. submit_npc == '9999' 的自动完成任务
-                # 3. RESOURCE_TOTAL 类型（收集金钱等）
-                # 自动激活规则（不需要找 NPC 接取）：
-                # 1. 任务类型在 quest_types/ 里声明了 auto_activate = True
-                # 2. submit_npc == '9999'（玩家自己执行）
-                from . import quest_types
-                auto_activate = (
-                    quest_types.is_auto_activate(next_quest.type) or
-                    next_quest.submit_npc == '9999'
-                )
-                
-                if auto_activate:
+
+                # 【优先】CSV 显式 trigger 字段决定状态（策划可见配置）
+                # AUTO        → 直接 ACTIVE，由 dialog_runner 播开场对白
+                # CLICKNPC:xx → AVAILABLE，等玩家点 NPC 接取
+                if next_quest.trigger == 'AUTO':
                     self.quest_status = QS_ACTIVE
-                    print(f"[Quest] 任务自动激活: {next_quest.title} (类型:{next_quest.type}, NPC:{next_quest.submit_npc})")
-                else:
+                    print(f"[Quest] 任务自动激活: {next_quest.title} (trigger=AUTO)")
+                elif next_quest.trigger == 'CLICKNPC':
                     self.quest_status = "AVAILABLE"
+                    print(f"[Quest] 等待玩家点 NPC 接取: {next_quest.title} (trigger=CLICKNPC:{next_quest.trigger_npc})")
+                else:
+                    # 【兼容旧配置】没填 trigger 的走原有 auto_activate / submit_npc=9999 推断
+                    from . import quest_types
+                    auto_activate = (
+                        quest_types.is_auto_activate(next_quest.type) or
+                        next_quest.submit_npc == '9999'
+                    )
+
+                    if auto_activate:
+                        self.quest_status = QS_ACTIVE
+                        print(f"[Quest] 任务自动激活(legacy): {next_quest.title} (类型:{next_quest.type}, NPC:{next_quest.submit_npc})")
+                    else:
+                        self.quest_status = "AVAILABLE"
             else:
                 self.active_quest_id = "Q_FREE_PLAY"
                 self.quest_status = "ACTIVE"

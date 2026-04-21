@@ -1148,37 +1148,46 @@ class RenderSystem:
     # ═══════════════════════════════════════════════════════════════
     
     def _handle_use_food(self, player, item_name, ft_manager):
-        """
-        处理吃东西：消耗食物，恢复饥饿值
-        """
-        from src.item_system import ItemManager
+        """玩家手动使用/吃物品。按 items.csv 的所有效果列驱动应用。"""
+        from src.item_system import ItemManager, apply_food_effects
         item_sys = ItemManager.get_instance()
-        
+
         if item_name not in player.inventory or player.inventory[item_name] <= 0:
             if ft_manager:
                 ft_manager.add_text("没有这个物品", player.rect.centerx, player.rect.top - 40, (255, 100, 100))
             return
-        
-        # 获取食物恢复值
-        hunger_rec = item_sys.get_hunger_recovery(item_name)
-        if hunger_rec <= 0:
+
+        if not item_sys.is_food(item_name):
             if ft_manager:
                 ft_manager.add_text("这不是食物", player.rect.centerx, player.rect.top - 40, (255, 100, 100))
             return
-        
-        # 消耗食物
+
         player.inventory[item_name] -= 1
         if player.inventory[item_name] <= 0:
             del player.inventory[item_name]
-        
-        # 恢复饥饿值（hunger越低越饿，所以减少hunger值）
-        old_hunger = player.hunger
-        player.hunger = max(0, player.hunger - hunger_rec)
-        
-        log_game_event(f"玩家吃了 {item_name}，饥饿值 {old_hunger} -> {player.hunger}")
-        
+
+        applied = apply_food_effects(player, item_name)
+
+        parts = [f"吃了{item_name}"]
+        if applied.get('hunger'):
+            parts.append(f"饥饿-{applied['hunger']}")
+        if applied.get('warm'):
+            parts.append(f"寒冷-{applied['warm']}")
+        if applied.get('atk_buff'):
+            parts.append(f"攻+{applied['atk_buff']}({applied['atk_buff_sec']}s)")
+        if applied.get('def_buff'):
+            parts.append(f"防+{applied['def_buff']}({applied['def_buff_sec']}s)")
+
+        log_game_event(" ".join(parts))
         if ft_manager:
-            ft_manager.add_text(f"吃了{item_name} 饥饿-{hunger_rec}", player.rect.centerx, player.rect.top - 40, (100, 255, 100))
+            ft_manager.add_text(" ".join(parts), player.rect.centerx, player.rect.top - 40, (100, 255, 100))
+
+        # 推进 CONSUME 任务进度
+        from src.task.quest_system import QuestManager
+        from src.task import quest_types
+        qm = QuestManager.get_instance()
+        if qm:
+            quest_types.get('CONSUME').on_consumed(qm, item_name, 1, player, ft_manager)
     
     def _handle_equip_item(self, player, item_name, ft_manager):
         """

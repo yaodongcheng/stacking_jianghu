@@ -116,6 +116,12 @@ def check_deliver(quest, player, all_cards, manager, ctx):
     return quest_types.get('DELIVER').is_goal_met(manager, quest)
 
 
+def check_consume(quest, player, all_cards, manager, ctx):
+    """使用/吃下指定物品 N 次：进度由 ConsumeType 维护"""
+    from . import quest_types
+    return quest_types.get('CONSUME').is_goal_met(manager, quest)
+
+
 def check_reach(quest, player, all_cards, manager, ctx):
     """玩家到达指定区域（命名点 或 "x,y"），count 是判定半径"""
     if not player:
@@ -212,6 +218,7 @@ GOAL_CHECKERS = {
     'COMBAT':         check_combat,
     'EAT':            check_eat,
     'DELIVER':        check_deliver,
+    'CONSUME':        check_consume,
     'REACH':          check_reach,
     'WAIT_TIME':      check_wait_time,
     'AFFINITY_CHECK': check_affinity,

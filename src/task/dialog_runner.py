@@ -72,7 +72,12 @@ class DialogRunner:
                 self._auto_advance_dialog_chain(q, ctx)
 
     def _auto_advance_dialog_chain(self, current_quest, ctx):
-        """DIALOG 任务完成后，根据下一段类型决定是自动播对话还是停下来"""
+        """DIALOG 任务完成后推进到下一段。
+        新逻辑：完全看 next.trigger 决定要不要播开场对白
+          - AUTO         → 状态已是 ACTIVE，播开场对白
+          - CLICKNPC:xx  → 状态已是 AVAILABLE，等玩家点 NPC，不主动播
+          - 空(legacy)   → 走旧的隐式判断（DIALOG→DIALOG / 同 NPC 自动接）
+        """
         qm = self.qm
         print(f"[Quest] DIALOG任务自动推进: {current_quest.id} -> {current_quest.next_id}")
         qm.advance_quest()
@@ -81,10 +86,23 @@ class DialogRunner:
         if not next_q:
             return
 
+        # 显式 trigger=AUTO：advance_quest 已置 ACTIVE，这里负责播开场对白
+        if next_q.trigger == 'AUTO':
+            dialogs = qm.get_dialog(next_q.id)
+            if dialogs and ctx:
+                print(f"[Quest] 播放下一段开场对白: {next_q.id} (trigger=AUTO)")
+                ctx.story_ui.start_dialog(dialogs)
+            return
+
+        # 显式 trigger=CLICKNPC：等玩家点 NPC，不在这里播
+        if next_q.trigger == 'CLICKNPC':
+            return
+
+        # ── 以下为旧配置兼容路径（trigger 为空）──
         # 下一段也是 DIALOG → 立即播
         if next_q.type == 'DIALOG':
             qm.quest_status = QS_ACTIVE
-            print(f"[Quest] 任务接取: {next_q.id}")
+            print(f"[Quest] 任务接取(legacy): {next_q.id}")
             dialogs = qm.get_dialog(next_q.id)
             if dialogs and ctx:
                 ctx.story_ui.start_dialog(dialogs)
@@ -93,7 +111,7 @@ class DialogRunner:
         # 下一段 submit_npc 与当前任务相同 → 自动接取（连续任务）
         if next_q.submit_npc == current_quest.submit_npc and qm.quest_status == QS_AVAILABLE:
             qm.quest_status = QS_ACTIVE
-            print(f"[Quest] 连续任务自动接取: {next_q.id} (同一NPC: {current_quest.submit_npc})")
+            print(f"[Quest] 连续任务自动接取(legacy): {next_q.id} (同一NPC: {current_quest.submit_npc})")
             dialogs = qm.get_dialog(next_q.id)
             if dialogs and ctx:
                 ctx.story_ui.start_dialog(dialogs)
@@ -125,9 +143,17 @@ class DialogRunner:
         return False
 
     def _handle_accept_dialog(self, target_npc, npc_name, q, story_ui):
-        """AVAILABLE 阶段：玩家找发布人接取任务"""
+        """AVAILABLE 阶段：玩家找发布人接取任务。
+        【新】优先读 trigger=CLICKNPC:<NPC名>；trigger 为空才回落到 submit_npc 兼容旧逻辑。
+        """
         qm = self.qm
-        if not qm._match_submit_npc(target_npc.id, npc_name, q.submit_npc):
+        matched = False
+        if q.trigger == 'CLICKNPC' and q.trigger_npc:
+            matched = (npc_name == q.trigger_npc)
+        else:
+            matched = qm._match_submit_npc(target_npc.id, npc_name, q.submit_npc)
+
+        if not matched:
             return False
         dialogs = qm.get_dialog(q.id)
         if dialogs:
@@ -270,21 +296,36 @@ class DialogRunner:
     # 4. 开场剧情自动播放
     # ═══════════════════════════════════════════════════════════════
     def check_and_play_intro(self, all_cards, story_ui):
-        """检查并播放开场剧情（main loop 调用）。开场剧情就两段：开头 CG + 落地介绍。"""
+        """检查并播放开场剧情（main loop 调用）。
+
+        通用机制：扫描所有 trigger=NEWGAME 的任务，若该任务正好是当前激活任务、
+        precondition 通过且尚未播放过，则自动播放其对话。
+
+        Q0_FIND_ELDER 因有动态分支（门客/独行者）走单独逻辑。
+        """
         qm = self.qm
-        if qm.flags.get('intro_played') and qm.flags.get('intro_played_dialog'):
-            return True
 
-        # 第一段：序章 CG
-        if qm.active_quest_id == 'Q_PROLOGUE' and not qm.flags.get('intro_played'):
-            qm.flags['intro_played'] = True
-            dialogs = qm.get_dialog('Q_PROLOGUE')
-            story_ui.start_dialog(dialogs)
-            qm.quest_status = QS_ACTIVE
-            print("[Quest] 自动激活了第一段开场剧情 (教程模式)")
-            return True
+        # 通用配置驱动：trigger=NEWGAME 的任务自动播放
+        for q in qm.quests.values():
+            if q.trigger != 'NEWGAME':
+                continue
+            if qm.active_quest_id != q.id:
+                continue
+            played_flag = f'newgame_intro_played_{q.id}'
+            if qm.flags.get(played_flag):
+                continue
+            if not self._check_precondition(q.precondition):
+                continue
 
-        # 第二段：落地介绍（带门客/独行者两版）
+            qm.flags[played_flag] = True
+            dialogs = qm.get_dialog(q.id)
+            if dialogs:
+                story_ui.start_dialog(dialogs)
+                qm.quest_status = QS_ACTIVE
+                print(f"[Quest] 自动激活了开场剧情 {q.id} (trigger=NEWGAME)")
+                return True
+
+        # 第二段：落地介绍（带门客/独行者两版，动态内容暂保留专用逻辑）
         if qm.active_quest_id == 'Q0_FIND_ELDER' and not qm.flags.get('intro_played_dialog'):
             qm.flags['intro_played'] = True
             qm.flags['intro_played_dialog'] = True
@@ -300,6 +341,31 @@ class DialogRunner:
                 return True
 
         return False
+
+    def _check_precondition(self, precondition):
+        """检查 precondition 表达式是否通过。
+
+        目前支持：
+        - 空字符串 / 'true' → 始终通过
+        - 'flag:foo' → 检查 quest flag foo 为真
+        - 'flag:foo;flag:bar' → 多条件 AND
+        """
+        cond = (precondition or '').strip().lower()
+        if not cond or cond == 'true':
+            return True
+
+        for clause in cond.split(';'):
+            clause = clause.strip()
+            if not clause:
+                continue
+            if clause.startswith('flag:'):
+                flag_name = clause[5:].strip()
+                if not self.qm.flags.get(flag_name):
+                    return False
+            else:
+                print(f"[Quest] 未知 precondition 子句: {clause}")
+                return False
+        return True
 
     # ═══════════════════════════════════════════════════════════════
     # 5. 模板替换的对话查询（如 {follower} → 实际门客名）

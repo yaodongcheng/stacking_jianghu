@@ -412,8 +412,8 @@ class WorldLoader:
                     ctx.event_actors = []  # 清空事件演员列表
             else:
                 # 沙盒模式：系统驱动开局（designDoc 12.7）
-                # 子时（深夜）抵达小镇，主线立即触发
-                ctx.quest_manager.active_quest_id = "Q_SETTLE_WAIT"
+                # 子时（深夜）抵达小镇，开场独白立即触发
+                ctx.quest_manager.active_quest_id = "Q_SETTLE_INTRO"
                 ctx.quest_manager.quest_status = QS_ACTIVE
                 # guidance_visible 保持 False，开场独白结束后由 UNLOCK_GUIDANCE 解锁
                 ctx.quest_manager.set_flag('refugee_unlocked', True)
