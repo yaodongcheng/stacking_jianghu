@@ -617,7 +617,15 @@ class AISystem:
         # ══════════════════════════════════════════════════════════════
         if self._enqueue_spectate(npc):
             return
-        
+
+        # ══════════════════════════════════════════════════════════════
+        # 优先级 3.2: 剧情锁定（任务期间被钉在指定地点待命）
+        # ══════════════════════════════════════════════════════════════
+        # 由 QuestManager 通过 npc.quest_lock_dest = (x, y) 挂上；
+        # 比围观/集结/工作都优先，但让位于战斗/救援，避免剧情人物错过出场点。
+        if self._enqueue_quest_lock(npc):
+            return
+
         # ══════════════════════════════════════════════════════════════
         # 优先级 3.5: 组织集结（同伴被攻击时前去支援）
         # ══════════════════════════════════════════════════════════════
@@ -781,6 +789,30 @@ class AISystem:
             npc.ai_reason = "睡觉中"
             npc.action_queue.enqueue(Stay(reason="睡觉中"))
             return True
+
+
+    def _enqueue_quest_lock(self, npc):
+        """剧情锁定：任务期间把 NPC 钉在 quest_lock_dest 那个点待命。
+        QuestManager 通过 npc.quest_lock_dest = (x, y) 挂锁，advance 时清。"""
+        dest = getattr(npc, 'quest_lock_dest', None)
+        if not dest:
+            return False
+        from src.atomic_actions import MoveToPosition, Stay
+        dx, dy = dest
+        dist = math.hypot(npc.rect.centerx - dx, npc.rect.centery - dy)
+        if dist > 50:
+            # 还没到位，走过去
+            npc.action_queue.clear()
+            npc.action_queue.enqueue(MoveToPosition(dx, dy, reason="剧情归位"))
+            npc.ai_reason = "剧情归位中"
+        else:
+            # 到位了，原地待命；只在不是 Stay 时重排，避免每帧 clear 抖动
+            current = npc.action_queue.current()
+            if not isinstance(current, Stay):
+                npc.action_queue.clear()
+                npc.action_queue.enqueue(Stay(reason="剧情待命"))
+            npc.ai_reason = "剧情待命中"
+        return True
 
 
     # ---- 阵营判断（job 优先，tag 仅辅助） ----

@@ -52,6 +52,12 @@ class QuestData:
             self.trigger = raw_trigger.upper()
         self.precondition = (row.get('precondition') or '').strip()
 
+        # 剧情锁定：任务激活期间，把这些 NPC 强制拉回各自 home_building 待命
+        # 格式："NPC名" 或 "NPC名;NPC名"（分号分隔多人，留空 = 不锁）
+        # 用途：剧情线需要在固定地点遇见某 NPC（如孙二娘必须在十字坡），防止 AI 漫游错过剧情
+        self.force_npc = (row.get('force_npc') or '').strip()
+        self.force_npc_list = [n.strip() for n in self.force_npc.split(';') if n.strip()]
+
         # 分支任务支持
         # CHOICE 类型任务可以有多个后续分支
         # 格式: "next_good|next_evil" 或 "BRANCH_A:条件A|BRANCH_B:条件B"

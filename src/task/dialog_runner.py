@@ -53,6 +53,11 @@ class DialogRunner:
 
         # 路径 1：接取任务（AVAILABLE → ACTIVE）
         if qm.quest_status == QS_AVAILABLE and q:
+            # CLICKNPC 任务必须等玩家点对应 NPC（_handle_accept_dialog 那条路）；
+            # 过场对话播完(npc_id=None) 不算"接取"，否则会跳过 NPC 交互直接进 ACTIVE，
+            # 玩家再点 NPC 就只能弹 REMIND 了。
+            if q.trigger == 'CLICKNPC':
+                return
             npc_matched = qm._match_submit_npc(npc_id, npc_name, q.submit_npc)
             if npc_id is None or npc_matched:
                 qm.accept_quest()

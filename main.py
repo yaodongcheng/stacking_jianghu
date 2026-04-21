@@ -167,6 +167,9 @@ def main():
     ctx, npc_raw = init_game_systems(SCREEN_W, SCREEN_H, scenario_type)
     # 3. 实体生成
     ctx.all_cards = WorldLoader.init_world_entities(ctx, create_res, npc_raw, scenario_type)
+    # active_quest_id 在 world_loader 里就被赋值，那时 ctx.all_cards 还没填上；
+    # 这里补一次锁定，保证开局任务的 force_npc 也能生效
+    ctx.quest_manager._apply_force_npc_lock(ctx.quest_manager.get_current_quest())
     
     # 3.5 【阶段3】初始化组织经济系统
     from src.organization_system import get_org_economy

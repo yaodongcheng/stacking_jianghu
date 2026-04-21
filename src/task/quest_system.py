@@ -140,6 +140,9 @@ class QuestManager:
             quest_title = self.quests.get(value, None)
             title_str = f"({quest_title.title})" if quest_title else ""
             print(f"[Quest] [任] 任务变更: {old_value} -> {value} {title_str}")
+            # 剧情锁定：先清旧任务的锁，再给新任务挂上
+            self._clear_force_npc_lock(self.quests.get(old_value))
+            self._apply_force_npc_lock(self.quests.get(value))
     
     @property
     def quest_status(self):
@@ -379,6 +382,52 @@ class QuestManager:
         """委托给 action_dispatcher.is_cinematic_action"""
         from .action_dispatcher import is_cinematic_action
         return is_cinematic_action(action_str)
+
+    # ═══════════════════════════════════════════════════════════════
+    # 剧情 NPC 锁定（force_npc 字段）
+    # ═══════════════════════════════════════════════════════════════
+    # 设计：任务激活期间把 NPC 拉回 home_building 待命，避免他们漫游导致玩家
+    # 找不到剧情触发点。锁通过 npc.quest_lock_dest = (x, y) 表达，AI 在
+    # _decide_behavior 里有专门的优先级分支处理。
+    def _apply_force_npc_lock(self, quest):
+        if not quest or not quest.force_npc_list:
+            return
+        ctx = self._ctx_ref
+        all_cards = getattr(ctx, 'all_cards', None) if ctx else None
+        if not all_cards:
+            return  # 初始化阶段 ctx 还没填充，活到玩家正式开玩时 advance 会再触发
+        from .actions._helpers import find_npc_by_name
+        for name in quest.force_npc_list:
+            npc = find_npc_by_name(all_cards, name)
+            if not npc:
+                print(f"[Quest] force_npc 未找到 NPC: {name} (quest={quest.id})")
+                continue
+            home = getattr(npc, 'home_building', None)
+            if not home:
+                print(f"[Quest] force_npc {name} 没有 home_building，跳过锁定 (quest={quest.id})")
+                continue
+            npc.quest_lock_dest = (home.rect.centerx, home.rect.centery)
+            npc.quest_lock_quest_id = quest.id
+            print(f"[Quest] 锁定 {name} 到 {getattr(home, 'name', 'home')} (quest={quest.id})")
+
+    def _clear_force_npc_lock(self, quest):
+        if not quest or not quest.force_npc_list:
+            return
+        ctx = self._ctx_ref
+        all_cards = getattr(ctx, 'all_cards', None) if ctx else None
+        if not all_cards:
+            return
+        from .actions._helpers import find_npc_by_name
+        for name in quest.force_npc_list:
+            npc = find_npc_by_name(all_cards, name)
+            if not npc:
+                continue
+            # 只清当前任务挂的锁，避免误清紧接的下一段任务刚挂上的同 NPC 锁
+            if getattr(npc, 'quest_lock_quest_id', None) == quest.id:
+                npc.quest_lock_dest = None
+                npc.quest_lock_quest_id = None
+                npc.action_queue.clear()
+                print(f"[Quest] 解锁 {name} (quest={quest.id})")
 
     def trigger_action(self, action_name, ctx=None):
         """委托给 ActionDispatcher（详细逻辑在 action_dispatcher.py）"""
