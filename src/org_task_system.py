@@ -659,7 +659,7 @@ class OrgTaskSystem:
                 count = int(count_str)
                 if not hasattr(player, 'inventory'):
                     player.inventory = {}
-                player.inventory[item_name] = player.inventory.get(item_name, 0) + count
+                player.add_item(item_name, count, reason="org_task_reward")
                 rewards['items'] = {item_name: count}
                 
                 if ft_manager:

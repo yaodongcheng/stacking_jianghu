@@ -206,9 +206,8 @@ class InteractionManager:
                                 # 物品被交付任务消耗，不放入NPC背包
                                 return 'DELIVER_ITEM', (card, best_target)
                         
-                        # 正常放入背包
-                        current_c = best_target.inventory.get(card.item_type, 0)
-                        best_target.inventory[card.item_type] = current_c + card.count
+                        # 正常放入背包（走 add_item 收口，is_player 时会自动通知 QuestManager）
+                        best_target.add_item(card.item_type, card.count, reason="pickup_resource")
                         return 'PICKUP_RESOURCE', card
                 # [关键逻辑] 找到堆叠链的最末端
                 # 如果 best_target 已经身上有人了，就往它下面找，直到找到空位

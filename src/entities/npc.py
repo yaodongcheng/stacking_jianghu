@@ -54,7 +54,56 @@ RANK_SYMBOLS = {
     0: '',       # 无组织
 }
 
+# ═══════════════════════════════════════════════════════════════════
+# 玩家状态属性收口（descriptor）
+# ═══════════════════════════════════════════════════════════════════
+# 任务系统依赖此处派发的事件来更新进度，禁止外部直接 self.hunger = X 时绕过此通道
+# （Python 拦截不了实例级 dict 同名键，但 class-level descriptor 已经把所有标量
+#  属性写入路径都收住了）。仅 player（is_player=True）会通知 QuestManager；
+# 普通 NPC 走相同路径但不发事件，零额外开销。
+class _TrackedStat:
+    def __init__(self, name, default=0):
+        self.name = name
+        self.private = '_stat_' + name
+        self.default = default
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        return instance.__dict__.get(self.private, self.default)
+
+    def __set__(self, instance, value):
+        old = instance.__dict__.get(self.private, self.default)
+        instance.__dict__[self.private] = value
+        if old == value:
+            return
+        if not getattr(instance, 'is_player', False):
+            return
+        try:
+            from src.task.quest_system import QuestManager
+            qm = QuestManager.get_instance()
+            if qm:
+                qm.on_player_stat_changed(self.name, value, old)
+        except Exception as e:
+            print(f"[Stat] notify {self.name} failed: {e}")
+
+
 class NPC(CardBase):
+    # ───────────────────────────────────────────────────────────────
+    # 受任务系统监听的玩家状态属性（descriptor 拦截赋值，is_player 时派事件）
+    # 写法不变：外部仍可 player.hunger -= 5，自动走 _TrackedStat.__set__
+    # 新加任务相关属性时：在这里加一行 + 在 QuestManager._STAT_DRIVEN 注册关心它的任务类型
+    # ───────────────────────────────────────────────────────────────
+    hunger = _TrackedStat('hunger', 0)
+    cold = _TrackedStat('cold', 0)
+    dissatisfaction = _TrackedStat('dissatisfaction', 0)
+    atk_buff = _TrackedStat('atk_buff', 0)
+    def_buff = _TrackedStat('def_buff', 0)
+    fame = _TrackedStat('fame', 0)
+    morality = _TrackedStat('morality', 0)
+    safety = _TrackedStat('safety', None)
+    hp = _TrackedStat('hp', 0)
+
     def __init__(self, data):
 
         #data是什么？
@@ -277,13 +326,14 @@ class NPC(CardBase):
 
     @money.setter
     def money(self, value):
-        # 确保 value 是整数
+        # 走 add_item / remove_item 收口，复用 inventory 事件链（is_player 时通知 QuestManager）
         val = int(value)
-        if val <= 0:
-            if ITEM_COIN in self.inventory:
-                del self.inventory[ITEM_COIN]
-        else:
-            self.inventory[ITEM_COIN] = val
+        current = self.inventory.get(ITEM_COIN, 0)
+        delta = val - current
+        if delta > 0:
+            self.add_item(ITEM_COIN, delta, reason="money_set")
+        elif delta < 0:
+            self.remove_item(ITEM_COIN, -delta, reason="money_set")
     
     def _give_starter_kit(self):
         """
@@ -604,6 +654,62 @@ class NPC(CardBase):
                 self.quest_icon_active = True # 黄色叹号
             elif quest_manager.quest_status == QS_READY:
                 self.quest_icon_active = True # 黄色问号
+
+    # ══════════════════════════════════════════════════════════════════
+    # 背包统一收口
+    # 任务系统依赖此处派发的事件来更新进度，禁止外部直接 inventory[x] = ...
+    # 仅 player（is_player=True）会通知 QuestManager；NPC 之间转移走这里只是统一入口。
+    # ══════════════════════════════════════════════════════════════════
+    def add_item(self, item_id, count=1, reason=None):
+        if count <= 0:
+            return 0
+        self.inventory[item_id] = self.inventory.get(item_id, 0) + count
+        self._notify_inventory_changed(item_id, +count, reason)
+        return count
+
+    def remove_item(self, item_id, count=1, reason=None):
+        if count <= 0:
+            return 0
+        have = self.inventory.get(item_id, 0)
+        actual = min(count, have)
+        if actual <= 0:
+            return 0
+        new_val = have - actual
+        if new_val <= 0:
+            del self.inventory[item_id]
+        else:
+            self.inventory[item_id] = new_val
+        self._notify_inventory_changed(item_id, -actual, reason)
+        return actual
+
+    def consume_item(self, item_id, count=1, reason="use"):
+        """使用/吃掉：先 remove_item，再额外派 ON_ITEM_CONSUMED 事件"""
+        actual = self.remove_item(item_id, count, reason=reason)
+        if actual > 0:
+            self._notify_item_consumed(item_id, actual, reason)
+        return actual
+
+    def _notify_inventory_changed(self, item_id, delta, reason):
+        if not getattr(self, 'is_player', False):
+            return
+        try:
+            from src.task.quest_system import QuestManager
+            qm = QuestManager.get_instance()
+            if qm:
+                qm.on_player_inventory_changed(item_id, delta, reason)
+        except Exception as e:
+            print(f"[Inventory] notify changed failed: {e}")
+
+    def _notify_item_consumed(self, item_id, count, reason):
+        if not getattr(self, 'is_player', False):
+            return
+        try:
+            from src.task.quest_system import QuestManager
+            qm = QuestManager.get_instance()
+            if qm:
+                qm.on_player_item_consumed(item_id, count, reason)
+        except Exception as e:
+            print(f"[Inventory] notify consumed failed: {e}")
 
     def drop_item(self, item_type, all_cards, count=1):
         current_count = self.inventory.get(item_type, 0)

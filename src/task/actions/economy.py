@@ -17,10 +17,8 @@ def action_reward_fish_money(quest_mgr, ctx=None):
 
         # 移除已交付的鱼（兜底）
         fish_key = '生鱼'
-        if fish_key in player.inventory and player.inventory[fish_key] >= 3:
-            player.inventory[fish_key] -= 3
-            if player.inventory[fish_key] <= 0:
-                del player.inventory[fish_key]
+        if player.inventory.get(fish_key, 0) >= 3:
+            player.remove_item(fish_key, 3, reason="reward_fish_settle")
 
         # 发放铜钱奖励（3条鱼 × 10铜/条 = 30铜）
         reward_money = 30

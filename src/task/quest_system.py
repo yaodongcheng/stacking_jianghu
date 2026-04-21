@@ -396,6 +396,75 @@ class QuestManager:
         if self.quest_status == QS_AVAILABLE:
             self.quest_status = QS_ACTIVE
             print(f"[Quest] 任务接取: {self.active_quest_id}")
+
+    # ═══════════════════════════════════════════════════════════════
+    # 玩家状态事件钩子（事件驱动的进度刷新）
+    # 由 NPC.add_item / remove_item / consume_item 在 player 身上触发时回调；
+    # 替代了主循环每帧轮询 check_progress 的高频检测路径。
+    # ═══════════════════════════════════════════════════════════════
+    # 受"玩家背包变化"影响的任务类型
+    _INVENTORY_DRIVEN_TYPES = {'GATHER', 'HAVE_UNIT', 'RESOURCE_TOTAL'}
+    # 受"玩家使用/吃下物品"影响的任务类型
+    _CONSUME_DRIVEN_TYPES = {'CONSUME', 'EAT', 'GOAL'}
+    # stat 名 → 关心它的任务类型集合（descriptor 派事件时按此查询）
+    # 新加任务时:在这里登记关心的 stat,无新 stat 时无需改 NPC 类
+    _STAT_DRIVEN_TYPES = {
+        'hunger':   {'EAT', 'GOAL'},
+        'fame':     {'RESOURCE_TOTAL'},
+        'morality': {'GOAL'},
+    }
+
+    def on_player_inventory_changed(self, item_id, delta, reason=None):
+        if self.quest_status != QS_ACTIVE:
+            return
+        q = self.get_current_quest()
+        if not q or q.type not in self._INVENTORY_DRIVEN_TYPES:
+            return
+        self._check_progress_from_event()
+
+    def on_player_item_consumed(self, item_id, count, reason=None):
+        # CONSUME 进度由 ConsumeType 维护；先推进进度，再走通用 check_progress
+        ctx = self._ctx_ref
+        player = getattr(ctx, 'player', None) if ctx else None
+        ft_mgr = getattr(ctx, 'ft_manager', None) if ctx else None
+        from . import quest_types
+        consume_type = quest_types.get('CONSUME')
+        if consume_type and player:
+            consume_type.on_consumed(self, item_id, count, player, ft_mgr)
+        if self.quest_status != QS_ACTIVE:
+            return
+        q = self.get_current_quest()
+        if not q or q.type not in self._CONSUME_DRIVEN_TYPES:
+            return
+        self._check_progress_from_event()
+
+    def _check_progress_from_event(self):
+        """事件路径上调用 check_progress；player/all_cards/ctx 从 _ctx_ref 取。"""
+        ctx = self._ctx_ref
+        if not ctx:
+            return
+        player = getattr(ctx, 'player', None)
+        all_cards = getattr(ctx, 'all_cards', None)
+        if player is None or all_cards is None:
+            return
+        self.check_progress(player, all_cards, ctx)
+
+    def on_player_stat_changed(self, name, new, old, reason=None):
+        """玩家标量属性发生变化（hunger/fame/morality/...）。
+
+        descriptor 已经做了 is_player + old != new 的过滤,这里只做任务路由。
+        money 的变化走 inventory 事件链(via add_item/remove_item),不走这里,
+        避免 RESOURCE_TOTAL=MONEY 任务被双重触发。
+        """
+        if self.quest_status != QS_ACTIVE:
+            return
+        q = self.get_current_quest()
+        if not q:
+            return
+        affected = self._STAT_DRIVEN_TYPES.get(name)
+        if not affected or q.type not in affected:
+            return
+        self._check_progress_from_event()
     
     # ═══════════════════════════════════════════════════════════════
     # 交付物品（业务在 quest_types/deliver.py）

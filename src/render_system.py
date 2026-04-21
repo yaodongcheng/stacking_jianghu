@@ -1029,10 +1029,8 @@ class RenderSystem:
 
             if random.random() < success_rate:
                 # ── 成功 ──
-                npc.inventory[item_key] -= 1
-                if npc.inventory[item_key] <= 0:
-                    del npc.inventory[item_key]
-                player.inventory[item_key] = player.inventory.get(item_key, 0) + 1
+                npc.remove_item(item_key, 1, reason="player_demand")
+                player.add_item(item_key, 1, reason="player_demand")
                 npc.dissatisfaction = min(getattr(npc, 'dissatisfaction', 0) + 5, 100)
                 log_game_event(f"玩家成功向 {npc.name} 索要了 {item_key}")
                 if ft_mgr:
@@ -1052,10 +1050,8 @@ class RenderSystem:
 
             if random.random() < success_rate:
                 # ── 成功（不知情，无仇恨惩罚）──
-                npc.inventory[item_key] -= 1
-                if npc.inventory[item_key] <= 0:
-                    del npc.inventory[item_key]
-                player.inventory[item_key] = player.inventory.get(item_key, 0) + 1
+                npc.remove_item(item_key, 1, reason="player_steal")
+                player.add_item(item_key, 1, reason="player_steal")
                 log_game_event(f"玩家悄悄偷走了 {npc.name} 的 {item_key}")
                 if ft_mgr:
                     ft_mgr.add_text(f"偷窃成功 +{item_key}", npc.rect.x, npc.rect.y - 60, (180, 100, 220))
@@ -1162,9 +1158,10 @@ class RenderSystem:
                 ft_manager.add_text("这不是食物", player.rect.centerx, player.rect.top - 40, (255, 100, 100))
             return
 
-        player.inventory[item_name] -= 1
-        if player.inventory[item_name] <= 0:
-            del player.inventory[item_name]
+        # 吃食物：consume_item 会派 ON_ITEM_CONSUMED 事件，QuestManager 自动推进 CONSUME 进度
+        consumed = player.consume_item(item_name, 1, reason="eat_food")
+        if consumed <= 0:
+            return
 
         applied = apply_food_effects(player, item_name)
 
@@ -1181,13 +1178,6 @@ class RenderSystem:
         log_game_event(" ".join(parts))
         if ft_manager:
             ft_manager.add_text(" ".join(parts), player.rect.centerx, player.rect.top - 40, (100, 255, 100))
-
-        # 推进 CONSUME 任务进度
-        from src.task.quest_system import QuestManager
-        from src.task import quest_types
-        qm = QuestManager.get_instance()
-        if qm:
-            quest_types.get('CONSUME').on_consumed(qm, item_name, 1, player, ft_manager)
     
     def _handle_equip_item(self, player, item_name, ft_manager):
         """
@@ -1206,54 +1196,48 @@ class RenderSystem:
             # 卸下旧武器（如果有）
             old_weapon = getattr(player, 'equip_weapon', None)
             if old_weapon:
-                player.inventory[old_weapon] = player.inventory.get(old_weapon, 0) + 1
-            
+                player.add_item(old_weapon, 1, reason="unequip")
+
             # 装备新武器
             player.equip_weapon = item_name
-            player.inventory[item_name] -= 1
-            if player.inventory[item_name] <= 0:
-                del player.inventory[item_name]
-            
+            player.remove_item(item_name, 1, reason="equip")
+
             # 更新攻击力加成
             atk_bonus = item_sys.get_atk_bonus(item_name)
             log_game_event(f"玩家装备了武器 {item_name}，攻击+{atk_bonus}")
-            
+
             if ft_manager:
                 ft_manager.add_text(f"装备{item_name} 攻击+{atk_bonus}", player.rect.centerx, player.rect.top - 40, (100, 200, 255))
-        
+
         elif item_sys.is_armor(item_name):
             # 卸下旧护甲
             old_armor = getattr(player, 'equip_armor', None)
             if old_armor:
-                player.inventory[old_armor] = player.inventory.get(old_armor, 0) + 1
-            
+                player.add_item(old_armor, 1, reason="unequip")
+
             # 装备新护甲
             player.equip_armor = item_name
-            player.inventory[item_name] -= 1
-            if player.inventory[item_name] <= 0:
-                del player.inventory[item_name]
-            
+            player.remove_item(item_name, 1, reason="equip")
+
             def_bonus = item_sys.get_def_bonus(item_name)
             log_game_event(f"玩家装备了护甲 {item_name}，防御+{def_bonus}")
-            
+
             if ft_manager:
                 ft_manager.add_text(f"装备{item_name} 防御+{def_bonus}", player.rect.centerx, player.rect.top - 40, (100, 200, 255))
-        
+
         elif item_sys.is_clothing(item_name):
             # 卸下旧衣物
             old_clothing = getattr(player, 'equip_clothing', None)
             if old_clothing:
-                player.inventory[old_clothing] = player.inventory.get(old_clothing, 0) + 1
-            
+                player.add_item(old_clothing, 1, reason="unequip")
+
             # 装备新衣物
             player.equip_clothing = item_name
-            player.inventory[item_name] -= 1
-            if player.inventory[item_name] <= 0:
-                del player.inventory[item_name]
-            
+            player.remove_item(item_name, 1, reason="equip")
+
             warm_val = item_sys.get_warm_val(item_name)
             log_game_event(f"玩家装备了衣物 {item_name}，保暖+{warm_val}")
-            
+
             if ft_manager:
                 ft_manager.add_text(f"穿上{item_name} 保暖+{warm_val}", player.rect.centerx, player.rect.top - 40, (100, 200, 255))
         
@@ -1272,19 +1256,19 @@ class RenderSystem:
         
         if item_sys.is_weapon(item_name) and getattr(player, 'equip_weapon', None) == item_name:
             player.equip_weapon = None
-            player.inventory[item_name] = player.inventory.get(item_name, 0) + 1
+            player.add_item(item_name, 1, reason="unequip")
             unequipped = True
             log_game_event(f"玩家卸下了武器 {item_name}")
-        
+
         elif item_sys.is_armor(item_name) and getattr(player, 'equip_armor', None) == item_name:
             player.equip_armor = None
-            player.inventory[item_name] = player.inventory.get(item_name, 0) + 1
+            player.add_item(item_name, 1, reason="unequip")
             unequipped = True
             log_game_event(f"玩家卸下了护甲 {item_name}")
-        
+
         elif item_sys.is_clothing(item_name) and getattr(player, 'equip_clothing', None) == item_name:
             player.equip_clothing = None
-            player.inventory[item_name] = player.inventory.get(item_name, 0) + 1
+            player.add_item(item_name, 1, reason="unequip")
             unequipped = True
             log_game_event(f"玩家卸下了衣物 {item_name}")
         

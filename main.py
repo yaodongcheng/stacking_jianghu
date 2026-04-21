@@ -138,6 +138,8 @@ def init_game_systems(screen_w, screen_h, scenario_type='village'):
     ctx.combat_manager.set_ai_system(ctx.ai_system)   # 互相注入，让战斗广播能触发旁观
     ctx.movement_system = MovementSystem()
     ItemManager.get_instance()
+    # QuestManager 事件钩子需要 ctx 拿 player/all_cards/ft_manager
+    ctx.quest_manager._ctx_ref = ctx
     return ctx, npc_raw_data
 
 
@@ -840,7 +842,13 @@ def main():
             else:
                 _wmx, _wmy = float(mx), float(my)
             ctx.interaction_mgr.update(_wmx, _wmy)
-            ctx.quest_manager.check_progress(ctx.player, ctx.all_cards, ctx)
+            # 任务进度大部分走事件驱动（背包/消费 → QuestManager 事件钩子）。
+            # 这里只做低频兜底，覆盖 REACH/WAIT_TIME/AFFINITY/SURVIVE/ORG_RANK/HAVE_UNIT 等
+            # 没有显式写点的持续类任务。500ms 一次足够。
+            _now_ms = pygame.time.get_ticks()
+            if _now_ms - getattr(ctx, '_last_quest_poll_ms', 0) >= 500:
+                ctx.quest_manager.check_progress(ctx.player, ctx.all_cards, ctx)
+                ctx._last_quest_poll_ms = _now_ms
             
             # 【修复】剧情期间暂停AI系统和战斗系统
             is_story_blocking = ctx.story_ui.is_active or ctx.story_ui.choice_mode

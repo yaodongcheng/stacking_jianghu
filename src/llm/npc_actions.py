@@ -661,14 +661,11 @@ class NPCActionExecutor:
         item_id, qty = random.choice(available_items)
         
         # 从NPC移除
-        npc.inventory[item_id] -= 1
-        if npc.inventory[item_id] <= 0:
-            del npc.inventory[item_id]
-        
-        # 给玩家（如果玩家有inventory）
-        if hasattr(player, 'inventory'):
-            player.inventory[item_id] = player.inventory.get(item_id, 0) + 1
-        
+        npc.remove_item(item_id, 1, reason="npc_gift")
+
+        # 给玩家
+        player.add_item(item_id, 1, reason="npc_gift")
+
         print(f"[NPCActionExecutor] {npc.name} 赠送 {item_id} 给玩家")
         return item_id
     
@@ -708,10 +705,9 @@ class NPCActionExecutor:
         
         give_amount = max(1, give_amount)
         
-        # 转移金钱
-        npc.inventory[ITEM_COIN] -= give_amount
-        if hasattr(player, 'inventory'):
-            player.inventory[ITEM_COIN] = player.inventory.get(ITEM_COIN, 0) + give_amount
+        # 转移金钱（COIN 也走 add/remove，事件统一收口）
+        npc.remove_item(ITEM_COIN, give_amount, reason="npc_gift_money")
+        player.add_item(ITEM_COIN, give_amount, reason="npc_gift_money")
         
         print(f"[NPCActionExecutor] {npc.name} 赠送 {give_amount}文 给玩家")
         return give_amount
