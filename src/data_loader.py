@@ -248,24 +248,21 @@ def _resolve_position(zone_str, offset_x, offset_y, spread, zone_data, world_map
 
 def load_buildings_from_csv(filepath, world_map, scenario_type):
     """
-    从 CSV 加载所有建筑定义。
+    从 CSV 加载所有建筑定义。位置完全由 pos_x / pos_y 列决定（绝对世界坐标）。
+    zone 列保留作为策划注释，不参与计算。
 
     Returns:
         (cards, org_workplace_refs, npc_home_map, market_pos)
         - cards: Building / Resource 对象列表
         - org_workplace_refs: {org_id: Building} 组织工作建筑
         - npc_home_map: {npc_id_str: Building} NPC 独立住所
-        - market_pos: (x, y) 主市场位置（用于散落资源定位）
+        - market_pos: (x, y) 主市场位置
     """
-    from src.world_loader import find_valid_building_position
-
     cards = []
-    org_workplace_refs = {}   # org_id → Building (工作场所)
-    npc_home_map = {}         # npc_id_str → Building (住所)
-    market_pos = None         # 主市场坐标
-    zone_data = _precompute_zones(world_map)
+    org_workplace_refs = {}
+    npc_home_map = {}
+    market_pos = None
 
-    # 场景名映射
     scenario_name = 'SANDBOX' if scenario_type == SCENARIO_SANDBOX else 'TUTORIAL'
 
     try:
@@ -284,39 +281,29 @@ def load_buildings_from_csv(filepath, world_map, scenario_type):
             if not row or not row[0].strip():
                 continue
 
-            # 补齐缺失列
             while len(row) < len(keys):
                 row.append('')
             data = dict(zip(keys, row))
 
-            # 场景过滤
             row_scenario = data.get('scenario', '').strip()
             if row_scenario and row_scenario != scenario_name:
                 continue
 
             bid = data['id'].strip()
             building_type = data['building_type'].strip()
-            zone_str = data.get('zone', 'CITY').strip()
-            offset_x = int(data.get('offset_x') or 0)
-            offset_y = int(data.get('offset_y') or 0)
-            spread = int(data.get('spread') or 0)
             owner_type = data.get('owner_type', '').strip()
             owner_id = data.get('owner_id', '').strip()
             is_home = data.get('is_home', '0').strip() == '1'
             inventory_str = data.get('inventory', '').strip()
 
-            # MARKET_NEAR 特殊处理：相对于主市场位置
-            if zone_str == 'MARKET_NEAR' and market_pos:
-                zone_data['MARKET_NEAR'] = market_pos
+            pos_x_str = data.get('pos_x', '').strip()
+            pos_y_str = data.get('pos_y', '').strip()
+            if not pos_x_str or not pos_y_str:
+                print(f"[BuildingCSV] [!] {bid} 缺少 pos_x/pos_y，跳过。"
+                      f"用 tools/freeze_building_positions.py 生成默认坐标。")
+                continue
+            bx, by = int(pos_x_str), int(pos_y_str)
 
-            # 解析位置
-            bx, by = _resolve_position(zone_str, offset_x, offset_y, spread, zone_data, world_map)
-
-            # 防重叠（资源点和住房用 find_valid_building_position）
-            if building_type in ('BUSH', 'TREE', 'MINE', 'FISHPOND', 'HOUSE', 'FARM'):
-                bx, by = find_valid_building_position(bx, by, cards, world_map, spread=max(spread, 80))
-
-            # 散落资源（RESOURCE 类型）
             if building_type == 'RESOURCE':
                 inv = _parse_inventory(inventory_str)
                 for item_type, count in inv.items():
@@ -324,18 +311,14 @@ def load_buildings_from_csv(filepath, world_map, scenario_type):
                     cards.append(res)
                 continue
 
-            # 创建建筑
             bld = Building(bx, by, building_type)
 
-            # 设置库存
             if inventory_str:
                 bld.inventory = _parse_inventory(inventory_str)
 
-            # 记录主市场位置
             if bid == 'B_MARKET_MAIN':
                 market_pos = (bx, by)
 
-            # 所有者映射
             if owner_type == 'ORG' and owner_id:
                 for oid in owner_id.split(';'):
                     oid = oid.strip()
