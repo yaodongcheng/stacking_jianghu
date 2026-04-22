@@ -65,7 +65,9 @@ class DialogRunner:
 
         # 路径 2：完成对话型任务（ACTIVE → READY）
         if qm.quest_status == QS_ACTIVE and q and q.type in ('DIALOG', 'INTERACT'):
-            target_check = (q.type == 'DIALOG') or (q.type == 'INTERACT' and str(npc_id) == q.target)
+            target_check = (q.type == 'DIALOG') or (
+                q.type == 'INTERACT' and (str(npc_id) == q.target or npc_name == q.target)
+            )
             if not target_check:
                 return
 
@@ -170,8 +172,8 @@ class DialogRunner:
         """ACTIVE 阶段：交互型任务 / 找发布人提醒"""
         qm = self.qm
 
-        # A. 交互类任务：跟目标 NPC 对上话
-        if q.type == 'INTERACT' and npc_id_str == q.target:
+        # A. 交互类任务：跟目标 NPC 对上话（target 可填 NPC ID 或名字）
+        if q.type == 'INTERACT' and (npc_id_str == q.target or npc_name == q.target):
             dialogs = qm.get_dialog(q.id)
             if dialogs:
                 story_ui.start_dialog(dialogs)
