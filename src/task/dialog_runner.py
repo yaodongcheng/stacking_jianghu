@@ -48,6 +48,17 @@ class DialogRunner:
         q = qm.get_current_quest()
         print(f"[Quest] 对话序列结束 | 当前任务:{qm.active_quest_id} | 状态:{qm.quest_status} | 类型:{q.type if q else '?'}")
 
+        # 在记忆注入清空对话数据前，收集这段对话所有说话人名字（用于 INTERACT 目标匹配）
+        # 因为对话最后一句很可能是"我"（玩家），单看 last_speaker 会漏掉真正的目标 NPC
+        all_speaker_names = set()
+        story_ui = getattr(ctx, 'story_ui', None) if ctx else None
+        if story_ui:
+            dlg_data = getattr(story_ui, '_current_dialog_data', None) or []
+            for d in dlg_data:
+                spk = getattr(d, 'speaker', None)
+                if spk:
+                    all_speaker_names.add(spk)
+
         # 把这段对话注入参与 NPC 的 LLM 记忆
         self._inject_dialog_memory_to_npcs(ctx, q)
 
@@ -66,7 +77,11 @@ class DialogRunner:
         # 路径 2：完成对话型任务（ACTIVE → READY）
         if qm.quest_status == QS_ACTIVE and q and q.type in ('DIALOG', 'INTERACT'):
             target_check = (q.type == 'DIALOG') or (
-                q.type == 'INTERACT' and (str(npc_id) == q.target or npc_name == q.target)
+                q.type == 'INTERACT' and (
+                    str(npc_id) == q.target
+                    or npc_name == q.target
+                    or q.target in all_speaker_names
+                )
             )
             if not target_check:
                 return
@@ -74,8 +89,9 @@ class DialogRunner:
             qm.quest_status = QS_READY
             print(f"[Quest] 对话类任务 {q.id} 目标达成 -> READY")
 
-            # DIALOG 任务自动推进到下一段
-            if q.type == 'DIALOG' and q.next_id and q.next_id in qm.quests:
+            # DIALOG / INTERACT 任务都自动推进到下一段
+            # （INTERACT 的"提交"动作本质就是和目标 NPC 对完这段话，无需再点一次）
+            if q.type in ('DIALOG', 'INTERACT') and q.next_id and q.next_id in qm.quests:
                 self._auto_advance_dialog_chain(q, ctx)
 
     def _auto_advance_dialog_chain(self, current_quest, ctx):
