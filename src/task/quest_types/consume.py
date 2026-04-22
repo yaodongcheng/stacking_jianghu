@@ -24,13 +24,18 @@ class ConsumeType(QuestType):
     def objective_text(self, q):
         return f"使用 {q.target} ×{q.count}"
 
-    def progress_text(self, q, player, all_cards):
+    def _current_count(self, q):
         from src.task.quest_system import QuestManager
         qm = QuestManager.get_instance()
         if not qm:
-            return f"(0/{q.count})" if q.count > 0 else ""
-        current = qm.flags.get(_progress_key(q.id), 0)
-        return f"({current}/{q.count})"
+            return 0
+        return qm.flags.get(_progress_key(q.id), 0)
+
+    def current_value_text(self, q, player, all_cards):
+        return str(self._current_count(q))
+
+    def progress_text(self, q, player, all_cards):
+        return f"（当前 {self._current_count(q)}）"
 
     def on_consumed(self, qm, item_id, count, player, ft_manager=None):
         """玩家在背包里使用了物品时调用。命中当前任务则累加进度。"""

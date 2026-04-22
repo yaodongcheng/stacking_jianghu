@@ -807,7 +807,7 @@ class AISystem:
             npc.ai_reason = "剧情归位中"
         else:
             # 到位了，原地待命；只在不是 Stay 时重排，避免每帧 clear 抖动
-            current = npc.action_queue.current()
+            current = npc.action_queue.current
             if not isinstance(current, Stay):
                 npc.action_queue.clear()
                 npc.action_queue.enqueue(Stay(reason="剧情待命"))

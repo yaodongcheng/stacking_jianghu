@@ -49,11 +49,22 @@ class QuestPresenter:
     # ─────────────────────────────────────────────────────────
     # 详情面板：完成条件文案
     # ─────────────────────────────────────────────────────────
-    def derive_objective(self, q) -> str:
-        """从 QuestData 派生"完成条件"。委托给 quest_types/<类型>.py。"""
+    def derive_objective(self, q, player=None, all_cards=()) -> str:
+        """从 QuestData 派生"完成条件"。委托给 quest_types/<类型>.py。
+        传入 player 时，会自动追加"（当前 X）"后缀（若该任务类型有可观测进度）。
+        """
         if not q:
             return ""
-        return quest_types.get(q.type).objective_text(q)
+        qt = quest_types.get(q.type)
+        base = qt.objective_text(q)
+        if not base:
+            return ""
+        if player is None:
+            return base
+        current = qt.current_value_text(q, player, all_cards)
+        if not current:
+            return base
+        return f"{base}（当前 {current}）"
 
     # ─────────────────────────────────────────────────────────
     # 侧边栏：当前任务文字（带状态前缀和进度）
@@ -123,14 +134,16 @@ class QuestPresenter:
 
         if hunger >= 70:
             out.append(TaskDisplayData(
-                task_type=task_type, text="得找点吃的", is_urgent=True,
+                task_type=task_type, is_urgent=True,
+                text=f"得找点吃的，把饥饿值降到 50 以下（当前 {int(hunger)}）",
                 description="饥饿是会死人的。再不进食，体力崩溃只是时间问题。",
                 objective=f"将饥饿值降到 50 以下（当前 {int(hunger)}）",
                 target_npc="玩家",
             ))
         elif hunger >= 50:
             out.append(TaskDisplayData(
-                task_type=task_type, text="肚子有些饿了", is_urgent=False,
+                task_type=task_type, is_urgent=False,
+                text=f"肚子有些饿了，把饥饿值降到 50 以下（当前 {int(hunger)}）",
                 description="还能撑一阵子，但久了对身子不好。",
                 objective=f"将饥饿值降到 50 以下（当前 {int(hunger)}）",
                 target_npc="玩家",
@@ -138,7 +151,8 @@ class QuestPresenter:
 
         if cold >= 70:
             out.append(TaskDisplayData(
-                task_type=task_type, text="快冻僵了", is_urgent=True,
+                task_type=task_type, is_urgent=True,
+                text=f"快冻僵了，找件衣裳或近火取暖（当前寒冷 {int(cold)}）",
                 description="再这么冻下去，命都要保不住。",
                 objective=f"找件衣裳或近火取暖（当前寒冷 {int(cold)}）",
                 target_npc="玩家",
@@ -177,7 +191,7 @@ class QuestPresenter:
             is_complete=is_complete,
             description=q.desc if q else "",
             target_npc=target_npc,
-            objective=self.derive_objective(q) if q else "",
+            objective=self.derive_objective(q, player, all_cards) if q else "",
             reward=reward_text,
             deadline_days=q.deadline if q else 0,
         )

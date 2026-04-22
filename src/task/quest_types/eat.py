@@ -11,6 +11,12 @@ class EatType(QuestType):
     def objective_text(self, q):
         return f"将饥饿值降到 {q.count} 以下"
 
+    def current_value_text(self, q, player, all_cards):
+        if player is None:
+            return ""
+        return str(int(getattr(player, 'hunger', 0)))
+
     def progress_text(self, q, player, all_cards):
-        # 进度归生存卡管，主线 text 只讲"怎么做"，不附带饥饿值
-        return ""
+        if player is None:
+            return ""
+        return f"（当前 {int(getattr(player, 'hunger', 0))}）"

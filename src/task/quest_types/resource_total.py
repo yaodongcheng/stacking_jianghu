@@ -29,5 +29,10 @@ class ResourceTotalType(QuestType):
         unit = RESOURCE_DISPLAY.get(q.target, q.target)
         return f"{unit}累积达到 {q.count}"
 
+    def current_value_text(self, q, player, all_cards):
+        if player is None:
+            return ""
+        return str(_player_resource(player, q.target))
+
     def progress_text(self, q, player, all_cards):
-        return f"({_player_resource(player, q.target)}/{q.count})"
+        return f"（当前 {_player_resource(player, q.target)}）"

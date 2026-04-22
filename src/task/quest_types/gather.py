@@ -18,12 +18,20 @@ class GatherType(QuestType):
     def objective_text(self, q):
         return f"采集 {q.target} ×{q.count}"
 
-    def progress_text(self, q, player, all_cards):
-        current = player.inventory.get(q.target, 0)
+    def _count_owned(self, q, player, all_cards):
+        n = player.inventory.get(q.target, 0)
         for c in all_cards:
             if getattr(c, 'is_follower', False):
-                current += c.inventory.get(q.target, 0)
-        return f"({current}/{q.count})"
+                n += c.inventory.get(q.target, 0)
+        return n
+
+    def current_value_text(self, q, player, all_cards):
+        if player is None:
+            return ""
+        return str(self._count_owned(q, player, all_cards))
+
+    def progress_text(self, q, player, all_cards):
+        return f"（当前 {self._count_owned(q, player, all_cards)}）"
 
     def can_act(self, q, dragged_card, target_card, recipe_mgr=None):
         # A. 直接操作目标物品（整理背包、合并堆叠）

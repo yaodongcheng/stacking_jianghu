@@ -9,10 +9,11 @@
   2. 写一个继承 QuestType 的类，覆盖你需要的方法
   3. 用 @register 装饰器注册即可，无需改任何其它文件
 
-每个任务类型最多回答 4 个问题：
+每个任务类型最多回答 5 个问题：
   - auto_activate    : 上一段任务完成后，本段是否自动激活（不需要去找 NPC 接取）
   - objective_text(q): 详情面板"完成条件"字段显示什么
-  - progress_text(q, player, all_cards): 侧边栏的进度文字（如 "(3/5)"）
+  - current_value_text(q, player, all_cards): 玩家当前已完成的数值（如 "3"），用于"（当前 X）"后缀
+  - progress_text(q, player, all_cards): 侧边栏的进度文字（如 "（当前 3）"）
   - can_act(q, dragged, target, recipe_mgr): 玩家这步操作允不允许做
 ====================================================================
 
@@ -39,10 +40,17 @@ class QuestType:
         """详情面板"完成条件"显示文案。空字符串表示不显示。"""
         return ""
 
+    def current_value_text(self, q, player, all_cards) -> str:
+        """玩家当前已完成的数值（如 "3"、"80"）。
+        非空时，presenter 会拼成"完成条件（当前 X）"显示在 sidebar 与详情弹窗。
+        无可观测进度的任务（CHOICE/DIALOG/COMBAT 等）返回空字符串即可。
+        """
+        return ""
+
     def progress_text(self, q, player, all_cards) -> str:
-        """侧边栏的进度文字（如 "(3/5)" 或 "(进行中)"）。空字符串表示无进度。"""
+        """侧边栏的进度文字（如 "（当前 3）" 或 "(进行中)"）。空字符串表示无进度。"""
         if q.count > 0:
-            return f"(0/{q.count})"
+            return f"（当前 0）"
         return ""
 
     def can_act(self, q, dragged_card, target_card, recipe_mgr=None) -> tuple[bool, str]:

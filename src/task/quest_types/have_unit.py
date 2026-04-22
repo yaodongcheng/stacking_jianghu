@@ -11,9 +11,14 @@ class HaveUnitType(QuestType):
     def objective_text(self, q):
         return f"拥有 {q.target} ×{q.count}"
 
-    def progress_text(self, q, player, all_cards):
-        current = sum(
+    def _count_owned(self, q, all_cards):
+        return sum(
             1 for c in all_cards
             if (getattr(c, 'job', '') if hasattr(c, 'job') else getattr(c, 'building_type', '')) == q.target
         )
-        return f"({current}/{q.count})"
+
+    def current_value_text(self, q, player, all_cards):
+        return str(self._count_owned(q, all_cards))
+
+    def progress_text(self, q, player, all_cards):
+        return f"（当前 {self._count_owned(q, all_cards)}）"

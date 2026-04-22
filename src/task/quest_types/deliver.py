@@ -25,14 +25,18 @@ class DeliverType(QuestType):
     def objective_text(self, q):
         return f"向指定 NPC 交付 {q.target} ×{q.count}"
 
-    def progress_text(self, q, player, all_cards):
-        # 用 QuestManager 单例查 flag，不需要从外面传 manager
+    def _current_count(self, q):
         from src.task.quest_system import QuestManager
         qm = QuestManager.get_instance()
         if not qm:
-            return f"(0/{q.count})" if q.count > 0 else ""
-        current = qm.flags.get(_progress_key(q.id), 0)
-        return f"({current}/{q.count})"
+            return 0
+        return qm.flags.get(_progress_key(q.id), 0)
+
+    def current_value_text(self, q, player, all_cards):
+        return str(self._current_count(q))
+
+    def progress_text(self, q, player, all_cards):
+        return f"（当前 {self._current_count(q)}）"
 
     # ── 业务方法（被 QuestManager 委托调用）─────────────────────────
 

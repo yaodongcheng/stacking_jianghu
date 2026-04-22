@@ -7,6 +7,33 @@ from src.task import (
     TASK_PRIORITY, TASK_TYPE_STYLES, TaskDisplayData
 )
 
+
+def _wrap_text_by_width(text, font, first_line_max_w, cont_line_max_w):
+    """按像素宽度逐字换行，返回行列表。
+    first_line_max_w: 第一行允许的最大像素宽度
+    cont_line_max_w:  第二行起允许的最大像素宽度（通常更窄，用于悬挂缩进对齐）
+    """
+    if not text:
+        return [""]
+    lines = []
+    cur = ""
+    cur_w = 0
+    max_w = first_line_max_w
+    for ch in text:
+        ch_w = font.size(ch)[0]
+        if cur and cur_w + ch_w > max_w:
+            lines.append(cur)
+            cur = ch
+            cur_w = ch_w
+            max_w = cont_line_max_w
+        else:
+            cur += ch
+            cur_w += ch_w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_font, big_font, small_font, mx=0, my=0, click_event=False, screen_w=1920, screen_h=1080):
     """
     玩家信息面板 v3 - 精简美化版
@@ -410,7 +437,7 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
             full_text = task.text
             if task.progress:
                 full_text = f"{task.text} ({task.progress})"
-            
+
             # 完成状态前缀
             if task.is_complete:
                 prefix = "√ "
@@ -421,25 +448,30 @@ def draw_sidebar_panel(screen, rect, player, all_cards, tech_mgr, quest_mgr, ui_
             else:
                 prefix = "· "
                 text_color = style['color']
-            
-            # 截断过长文本（最多12个中文字符，约24个英文字符）
-            if len(full_text) > 12:
-                display_text = full_text[:12] + "..."
-            else:
-                display_text = full_text
-            
+
             # 记录任务点击区域（如果是新类型，包含类型标题区域）
             if type_title_y_start is not None:
                 task_click_y_start = type_title_y_start  # 包含类型标题
             else:
                 task_click_y_start = cur_y
-            
-            # 绘制任务文本（缩进4像素）
-            task_text = f"{prefix}{display_text}"
-            task_surf = small_font.render(task_text, True, text_color)
-            screen.blit(task_surf, (pad_x + 8, cur_y))
-            cur_y += 18
-            
+
+            # 自动换行：按可用像素宽度切分（中英文字符宽度不一致，逐字累计更准确）
+            task_text = f"{prefix}{full_text}"
+            text_x = pad_x + 8
+            text_max_w = content_w - 8  # 可用绘制宽度
+            line_h = small_font.get_height() + 2
+
+            # 第二行起的悬挂缩进（让续行视觉上对齐到 prefix 之后的文字）
+            prefix_w = small_font.size(prefix)[0]
+
+            lines = _wrap_text_by_width(task_text, small_font, text_max_w, text_max_w - prefix_w)
+            for li, line in enumerate(lines):
+                line_x = text_x if li == 0 else text_x + prefix_w
+                line_surf = small_font.render(line, True, text_color)
+                screen.blit(line_surf, (line_x, cur_y))
+                cur_y += line_h
+            cur_y += 2  # 任务之间的额外间距
+
             # 保存任务点击区域（用于后续点击检测）
             task_click_areas.append((task_click_y_start, cur_y, task))
 
